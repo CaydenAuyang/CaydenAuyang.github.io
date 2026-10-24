@@ -46,6 +46,7 @@ const DEFAULTS = {
   maxDpr: 2,
   maxBackingPixels: 2600 * 2600,
   colors: null, // { point, glow } CSS colors that override the custom properties
+  forceWebGL1: false, // testing only: skip WebGL2
   onReady: null,
   onFallback: null,
 };
@@ -165,7 +166,7 @@ export function mountFigure(canvas, options = {}) {
     };
     let ctx = null;
     try {
-      ctx = canvas.getContext('webgl2', attrs);
+      ctx = opts.forceWebGL1 ? null : canvas.getContext('webgl2', attrs);
       stats.webgl = ctx ? 2 : 0;
       if (!ctx) {
         ctx = canvas.getContext('webgl', attrs) || canvas.getContext('experimental-webgl', attrs);
@@ -332,12 +333,17 @@ export function mountFigure(canvas, options = {}) {
     gl.uniform3f(loc.uColPoint, p[0], p[1], p[2]);
     gl.uniform3f(loc.uColGlow, g[0], g[1], g[2]);
     gl.uniform1f(loc.uGlowAmt, g[3]);
-    gl.uniform1f(loc.uAlpha, p[3] * (blendAdd ? 0.55 : 0.9));
+    gl.uniform1f(loc.uAlpha, p[3] * (blendAdd ? 0.5 : 0.78));
     gl.drawArrays(gl.POINTS, 0, data.count);
     const ms = performance.now() - t0;
     stats.frameMs = stats.frames ? stats.frameMs * 0.9 + ms * 0.1 : ms;
     stats.frames++;
-    lastDraw = performance.now();
+    const nowMs = performance.now();
+    if (lastDraw && nowMs - lastDraw < 500) {
+      const inst = 1000 / Math.max(1, nowMs - lastDraw);
+      stats.fps = stats.fps ? stats.fps * 0.9 + inst * 0.1 : inst; // draws per second
+    }
+    lastDraw = nowMs;
     if (stats.state !== 'ready') {
       stats.state = 'ready';
       setState('ready');
@@ -386,7 +392,6 @@ export function mountFigure(canvas, options = {}) {
     raf = 0;
     if (destroyed || failed || !data) return;
     const dt = lastFrame ? Math.min(64, now - lastFrame) : 16;
-    if (lastFrame) stats.fps = stats.fps ? stats.fps * 0.92 + (1000 / Math.max(1, now - lastFrame)) * 0.08 : 1000 / Math.max(1, now - lastFrame);
     lastFrame = now;
     if (!motion) {
       drawStill();
@@ -624,11 +629,19 @@ export function mountFigure(canvas, options = {}) {
       data = d;
       stats.count = d.count;
       uploadData();
-      if (slow) {
-        assembled = true;
-        stats.state = 'loading';
-      }
       onScroll();
+      if (slow) {
+        // The still image is up and the canvas is hidden (so it also counts as offscreen). Swap
+        // them and draw the assembled figure in this same task, so nothing flashes; no assemble.
+        assembled = true;
+        stats.assembled = true;
+        inView = true;
+        setState('loading');
+        resize();
+        draw(1, 1);
+        if (motion) schedule();
+        return;
+      }
       if (motion) schedule();
       else drawStill();
     })
@@ -645,6 +658,18 @@ export function mountFigure(canvas, options = {}) {
       setMotion,
       refreshTheme,
       redraw: () => (motion ? schedule() : drawStill()),
+      // Draws n frames back to back, waiting for the GPU each time; returns the average ms.
+      benchmark(n = 30) {
+        if (!gl || !data || failed) return null;
+        resize();
+        const px = new Uint8Array(4);
+        const t0 = performance.now();
+        for (let i = 0; i < n; i++) {
+          draw(1, 1);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); // forces the GPU to finish
+        }
+        return (performance.now() - t0) / n;
+      },
       destroy() {
         destroyed = true;
         stop();

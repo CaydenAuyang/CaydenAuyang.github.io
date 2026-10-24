@@ -1,77 +1,319 @@
 ---
-// Progress.astro: section 5. Build, Apply and Reflect: what the May proposal said, and where
-// each one stands now.
+// Progress.astro: section 04. Build, Apply and Reflect: what the May proposal said, a small
+// chart of course against track, and where each one stands now.
+//
+// The charts are drawings only (aria-hidden SVG): the Proposed and Now text carries the
+// meaning, and the legend says what each symbol is in words.
+//   Build:   a dashed course from May toward the plan; the solid track leaves it, hits two
+//            declined applications (HKSTP, CCMF), then bends to an open "Now" marker.
+//   Apply:   two number lines, 0 to 10, with the May target band (5 to 10) bracketed.
+//            School cases: 8 dots, 2 delivered. Outside organizations: 3 open dots.
+//   Reflect: a dashed course only, ending in an open marker.
+// Motion M10 (src/scripts/datum/progress.ts): lines reveal left to right once, the declined
+// marks scale in as the track reaches them, delivered dots fill one after another. With
+// reduced motion, Motion: Off or snapshot mode the charts are simply drawn.
 import { progress } from '../../data/content';
 import Say from '../ui/Say.astro';
+
+const kindOf = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+// "Build." in the copy; the 32px row label drops the period.
+const labelOf = (name: string) => name.replace(/\.\s*$/, '');
+
+// Apply chart: value v on a 0 to 10 line.
+const x = (v: number) => 30 + v * 26;
+const ticks = Array.from({ length: 11 }, (_, v) => v);
+const schoolCases = Array.from({ length: 8 }, (_, i) => ({ v: i + 1, delivered: i < 2 }));
+const outside = Array.from({ length: 3 }, (_, i) => ({ v: i + 1 }));
+
+// Legend words and chart labels are design labels.
+const L = { may: 'May', now: 'Now', declined: 'declined', delivered: 'delivered', open: 'open' };
 ---
 
 <section id="progress" class="section" aria-labelledby="progress-title">
   <div class="wrap">
     <div class="section__head">
-      <h2 id="progress-title" class="section__title">{progress.heading}</h2>
+      <h2 id="progress-title" class="section__title"><span class="section__num" aria-hidden="true">04</span>{progress.heading}</h2>
       <p class="t-lead"><Say line={progress.intro} /></p>
     </div>
+
+    <ul class="legend" aria-hidden="true">
+      <li>
+        <svg viewBox="0 0 28 10" width="28" height="10"><path class="pc-course" d="M1 5H27" /></svg>
+        {L.may}
+      </li>
+      <li>
+        <svg viewBox="0 0 28 10" width="28" height="10"><path class="pc-track" d="M1 5H27" /></svg>
+        {L.now}
+      </li>
+      <li>
+        <svg viewBox="0 0 12 12" width="12" height="12"><path class="pc-x" d="M1.5 1.5l9 9M10.5 1.5l-9 9" /></svg>
+        {L.declined}
+      </li>
+      <li>
+        <svg viewBox="0 0 12 12" width="12" height="12"><circle class="pc-dot" cx="6" cy="6" r="4.5" /><circle class="pc-dot-fill" cx="6" cy="6" r="3.75" /></svg>
+        {L.delivered}
+      </li>
+      <li>
+        <svg viewBox="0 0 12 12" width="12" height="12"><circle class="pc-dot" cx="6" cy="6" r="4.5" /></svg>
+        {L.open}
+      </li>
+    </ul>
+
     <ol class="strands">
       {
-        progress.strands.map((strand) => (
-          <li class="strand">
-            <h3 class="strand__name">{strand.name}</h3>
-            <dl class="strand__rows">
-              <div class="strand__row">
-                <dt class="t-label">{progress.proposedLabel}</dt>
-                <dd>
-                  <Say line={strand.proposed} />
-                </dd>
+        progress.strands.map((strand) => {
+          const kind = kindOf(strand.name);
+          return (
+            <li class="strand">
+              <h3 class="strand__name">{labelOf(strand.name)}</h3>
+              <p class="strand__proposed">
+                <span class="strand__label">{progress.proposedLabel}</span>
+                <Say line={strand.proposed} />
+              </p>
+
+              <div class="strand__chart plate">
+                {kind === 'build' && (
+                  <svg class="pc" data-pchart viewBox="0 0 320 116" aria-hidden="true" focusable="false">
+                    <text class="pc-text" x="10" y="22">{L.may}</text>
+                    <g class="pc-draw">
+                      <path class="pc-course" d="M14 38H298" />
+                      <path class="pc-arrow" d="M292 33.5 298 38l-6 4.5" />
+                      <path class="pc-track" d="M14 38H58C78 38 82 64 102 64H196C220 64 226 94 249 94" />
+                      <circle class="pc-dot" cx="255.5" cy="94" r="6" />
+                      <circle class="pc-origin" cx="14" cy="38" r="3.25" />
+                    </g>
+                    <path class="pc-x" style="--d: 380ms" d="M113 59l10 10M123 59l-10 10" />
+                    <path class="pc-x" style="--d: 500ms" d="M177 59l10 10M187 59l-10 10" />
+                    <text class="pc-text" x="118" y="88" text-anchor="middle">HKSTP</text>
+                    <text class="pc-text" x="182" y="88" text-anchor="middle">CCMF</text>
+                    <text class="pc-text" x="268" y="98">{L.now}</text>
+                  </svg>
+                )}
+                {kind === 'apply' && (
+                  <svg class="pc" data-pchart viewBox="0 0 320 140" aria-hidden="true" focusable="false">
+                    {[
+                      { y: 0, label: 'School cases', dots: schoolCases },
+                      { y: 70, label: 'Outside organizations', dots: outside },
+                    ].map((row) => (
+                      <g transform={`translate(0 ${row.y})`}>
+                        <text class="pc-text" x="10" y="20">{row.label}</text>
+                        <text class="pc-text" x={x(7.5)} y="20" text-anchor="middle">{L.may}</text>
+                        <g class="pc-draw">
+                          <path class="pc-bracket" d={`M${x(5)} 34V28H${x(10)}V34`} />
+                          <path class="pc-axis" d={`M${x(0)} 46H${x(10)}`} />
+                          {ticks.map((v) => (
+                            <path class="pc-axis" d={`M${x(v)} 46V${v % 5 === 0 ? 52 : 50}`} />
+                          ))}
+                          {row.dots.map((dot) => (
+                            <circle class="pc-dot" cx={x(dot.v)} cy="46" r="5" />
+                          ))}
+                        </g>
+                        {row.dots.map((dot, i) =>
+                          'delivered' in dot && dot.delivered ? (
+                            <circle class="pc-fill pc-dot-fill" style={`--d: ${260 + i * 60}ms`} cx={x(dot.v)} cy="46" r="4.25" />
+                          ) : null,
+                        )}
+                        {[0, 5, 10].map((v) => (
+                          <text class="pc-text pc-num" x={x(v)} y="66" text-anchor="middle">{v}</text>
+                        ))}
+                      </g>
+                    ))}
+                  </svg>
+                )}
+                {kind === 'reflect' && (
+                  <svg class="pc" data-pchart viewBox="0 0 320 52" aria-hidden="true" focusable="false">
+                    <text class="pc-text" x="10" y="18">{L.may}</text>
+                    <g class="pc-draw">
+                      <path class="pc-course" d="M14 34H243" />
+                      <circle class="pc-dot" cx="249.5" cy="34" r="6" />
+                      <circle class="pc-origin" cx="14" cy="34" r="3.25" />
+                    </g>
+                  </svg>
+                )}
               </div>
-              <div class="strand__row">
-                <dt class="t-label">{progress.nowLabel}</dt>
-                <dd>
-                  {strand.now.map((line, i) => (
-                    <>
-                      {i > 0 && ' '}
-                      <Say line={line} />
-                    </>
-                  ))}
-                </dd>
-              </div>
-            </dl>
-          </li>
-        ))
+
+              <p class="strand__now">
+                <span class="strand__label">{progress.nowLabel}</span>
+                {strand.now.map((line, i) => (
+                  <>
+                    {i > 0 && ' '}
+                    <Say line={line} />
+                  </>
+                ))}
+              </p>
+            </li>
+          );
+        })
       }
     </ol>
   </div>
 </section>
 
+<script>
+  import '../../scripts/datum/progress';
+</script>
+
 <style>
+  /* ---- Legend ---- */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    margin-bottom: var(--space-6);
+    font-size: var(--fs-label);
+    color: var(--text-2);
+  }
+  .legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .legend svg {
+    overflow: visible;
+  }
+
+  /* ---- Rows ---- */
   .strands {
     display: grid;
-    gap: var(--space-6);
   }
   .strand {
     display: grid;
-    gap: var(--space-3);
-    padding-top: var(--space-5);
+    gap: var(--space-4);
+    padding-block: var(--space-6);
     border-top: 1px solid var(--rule);
   }
-  .strand__name {
-    font-size: var(--fs-h3);
+  .strand:last-child {
+    border-bottom: 1px solid var(--rule);
   }
-  .strand__rows {
-    display: grid;
-    gap: var(--space-3);
+  .strand__name {
+    font-size: var(--fs-row);
+    line-height: var(--lh-tight);
+  }
+  .strand__proposed,
+  .strand__now {
     max-width: var(--max-text);
   }
-  .strand__row {
-    display: grid;
-    gap: var(--space-1);
-  }
-  .strand__row dt {
+  .strand__label {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-semibold);
     color: var(--text-2);
   }
-  @media (min-width: 900px) {
-    .strands {
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--space-6);
+  .strand__chart {
+    padding: var(--space-3);
+    max-width: 30rem;
+  }
+
+  /* ---- Chart marks ---- */
+  .pc {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+  .pc-text {
+    fill: var(--text-2);
+    font-family: var(--font-body);
+    font-size: 12px;
+  }
+  .pc-num {
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+  .pc-course {
+    fill: none;
+    stroke: var(--neatline);
+    stroke-width: 1.5;
+    stroke-dasharray: 5 4;
+  }
+  .pc-arrow {
+    fill: none;
+    stroke: var(--neatline);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pc-track {
+    fill: none;
+    stroke: var(--text);
+    stroke-width: 2.25;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .pc-origin {
+    fill: var(--text);
+  }
+  .pc-x {
+    fill: none;
+    stroke: var(--text);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .pc-dot {
+    fill: var(--plate);
+    stroke: var(--text);
+    stroke-width: 1.5;
+  }
+  .pc-dot-fill {
+    fill: var(--mark);
+  }
+  .pc-bracket {
+    fill: none;
+    stroke: var(--text);
+    stroke-width: 1.25;
+  }
+  .pc-axis {
+    fill: none;
+    stroke: var(--neatline);
+    stroke-width: 1;
+  }
+
+  /* ---- M10: reveal once on view. Starting states only while motion is allowed and the
+     script hasn't drawn the chart yet. ---- */
+  .pc-draw {
+    transition: clip-path var(--dur-draw) var(--ease-draw);
+  }
+  .pc-x {
+    transform-box: fill-box;
+    transform-origin: center;
+    transition:
+      opacity 160ms var(--ease-quick) var(--d, 0ms),
+      transform 160ms var(--ease-quick) var(--d, 0ms);
+  }
+  .pc-fill {
+    transition: opacity 120ms var(--ease-quick) var(--d, 0ms);
+  }
+  :global(html.js-motion) .pc:not(.is-drawn) .pc-draw {
+    clip-path: inset(0 100% 0 0);
+  }
+  :global(html.js-motion) .pc:not(.is-drawn) .pc-x {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  :global(html.js-motion) .pc:not(.is-drawn) .pc-fill {
+    opacity: 0;
+  }
+
+  /* ---- Laptops: name, Proposed, chart, Now as four columns. ---- */
+  @media (min-width: 1024px) {
+    .strand {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--gutter);
+      align-items: start;
+    }
+    .strand__name {
+      grid-column: 1 / 3;
+    }
+    .strand__proposed {
+      grid-column: 3 / 6;
+    }
+    .strand__chart {
+      grid-column: 6 / 10;
+      max-width: none;
+    }
+    .strand__now {
+      grid-column: 10 / 13;
     }
   }
 </style>

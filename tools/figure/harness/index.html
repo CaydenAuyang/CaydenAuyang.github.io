@@ -17,6 +17,7 @@
         transparent=1     no frame background (used by render-fallback.mjs)
         bare=1            the frame fills the whole viewport (used by render-fallback.mjs)
         yaw=deg pitch=deg base pose
+        gl=1              force WebGL1 (tests the fallback context)
         src=path          a different hi file (lo stays the default unless srclo= is given)
         point=css glow=css blend=add   override colors and blending
     -->
@@ -117,6 +118,7 @@
             yaw: Number(q.get('yaw') || 0),
             pitch: Number(q.get('pitch') || 0),
             colors,
+            forceWebGL1: q.get('gl') === '1',
           });
           const out = document.getElementById('stats');
           setInterval(() => {

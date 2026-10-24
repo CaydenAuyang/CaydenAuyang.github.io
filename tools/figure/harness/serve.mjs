@@ -35,7 +35,8 @@ export function serve(root = REPO_ROOT, port = 0, mounts = {}) {
         rel = pathname.slice(prefix.length);
       }
     }
-    const file = path.resolve(base, rel || 'index.html');
+    let file = path.resolve(base, rel || 'index.html');
+    if (rel.endsWith('/') || (fs.existsSync(file) && fs.statSync(file).isDirectory())) file = path.join(file, 'index.html');
     if (!file.startsWith(base)) {
       res.writeHead(403).end();
       return;

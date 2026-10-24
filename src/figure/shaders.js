@@ -87,13 +87,13 @@ void main() {
   float back = f < 0.0 ? mix(0.2, 1.0, smoothstep(-0.5, 0.0, f)) : 1.0;
   back = mix(1.0, back, e);
   float depth = mix(0.6, 1.0, smoothstep(-1.1, 0.5, R.z));
-  float alpha = uAlpha * (0.32 + 0.68 * weight) * back * depth * (0.8 + 0.45 * rim);
+  float alpha = uAlpha * (0.3 + 0.6 * weight) * back * depth * (0.85 + 0.15 * rim);
   float glow = clamp(rim * 0.85 + (group > 2.5 ? 0.25 : 0.0) + (group > 1.5 && group < 2.5 ? 0.12 : 0.0), 0.0, 1.0);
   vec3 col = mix(uColPoint, uColGlow, glow * uGlowAmt);
 
   // Scattered points start faint and a little larger, then sharpen as they land.
   alpha *= smoothstep(0.0, 0.14, uT) * mix(0.35, 1.0, e);
-  float size = uPointPx * (0.65 + 0.7 * weight) * (uCamDist / zc) * mix(1.35, 1.0, e);
+  float size = uPointPx * (0.75 + 0.45 * weight) * (uCamDist / zc) * mix(1.35, 1.0, e);
   if (size < 1.25) {
     alpha *= (size / 1.25) * (size / 1.25);
     size = 1.25;

@@ -1,48 +1,76 @@
 ---
-// Work.astro: section 4. The three projects, each with a looping preview and a live link.
+// Work.astro: section 03. The three projects as Datum plates, in the order of the question's
+// descent: a city (OurCityHealth), small organizations (AI Simply), a school (Civic AI Club).
+// content.ts keeps its own order; only the render order changes here.
 //
-// The preview recordings come from the previews tool (tools/previews/), which writes
-// src/data/previews.json. That file may not exist yet, so it is looked up softly here: a project
-// without a recording shows a "To come" frame. Expected shape, keyed by project id:
-//   { "civic-ai-club": { "mp4": "/media/previews/x.mp4", "webm": "/media/previews/x.webm",
-//                        "poster": "/media/previews/x.jpg", "width": 1600, "height": 1000 }, ... }
-// A list of objects with an "id" field also works.
+// Each plate: a scale tag with the nested-box locator, the project name as a new-tab link, the
+// role line, the 16:10 video plate (ui/LoopVideo.astro) captioned "Fig. n", the summary and
+// points, and an "Open {name}" link. OurCityHealth adds its independent study as an indented
+// paired plate. Phones stack everything; from 1024px the video takes columns 1 to 7 and the
+// text 8 to 12.
+//
+// Recordings come from src/data/previews.json through datum/previews.ts. A project without
+// one shows an empty plate that says the recording is to come.
 import { work, type Project } from '../../data/content';
-import LoopVideo, { type VideoSource } from '../ui/LoopVideo.astro';
+import LoopVideo from '../ui/LoopVideo.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import Say from '../ui/Say.astro';
+import Locator from '../datum/Locator.astro';
+import { clipFor } from '../datum/previews';
 
-const found = import.meta.glob<{ default: unknown }>('../../data/previews.json', { eager: true });
-const raw = Object.values(found)[0]?.default;
+type Level = 'city' | 'org' | 'school';
 
-function previewFor(id: Project['id']): VideoSource | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const list = Array.isArray(raw) ? raw : (raw as Record<string, unknown>).previews;
-  const entry = Array.isArray(list)
-    ? list.find((x: { id?: string }) => x?.id === id)
-    : (raw as Record<string, unknown>)[id];
-  const v = entry as Partial<VideoSource> | undefined;
-  return v && v.mp4 && v.poster ? (v as VideoSource) : undefined;
-}
+// The descent, with each plate's scale tag (design labels).
+const descent: { id: Project['id']; level: Level; scale: string }[] = [
+  { id: 'ourcityhealth', level: 'city', scale: 'A city' },
+  { id: 'ai-simply', level: 'org', scale: 'Small organizations' },
+  { id: 'civic-ai-club', level: 'school', scale: 'A school' },
+];
+
+// Fig. 1 is the hero figure, so the previews are Figs. 2 to 4.
+const plates = descent.flatMap((step, i) => {
+  const project = work.projects.find((p) => p.id === step.id);
+  if (!project) return [];
+  return [{ ...step, project, fig: `Fig. ${i + 2}`, clip: clipFor(project.id, project.name) }];
+});
 ---
 
 <section id="work" class="section" aria-labelledby="work-title">
   <div class="wrap">
     <div class="section__head">
-      <h2 id="work-title" class="section__title">{work.heading}</h2>
+      <h2 id="work-title" class="section__title"><span class="section__num" aria-hidden="true">03</span>{work.heading}</h2>
       <p class="t-lead"><Say line={work.intro} /></p>
     </div>
     <div class="work">
       {
-        work.projects.map((project) => (
-          <article class="project" id={`work-${project.id}`} aria-labelledby={`work-${project.id}-title`}>
-            <div class="project__preview">
-              <LoopVideo name={project.name} caption={project.caption.text} src={previewFor(project.id)} />
+        plates.map(({ project, level, scale, fig, clip }) => (
+          <article class="project" id={`work-${project.id}`} aria-labelledby={`work-${project.id}-title`} data-project>
+            <header class="project__head">
+              <p class="project__scale">
+                <Locator level={level} />
+                <span>{scale}</span>
+              </p>
+              <h3 id={`work-${project.id}-title`} class="project__name">
+                <ExternalLink href={project.link.href}>
+                  {project.name}
+                  <svg class="arrow arrow--name" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+                    <path d="M3 9 9 3M4.5 3H9v4.5" />
+                  </svg>
+                </ExternalLink>
+              </h3>
+              <p class="project__role">
+                <Say line={project.role} />
+              </p>
+            </header>
+
+            <div class="project__figure">
+              <LoopVideo name={project.name} id={project.id} caption={project.caption.text} fig={fig} src={clip} />
             </div>
+
             <div class="project__text">
-              <h3 id={`work-${project.id}-title`} class="project__name">{project.name}</h3>
-              <p class="t-meta"><Say line={project.role} /></p>
-              <p><Say line={project.summary} /></p>
+              <p>
+                <Say line={project.summary} />
+              </p>
               <ul class="project__points">
                 {project.points.map((point) => (
                   <li>
@@ -50,20 +78,26 @@ function previewFor(id: Project['id']): VideoSource | undefined {
                   </li>
                 ))}
               </ul>
-              {project.study && (
-                <div class="project__study">
-                  <h4 class="project__study-name">
-                    {project.study.name} <span class="t-meta">{project.study.when}</span>
-                  </h4>
-                  <p>
-                    <Say line={project.study.body} />
-                  </p>
-                </div>
-              )}
-              <p class="project__link">
-                <ExternalLink href={project.link.href}>{project.link.text}</ExternalLink>
+              <p class="project__open">
+                <ExternalLink href={project.link.href}>
+                  Open {project.name}
+                  <svg class="arrow" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+                    <path d="M3 9 9 3M4.5 3H9v4.5" />
+                  </svg>
+                </ExternalLink>
               </p>
             </div>
+
+            {project.study && (
+              <div class="project__study plate">
+                <h4 class="project__study-name">
+                  {project.study.name} <span class="project__study-when">{project.study.when}</span>
+                </h4>
+                <p>
+                  <Say line={project.study.body} />
+                </p>
+              </div>
+            )}
           </article>
         ))
       }
@@ -71,51 +105,181 @@ function previewFor(id: Project['id']): VideoSource | undefined {
   </div>
 </section>
 
+<script>
+  import '../../scripts/datum/work';
+</script>
+
 <style>
   .work {
     display: grid;
     gap: var(--space-8);
   }
+
   .project {
     display: grid;
     gap: var(--space-5);
   }
+
+  /* ---- Head: scale tag on a hairline, then the name and role. ---- */
+  .project__head {
+    display: grid;
+    gap: var(--space-2);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--rule);
+  }
+  .project__scale {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-semibold);
+    line-height: 1.3;
+    color: var(--text-2);
+  }
+  .project__name {
+    font-size: var(--fs-project);
+    line-height: var(--lh-tight);
+  }
+  .project__name :global(a) {
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.14em;
+  }
+  .project__role {
+    font-size: var(--fs-small);
+    color: var(--text-2);
+  }
+
+  /* The new-tab arrow, drawn in the text color. */
+  .arrow {
+    display: inline-block;
+    width: 0.6em;
+    height: 0.6em;
+    margin-left: 0.2em;
+    vertical-align: 0.05em;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+  .arrow--name {
+    width: 0.38em;
+    height: 0.38em;
+    margin-left: 0.14em;
+    vertical-align: 0.42em;
+    stroke-width: 1.75;
+  }
+
+  /* ---- Text ---- */
   .project__text {
     display: grid;
-    gap: var(--space-3);
+    gap: var(--space-4);
     max-width: var(--max-text);
     align-content: start;
   }
-  .project__name {
-    font-size: var(--fs-h3);
-  }
   .project__points {
-    padding-left: 1.25em;
-  }
-  .project__points li + li {
-    margin-top: var(--space-2);
-  }
-  .project__study {
     display: grid;
-    gap: var(--space-2);
+    gap: var(--space-3);
+  }
+  /* Survey ticks instead of bullets. */
+  .project__points li {
+    position: relative;
+    padding-left: 22px;
+  }
+  .project__points li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.8em;
+    width: 12px;
+    height: 1px;
+    background: var(--neatline);
+  }
+  .project__open {
+    font-weight: var(--fw-semibold);
+  }
+  .project__open :global(a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* ---- OurCityHealth's independent study: an indented plate, joined by a leader. ---- */
+  .project__study {
+    --indent: var(--space-4);
+    display: grid;
+    gap: var(--space-3);
+    margin-left: var(--indent);
     padding: var(--space-4);
-    background: var(--bg-2);
-    border-radius: var(--radius);
+    max-width: var(--max-text);
+  }
+  .project__study::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--indent) - 1px);
+    top: calc(-1 * var(--space-5));
+    width: calc(var(--indent) - 4px);
+    height: calc(var(--space-5) + 22px);
+    border-left: 1px solid var(--neatline);
+    border-bottom: 1px solid var(--neatline);
   }
   .project__study-name {
-    font-size: var(--fs-body);
+    font-size: 1.5rem;
+    line-height: var(--lh-head);
   }
-  .project__study-name .t-meta {
+  .project__study-when {
+    display: block;
+    margin-top: var(--space-1);
+    font-family: var(--font-body);
+    font-size: var(--fs-small);
     font-weight: var(--fw-regular);
+    color: var(--text-2);
   }
-  .project__link {
-    font-weight: var(--fw-bold);
-  }
-  @media (min-width: 900px) {
+
+  /* ---- Laptops: video in columns 1 to 7, text in 8 to 12. ---- */
+  @media (min-width: 1024px) {
+    .work {
+      gap: var(--space-9);
+    }
     .project {
-      grid-template-columns: 1.2fr 1fr;
-      gap: var(--space-7);
-      align-items: start;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      grid-template-rows: auto auto 1fr;
+      column-gap: var(--gutter);
+      row-gap: var(--space-5);
+    }
+    .project__head {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      grid-template-columns: auto 1fr;
+      align-items: baseline;
+      column-gap: var(--space-5);
+    }
+    .project__scale,
+    .project__name {
+      grid-column: 1 / -1;
+    }
+    .project__role {
+      grid-column: 1 / -1;
+    }
+    .project__figure {
+      grid-column: 1 / 8;
+      grid-row: 2;
+    }
+    .project__text {
+      grid-column: 8 / 13;
+      grid-row: 2 / span 2;
+      padding-left: var(--space-2);
+    }
+    .project__study {
+      --indent: var(--space-6);
+      grid-column: 1 / 8;
+      grid-row: 3;
+      align-self: start;
+      max-width: none;
+      padding: var(--space-5);
+    }
+    .project__study::before {
+      top: calc(-1 * var(--space-5));
+      height: calc(var(--space-5) + 26px);
     }
   }
 </style>

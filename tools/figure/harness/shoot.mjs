@@ -81,7 +81,8 @@ async function main() {
         await sleep(2000);
       }
       const s1 = await page.evaluate(() => ({ ...window.__fig.stats }));
-      report.push({ view: name, mode: 'motion', level: s1.level, count: s1.count, webgl: s1.webgl, frameMs: +s1.frameMs.toFixed(2), fps: +s1.fps.toFixed(1), assembled: s1.assembled, firstState: s0.state, errors });
+      const benchMs = await page.evaluate(() => window.__fig.benchmark(30));
+      report.push({ view: name, mode: 'motion', level: s1.level, count: s1.count, webgl: s1.webgl, cpuSubmitMs: +s1.frameMs.toFixed(2), gpuFrameMsSoftware: +benchMs.toFixed(2), drawsPerSec: +s1.fps.toFixed(1), assembled: s1.assembled, firstState: s0.state, errors });
       await ctx.close();
     }
     // Reduced motion (device setting) and the site's Motion switch (data-motion="off").
