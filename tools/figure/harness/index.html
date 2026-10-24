@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Figure harness</title>
+    <!--
+      Static test page for the point figure. Serve the repo root, then open this page:
+        node tools/figure/harness/serve.mjs   (or: python3 -m http.server from the repo root)
+        http://127.0.0.1:4317/tools/figure/harness/index.html
+      Query parameters:
+        motion=off        same as html[data-motion="off"]
+        theme=light|dark  sets --figure-point / --figure-glow and the page color
+        level=hi|lo       force a point file (lo=1 is short for level=lo)
+        still=1           one assembled frame, no animation
+        transparent=1     no frame background (used by render-fallback.mjs)
+        bare=1            the frame fills the whole viewport (used by render-fallback.mjs)
+        yaw=deg pitch=deg base pose
+        src=path          a different hi file (lo stays the default unless srclo= is given)
+        point=css glow=css blend=add   override colors and blending
+    -->
+    <style>
+      :root {
+        --bg: #ffffff;
+        --bg-2: #f2f2f2;
+        --text: #1a1a1a;
+        --figure-point: #1a1a1a;
+        --figure-glow: rgb(43 74 203 / 0.35);
+      }
+      :root[data-theme='dark'] {
+        --bg: #0e0f12;
+        --bg-2: #17191e;
+        --text: #ecebe6;
+        --figure-point: #e9e6df;
+        --figure-glow: rgb(150 178 255 / 0.55);
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+      .hero { display: grid; gap: 32px; padding: 48px 16px 96px; max-width: 80rem; margin: 0 auto; }
+      .hero__figure {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 5;
+        max-height: 70svh;
+        background: var(--bg-2);
+        border-radius: 4px;
+      }
+      .hero__name { font-size: clamp(2.5rem, 1.6rem + 4.5vw, 5.5rem); line-height: 1.1; margin: 0; }
+      @media (min-width: 900px) {
+        .hero { grid-template-columns: 1fr 1fr; align-items: center; }
+        .hero__figure { order: 2; }
+      }
+      .spacer { height: 140vh; }
+      .stats { position: fixed; left: 8px; bottom: 8px; font: 12px/1.3 ui-monospace, monospace; background: rgb(0 0 0 / 0.6); color: #fff; padding: 4px 6px; border-radius: 3px; }
+      body.bare .hero { display: block; padding: 0; max-width: none; }
+      body.bare .hero__figure { position: fixed; inset: 0; aspect-ratio: auto; max-height: none; border-radius: 0; }
+      body.bare .hero__text, body.bare .spacer, body.bare .stats { display: none; }
+      body.transparent, body.transparent .hero__figure { background: transparent !important; }
+      html.transparent { background: transparent !important; }
+
+      /* Same rules as src/components/Figure.astro. */
+      .figure { position: relative; width: 100%; height: 100%; overflow: hidden; }
+      .figure__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      .figure__fallback { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center bottom; display: none; }
+      .figure[data-state='fallback'] .figure__fallback { display: block; }
+      .figure[data-state='fallback'] .figure__canvas { display: none; }
+      .figure__desc { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      .figure[data-state='fallback'] .figure__desc { display: none; }
+      @media (scripting: none) {
+        .figure__fallback { display: block; }
+        .figure__canvas, .figure__desc { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="hero">
+      <div class="hero__figure">
+        <div class="figure" data-figure-mount data-state="idle">
+          <canvas class="figure__canvas" aria-hidden="true"></canvas>
+          <img class="figure__fallback" src="/public/figure/figure-fallback.webp" alt="A portrait of Cayden Auyang drawn in points" width="720" height="900" loading="lazy" decoding="async" />
+          <span class="figure__desc">A portrait of Cayden Auyang drawn in points</span>
+        </div>
+      </div>
+      <div class="hero__text">
+        <h1 class="hero__name">Cayden Auyang</h1>
+        <p>Harness for the point figure. Move the pointer or scroll.</p>
+      </div>
+    </section>
+    <div class="spacer"></div>
+    <div class="stats" id="stats">loading</div>
+    <script type="module">
+      const q = new URLSearchParams(location.search);
+      const html = document.documentElement;
+      if (q.get('motion') === 'off') html.setAttribute('data-motion', 'off');
+      if (q.get('theme') === 'dark') html.setAttribute('data-theme', 'dark');
+      if (q.has('bare')) document.body.classList.add('bare');
+      if (q.has('transparent')) {
+        document.body.classList.add('transparent');
+        html.classList.add('transparent');
+      }
+      const root = document.querySelector('[data-figure-mount]');
+      const canvas = root.querySelector('canvas');
+      const colors = q.has('point') || q.has('glow') ? { point: q.get('point') || undefined, glow: q.get('glow') || undefined } : null;
+      if (q.get('blend')) canvas.style.setProperty('--figure-blend', q.get('blend'));
+      const level = q.get('level') || (q.get('lo') === '1' ? 'lo' : 'auto');
+
+      function start() {
+        import('/src/figure/index.js').then(({ mountFigure }) => {
+          window.__fig = mountFigure(canvas, {
+            srcHi: q.get('src') || '/public/figure/figure-hi.bin',
+            srcLo: q.get('srclo') || '/public/figure/figure-lo.bin',
+            fallbackImg: root.querySelector('img'),
+            descEl: root.querySelector('.figure__desc'),
+            level,
+            still: q.has('still'),
+            yaw: Number(q.get('yaw') || 0),
+            pitch: Number(q.get('pitch') || 0),
+            colors,
+          });
+          const out = document.getElementById('stats');
+          setInterval(() => {
+            const s = window.__fig.stats;
+            out.textContent = `${s.state} webgl${s.webgl} ${s.level} ${s.count} pts  frame ${s.frameMs.toFixed(2)} ms  ${s.fps.toFixed(0)} fps${s.reason ? '  ' + s.reason : ''}`;
+          }, 300);
+        });
+      }
+      // Same timing as the site: after first paint, when the browser is idle.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 1200 });
+        else setTimeout(start, 200);
+      }));
+    </script>
+  </body>
+</html>

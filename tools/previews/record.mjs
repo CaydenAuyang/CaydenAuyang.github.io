@@ -8,6 +8,7 @@
 //   --framing=desktop,phone                      limit to some framings (default: both, desktop first)
 //   --encode-only                                skip capture, re-encode the frames already in raw/
 //   --preview                                    capture 4 stills per clip into raw/<id>/preview-*.jpg and stop
+//   --selftest                                   check the on-screen claim scanner against pages known to have them
 //
 // How it works: each clip is a frame sequence. For every output frame the script sets the page
 // to an exact pose (a scroll position, or the Cesium camera for the globe), waits for the page to
@@ -92,7 +93,7 @@ const SITES = {
     project: 'AI Simply',
     url: 'https://aisimply.co',
     caption: {
-      desktop: `AI Simply's website, scrolling from the home page headline through its four-step process. Recorded ${RECORDED_LABEL}.`,
+      desktop: `AI Simply's website, scrolling from the home page headline and services to its mission statement. Recorded ${RECORDED_LABEL}.`,
       phone: `AI Simply's website on a phone, scrolling through its services: Automate, Scale and Enrich. Recorded ${RECORDED_LABEL}.`,
     },
     // Audit (Oct 11) items that must not appear: stats on /about, OurCityHealth as a client,
@@ -101,15 +102,18 @@ const SITES = {
       /100\s*%/, /satisfaction/i, /hours saved/i, /client'?s average/i, /client industries/i,
       /120\+/, /tools leveraged/i, /our\s*city\s*health/i, /kay huang/i, /lionel mok/i,
       /revenue/i, /paid client/i, /featured clients/i, /us in numbers/i,
+      // Softer audit items that are easy to keep out of frame.
+      /student expert/i, /ready-made/i, /proudest/i, /under a month/i,
     ],
     imageFlags: [/our_city_health/i, /ourcityhealth/i],
-    scrollEnd: { desktop: 2120, phone: 1250 },
+    scrollEnd: { desktop: 880, phone: 1250 },
     async prepare(page) {
       await page.waitForLoadState('load');
       await page.evaluate(() => document.fonts.ready);
       await page.waitForTimeout(4000);
       await preScroll(page, 4200);
-      await freezeVideos(page, () => 1.0);
+      // The top-right starburst is a 6 s looping video; hold it on the full burst.
+      await freezeVideos(page, () => 2.5);
     },
     pose: scrollPose,
   },
@@ -188,6 +192,7 @@ const SITES = {
     flags: [/[A-Z][a-z]+ [A-Z][A-Za-z-]+ [’']\d\d\b/],
     imageFlags: [],
     scrollEnd: { desktop: 1700, phone: 900 },
+    virtualTime: true, // GSAP + Lenis: step their clock with the frames
     async prepare(page) {
       // Let the first-visit preloader finish.
       await page.waitForFunction(
@@ -236,47 +241,65 @@ async function preScroll(page, to) {
   await page.waitForTimeout(2000);
 }
 
-// Pause every <video> at a fixed time and stop the page from restarting them.
+// Pause every <video> at a fixed time and stop the page from restarting them. Each video plays for
+// a moment from its hold time first, so pages that paint video into a canvas (Wix tints its
+// decorative videos this way) draw that frame before the pause.
 async function freezeVideos(page, timeFor) {
   const srcs = await page.evaluate(() => [...document.querySelectorAll('video')].map((v) => v.currentSrc || v.src || ''));
   const times = srcs.map((s) => timeFor(s));
   await page.evaluate(async (times) => {
-    HTMLMediaElement.prototype.play = function () { this.pause(); return Promise.resolve(); };
+    const realPlay = HTMLMediaElement.prototype.play;
     const vids = [...document.querySelectorAll('video')];
-    await Promise.all(vids.map((v, i) => new Promise((resolve) => {
-      v.pause();
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    await Promise.all(vids.map(async (v, i) => {
+      v.muted = true;
       v.removeAttribute('autoplay');
-      const t = times[i];
-      if (!(v.readyState >= 1)) { v.load && v.preload !== 'none' && v.load(); }
-      const done = () => resolve();
-      const seek = () => {
-        if (Number.isFinite(v.duration) && v.duration > 0) {
-          v.addEventListener('seeked', done, { once: true });
-          v.currentTime = Math.min(t, v.duration - 0.05);
-          setTimeout(done, 4000);
-        } else done();
-      };
-      if (v.readyState >= 1) seek();
-      else { v.addEventListener('loadedmetadata', seek, { once: true }); setTimeout(done, 4000); }
-    })));
+      if (!(v.readyState >= 1)) {
+        if (v.preload === 'none') v.preload = 'auto';
+        v.load();
+        await Promise.race([new Promise((r) => v.addEventListener('loadedmetadata', r, { once: true })), wait(5000)]);
+      }
+      if (!(Number.isFinite(v.duration) && v.duration > 0)) { v.pause(); return; }
+      v.pause();
+      const t = Math.min(times[i], v.duration - 0.4);
+      await Promise.race([new Promise((r) => { v.addEventListener('seeked', r, { once: true }); v.currentTime = t; }), wait(5000)]);
+      try { await realPlay.call(v); await wait(250); } catch { /* autoplay refused; the seeked frame stays */ }
+      v.pause();
+    }));
+    HTMLMediaElement.prototype.play = function () { this.pause(); return Promise.resolve(); };
   }, times);
 }
 
-// Pause infinite CSS animations so they can be stepped per frame; finish one-shot ones.
+// Step every CSS animation and transition on the document timeline to the capture clock, so they
+// play at true speed in the encoded clip however long each screenshot takes.
 async function stepAnimations(page, t) {
   await page.evaluate((t) => {
     const base = (window.__animBase ||= new WeakMap());
     for (const a of document.getAnimations()) {
       if (a.timeline && a.timeline !== document.timeline) continue; // scroll-driven, already exact
-      const timing = a.effect && a.effect.getComputedTiming ? a.effect.getComputedTiming() : null;
-      if (timing && timing.iterations === Infinity) {
-        if (!base.has(a)) { base.set(a, a.currentTime || 0); a.pause(); }
-        a.currentTime = base.get(a) + t * 1000;
-      } else if (a.playState === 'running') {
-        try { a.finish(); } catch { /* infinite or unresolved */ }
-      }
+      if (!base.has(a)) base.set(a, { t0: t, c0: a.currentTime || 0 });
+      const b = base.get(a);
+      if (a.playState !== 'paused') a.pause();
+      a.currentTime = b.c0 + (t - b.t0) * 1000;
     }
   }, t);
+}
+
+// A page clock that runs normally until capture starts, then only moves when told to. It drives
+// requestAnimationFrame timestamps, performance.now() and Date.now(), which is what GSAP and Lenis
+// read, so scripted motion advances exactly one frame per screenshot.
+function installClock() {
+  const realPerf = performance.now.bind(performance);
+  const realDate = Date.now;
+  const realRaf = window.requestAnimationFrame.bind(window);
+  let manual = false, vPerf = 0, vDate = 0;
+  window.__clock = {
+    freeze() { vPerf = realPerf(); vDate = realDate(); manual = true; },
+    advance(ms) { vPerf += ms; vDate += ms; },
+  };
+  performance.now = () => (manual ? vPerf : realPerf());
+  Date.now = () => (manual ? vDate : realDate());
+  window.requestAnimationFrame = (cb) => realRaf((ts) => cb(manual ? vPerf : ts));
 }
 
 async function scrollPose(page, t, framing) {
@@ -341,6 +364,7 @@ async function capture(browser, siteId, framing, { preview = false } = {}) {
     colorScheme: 'light',
     reducedMotion: 'no-preference',
   });
+  if (site.virtualTime) await context.addInitScript(installClock);
   const page = await context.newPage();
   page.on('pageerror', (e) => console.log(`    [page error] ${String(e.message).slice(0, 120)}`));
   console.log(`  loading ${site.url}`);
@@ -353,8 +377,12 @@ async function capture(browser, siteId, framing, { preview = false } = {}) {
   const indices = preview ? [0, Math.round(frames * 0.25), Math.round(frames * 0.45), Math.round(frames * 0.6)] : [...Array(frames).keys()];
   const problems = new Set();
   const t0 = Date.now();
+  if (site.virtualTime) await page.evaluate(() => window.__clock.freeze());
+  let last = 0;
   for (const i of indices) {
     const t = i / FPS;
+    if (site.virtualTime) await page.evaluate((ms) => window.__clock.advance(ms), (t - last) * 1000);
+    last = t;
     await site.pose.call(site, page, t, framing);
     await stepAnimations(page, t);
     await nextFrames(page, 1);
@@ -391,8 +419,8 @@ function encodeToBudget(label, startCrf, maxCrf, encode) {
     const size = encode(crf);
     console.log(`    ${label} crf ${crf}: ${size} bytes`);
     if (size <= VIDEO_BUDGET || crf >= maxCrf) return { crf, size };
-    // Size roughly halves every +6 CRF (x264); step a little past the estimate.
-    crf = Math.min(maxCrf, crf + Math.max(1, Math.ceil(6 * Math.log2(size / VIDEO_BUDGET)) + 1));
+    // Size roughly halves every +6 CRF; step to the estimate and re-check.
+    crf = Math.min(maxCrf, crf + Math.max(1, Math.ceil(6 * Math.log2(size / VIDEO_BUDGET))));
   }
 }
 
@@ -416,7 +444,7 @@ function encode(siteId, framing) {
   });
 
   const passlog = path.join(dir, 'vp9pass');
-  const vp9 = encodeToBudget('webm', 30, 56, (crf) => {
+  const vp9 = encodeToBudget('webm', 26, 56, (crf) => {
     const common = ['-framerate', String(FPS), '-i', input, '-vf', vf, '-c:v', 'libvpx-vp9', '-b:v', '0',
       '-crf', String(crf), '-row-mt', '1', '-tile-columns', '2', '-deadline', 'good', '-pix_fmt', 'yuv420p',
       ...COLOR_TAGS, '-an', '-r', String(FPS), '-passlogfile', passlog];
@@ -477,6 +505,33 @@ const siteIds = argList('only', Object.keys(SITES));
 const framings = argList('framing', Object.keys(FRAMINGS));
 const encodeOnly = process.argv.includes('--encode-only');
 const preview = process.argv.includes('--preview');
+
+if (process.argv.includes('--selftest')) {
+  // The scanner must see the claims the audit lists where they are still live.
+  const b = await chromium.launch({ args: ['--hide-scrollbars'] });
+  const ctx = await b.newContext(FRAMINGS.desktop.context);
+  const pg = await ctx.newPage();
+  const site = SITES.aisimply;
+  const checks = [
+    ['https://www.aisimply.co/about', /Us in Numbers/],
+    ['https://www.aisimply.co/about', /Featured Clients/],
+    ['https://www.aisimply.co/post/case-study-institutional-memory-and-ai-writing-for-a-hong-kong-think-tank', /Kay Huang/],
+  ];
+  let ok = true;
+  for (const [url, anchor] of checks) {
+    await pg.goto(url, { waitUntil: 'load', timeout: 120000 });
+    await pg.waitForTimeout(4000);
+    await preScroll(pg, 7000);
+    await pg.getByText(anchor).first().scrollIntoViewIfNeeded();
+    await pg.evaluate(() => window.scrollBy(0, 150));
+    await pg.waitForTimeout(2500);
+    const hits = await scanViewport(pg, [...GLOBAL_FLAGS, ...site.flags], site.imageFlags);
+    console.log(`${hits.length ? 'caught' : 'MISSED'} ${anchor} on ${url}\n  ${hits.join('\n  ')}`);
+    if (!hits.length) ok = false;
+  }
+  await b.close();
+  process.exit(ok ? 0 : 1);
+}
 
 const jobs = [];
 for (const framing of framings) for (const siteId of siteIds) jobs.push([siteId, framing]);

@@ -1,0 +1,128 @@
+---
+// /lab/figure: a test page for the point figure. Not linked from the site and kept out of search
+// (noindex). Standalone on purpose, so it works whatever the site's layout does.
+import Figure from '../../components/Figure.astro';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Figure lab</title>
+  </head>
+  <body>
+    <main class="lab">
+      <div class="lab__frame">
+        <Figure />
+      </div>
+      <div class="lab__panel">
+        <h1>Figure lab</h1>
+        <p>Move the pointer or scroll. These buttons change what the figure listens to.</p>
+        <div class="lab__buttons">
+          <button type="button" data-action="motion" aria-pressed="true">Motion: on</button>
+          <button type="button" data-action="theme" aria-pressed="false">Theme: light</button>
+        </div>
+        <p class="lab__stats" data-stats aria-live="off">Waiting for the renderer</p>
+      </div>
+    </main>
+    <div class="lab__spacer"></div>
+
+    <script>
+      const html = document.documentElement;
+      const motionButton = document.querySelector<HTMLButtonElement>('[data-action="motion"]')!;
+      const themeButton = document.querySelector<HTMLButtonElement>('[data-action="theme"]')!;
+      const stats = document.querySelector<HTMLElement>('[data-stats]')!;
+
+      motionButton.addEventListener('click', () => {
+        const off = html.getAttribute('data-motion') !== 'off';
+        if (off) html.setAttribute('data-motion', 'off');
+        else html.removeAttribute('data-motion');
+        motionButton.textContent = `Motion: ${off ? 'off' : 'on'}`;
+        motionButton.setAttribute('aria-pressed', String(!off));
+        document.dispatchEvent(new CustomEvent('figure:motion', { detail: { enabled: !off } }));
+      });
+
+      themeButton.addEventListener('click', () => {
+        const dark = html.getAttribute('data-lab-theme') !== 'dark';
+        html.setAttribute('data-lab-theme', dark ? 'dark' : 'light');
+        themeButton.textContent = `Theme: ${dark ? 'dark' : 'light'}`;
+        themeButton.setAttribute('aria-pressed', String(dark));
+        document.dispatchEvent(new CustomEvent('figure:theme'));
+      });
+
+      setInterval(() => {
+        const root = document.querySelector('[data-figure-mount]') as (HTMLElement & { __figure?: { stats: Record<string, any> } }) | null;
+        const s = root && root.__figure && root.__figure.stats;
+        if (!s) return;
+        stats.textContent = `${s.state}, WebGL ${s.webgl}, ${s.level} file, ${s.count} points, ${s.frameMs.toFixed(2)} ms per frame (CPU), ${s.fps.toFixed(0)} fps${s.reason ? ', ' + s.reason : ''}`;
+      }, 500);
+    </script>
+
+    <style is:global>
+      :root {
+        --lab-bg: #ffffff;
+        --lab-bg-2: #f2f2f2;
+        --lab-text: #1a1a1a;
+        --figure-point: #1a1a1a;
+        --figure-glow: rgb(43 74 203 / 0.35);
+      }
+      :root[data-lab-theme='dark'] {
+        --lab-bg: #0e0f12;
+        --lab-bg-2: #17191e;
+        --lab-text: #ecebe6;
+        --figure-point: #e9e6df;
+        --figure-glow: rgb(150 178 255 / 0.55);
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--lab-bg);
+        color: var(--lab-text);
+        font: 16px/1.5 system-ui, sans-serif;
+      }
+      .lab {
+        display: grid;
+        gap: 24px;
+        padding: 32px 16px;
+        max-width: 80rem;
+        margin: 0 auto;
+      }
+      .lab__frame {
+        width: 100%;
+        aspect-ratio: 4 / 5;
+        max-height: 75svh;
+        background: var(--lab-bg-2);
+        border-radius: 4px;
+      }
+      .lab__buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .lab__buttons button {
+        min-height: 44px;
+        padding: 8px 12px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .lab__stats {
+        font: 13px/1.4 ui-monospace, monospace;
+      }
+      .lab__spacer {
+        height: 120vh;
+      }
+      @media (min-width: 900px) {
+        .lab {
+          grid-template-columns: 1fr 1fr;
+          align-items: center;
+        }
+      }
+    </style>
+  </body>
+</html>
