@@ -171,6 +171,21 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
    *   - Contact starts as soon as it enters the window, so the two lights have room to gather.
    *   - Everything else starts when its top reaches the middle of the window.
    */
+  /**
+   * Whether a project's content fits its one-screen frame. Measured from the frame's visible
+   * children rather than scrollHeight, which also counts the text scrim's oversized glow.
+   */
+  function frameFits(frame: HTMLElement): boolean {
+    const top = frame.getBoundingClientRect().top;
+    const padBottom = parseFloat(getComputedStyle(frame).paddingBottom) || 0;
+    let bottom = 0;
+    for (const child of Array.from(frame.children)) {
+      const r = child.getBoundingClientRect();
+      if (r.height > 0) bottom = Math.max(bottom, r.bottom - top);
+    }
+    return bottom + padBottom <= window.innerHeight + 1;
+  }
+
   function build() {
     triggers.forEach((st) => st.kill(true));
     triggers = scenes.map(({ key, el }) => {
@@ -180,7 +195,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         // taller than the window, .is-tall lets that project scroll normally instead.
         el.classList.remove('is-tall');
         const frame = el.querySelector<HTMLElement>('.stop__grid');
-        if (pinning && frame && frame.scrollHeight > window.innerHeight + 1) el.classList.add('is-tall');
+        if (pinning && frame && !frameFits(frame)) el.classList.add('is-tall');
         // Phones (and reduced motion, snapshot): the first project takes over at the top of the
         // window, giving the archive's dissolve its scroll; the next two take over a little
         // earlier, so the city never shows the last project under the next video.
