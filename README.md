@@ -83,13 +83,14 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A slim floor display on the right edge, like a Hong Kong lift's (G, 1 to 5, R), lights the current section; a floor is a link there | scroll, 1024px and wider | follows the section under the middle of the window | `Lift.astro`, `lift.ts` |
 | Live local times sit under Pomfret and Hong Kong; an arc of light travels between the two lights about every 6 s, and hovering or focusing the email sends another; Copy email confirms with Copied | Contact | 2.6 s an arc; Copied for 2 s | `Contact.astro`, `arc.ts` |
 | A faint shooting star crosses the sky, never across text; tapping one of the brightest stars sends one from it | every 20 to 40 s; a tap | under a second | `shooting.ts` |
+| Lights (the footer button, or the L key) starts a 12 s show: slim searchlights sweep from the tallest roofs while the windows pulse in rhythm | a click or L; any scroll stops it | 100 beats a minute | `lightshow.ts`, `Contact.astro`, `interact.ts` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
 | More panels open and close | click | 420 ms height | `More.astro`, `more.ts` |
 | The menu opens, its links step in | click | 240 ms; 420 ms | `Header.astro` |
 | Previews play | at least half visible | pause when not | `loop-video.ts` |
 | The Pomfret and Hong Kong labels fade in | at the bottom of the page | 400 ms | `Contact.astro` |
 
-With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The question's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars.
+With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The question's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars. There is no light show (the Lights button is hidden).
 
 ## Accessibility
 

@@ -101,3 +101,28 @@ if (emailLink) {
   emailLink.addEventListener('pointerenter', arc);
   emailLink.addEventListener('focus', arc);
 }
+
+// ---- Lights: the harbour light show (11b.9) -----------------------------------------------------
+// Shown only once the scene's interactions run (html.has-interactions), with motion on, never in
+// snapshot or without WebGL. The scene answers with `world:lights-state` ({ on }), which drives
+// aria-pressed, including when the show ends by itself or a scroll stops it.
+const html = document.documentElement;
+const lightsWrap = document.querySelector<HTMLElement>('[data-lights-wrap]');
+const lightsButton = document.querySelector<HTMLButtonElement>('[data-lights]');
+
+if (lightsWrap && lightsButton && !html.hasAttribute('data-snapshot')) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const showIfAble = () => {
+    const able = html.classList.contains('has-interactions') && !html.classList.contains('no-webgl') && !reduce.matches;
+    lightsWrap.hidden = !able;
+  };
+  new MutationObserver(showIfAble).observe(html, { attributes: true, attributeFilter: ['class'] });
+  reduce.addEventListener?.('change', showIfAble);
+  showIfAble();
+
+  lightsButton.addEventListener('click', () => window.dispatchEvent(new CustomEvent('world:lights')));
+  window.addEventListener('world:lights-state', (event) => {
+    const on = !!(event as CustomEvent<{ on: boolean }>).detail?.on;
+    lightsButton.setAttribute('aria-pressed', String(on));
+  });
+}

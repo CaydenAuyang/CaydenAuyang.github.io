@@ -23,6 +23,7 @@ uniform float uPulseOn;
 uniform vec3 uWarm;
 uniform vec4 uSpill; // video spill color, amount (0..0.2)
 uniform vec3 uSpillAt; // video center (device px), falloff radius (px)
+uniform vec4 uShow; // light show: strength, seconds in, seconds per beat
 varying vec3 vWorld;
 
 float h12(vec2 p) {
@@ -38,6 +39,7 @@ float vnoise(vec2 p) {
 }
 //#NS_PULSE
 //#NS_SPILL
+//#NS_SHOW
 
 void main() {
   vec3 C = cameraPosition;
@@ -114,6 +116,8 @@ void main() {
   refl *= smoothstep(wakeT - 0.03, wakeT + 0.03, uWake * 1.06 - 0.02);
   float inHi = smoothstep(uHiRange.x - 40.0, uHiRange.x, xs) * (1.0 - smoothstep(uHiRange.y, uHiRange.y + 40.0, xs));
   refl *= (1.0 + uHiRange.w) * (1.0 + uHiRange.z * 0.8 * inHi);
+  // the light show's beats come back off the water with the windows
+  refl *= 1.0 + 0.5 * nsShowBeat(clamp(across, 0.0, 1.0));
 
   // Pulses: the reflections answer with the windows they mirror (the window at height ym above
   // the reflected point), and a thin ring of light spreads across the water from the tap. Seen

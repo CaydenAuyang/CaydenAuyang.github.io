@@ -42,6 +42,8 @@ export const ui = {
   // Contact (NIGHT-SIGNAL.md 11b.7, content.md Interface labels).
   copyEmail: 'Copy email',
   copied: 'Copied',
+  // The harbour light show's button in the footer (NIGHT-SIGNAL.md 11b.9).
+  lights: 'Lights',
   // The lift indicator (NIGHT-SIGNAL.md 11b.6): the nav's label for screen readers.
   liftLabel: 'Floors',
   // The one-time hint in the hero (NIGHT-SIGNAL.md 11b.1, content.md Interface labels).

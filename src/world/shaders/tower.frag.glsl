@@ -20,6 +20,7 @@ uniform vec4 uPulseB[PULSES]; // ring center x, z; meters across the screen at t
 uniform float uPulseOn;
 uniform vec4 uSpill; // video spill color, amount (0..0.2)
 uniform vec3 uSpillAt; // video center (device px), falloff radius (px)
+uniform vec4 uShow; // light show: strength, seconds in, seconds per beat
 
 varying vec3 vWorld;
 varying vec2 vCell;
@@ -32,9 +33,12 @@ flat varying float vCols;
 //#NS_WINDOWS
 //#NS_PULSE
 //#NS_SPILL
+//#NS_SHOW
 
-// The pulse wave at this fragment (0..1), set once in main before the window taps.
+// The pulse wave and the light show's beat at this fragment (0..1), set once in main before the
+// window taps.
 float gWave = 0.0;
+float gShow = 0.0;
 
 const vec3 GLAZE[5] = vec3[5](
   vec3(0.19, 0.22, 0.78),
@@ -82,8 +86,8 @@ vec4 windowAt(vec2 c, vec2 fw, float across, uint seed, uint faceSeg, int L, int
   float b = nsBright(wh);
 
   // Project highlights and pulses widen the lit set for a while; the base rule stays the same.
-  int T2 = T + int(130.0 * gWave);
-  b *= highlight(group, across, T2) * (1.0 + 0.6 * gWave);
+  int T2 = T + int(130.0 * gWave + 40.0 * gShow);
+  b *= highlight(group, across, T2) * (1.0 + 0.6 * gWave + 0.5 * gShow);
   float state = nsLit(wh, T2) ? 1.0 : 0.0;
 
   if (uMotion > 0.5 && nsFlickers(wh)) {
@@ -122,6 +126,7 @@ void main() {
   vec3 light = vec3(0.0);
   float across = (vWorld.x - uCityX.x) / uCityX.y;
   if (uPulseOn > 0.0) gWave = nsPulseWave(vWorld);
+  gShow = nsShowBeat(across);
 
   if (face > 3.5) {
     wall = uFacade * 0.7;
@@ -144,7 +149,7 @@ void main() {
     float wash = 0.25 + 0.75 * hfrac * hfrac;
     float wakeT = across * 0.86 + 0.06;
     float on = smoothstep(wakeT - 0.02, wakeT + 0.02, uWake * 1.06 - 0.02);
-    light = cc * 0.5 * fin * wash * on * (1.0 + 0.6 * gWave);
+    light = cc * 0.5 * fin * wash * on * (1.0 + 0.6 * gWave + 0.5 * gShow);
   } else {
     vec3 g = GLAZE[int(vTower.z + 0.5)];
     uint seed = uint(vTower.x + 0.5);
@@ -180,14 +185,14 @@ void main() {
       vec3 floorMean = vec3(0.0);
       if (cy >= 0.0 && cy < vSeg.y) {
         uint fl = uint(vGrid.w + 0.5) + uint(cy);
-        int Tf = nsFloorThreshold(seed, fl, L) + int(130.0 * gWave);
-        float hb = highlight(group, across, Tf) * (1.0 + 0.6 * gWave);
+        int Tf = nsFloorThreshold(seed, fl, L) + int(130.0 * gWave + 40.0 * gShow);
+        float hb = highlight(group, across, Tf) * (1.0 + 0.6 * gWave + 0.5 * gShow);
         vec3 fc = Tf >= 256 ? mix(uCool, uWarm, 0.35) : mix(uCool, uWarm, 0.8);
         float yin = cover1(fract(vCell.y), g.y, g.z, fw.y) / max(g.z - g.y, 1e-3);
         floorMean = fc * (0.92 * hb * clamp(float(Tf) / 256.0, 0.0, 1.0) * area * yin);
       }
-      int Ts = L + int(130.0 * gWave);
-      float hs = highlight(group, across, Ts) * (1.0 + 0.6 * gWave);
+      int Ts = L + int(130.0 * gWave + 40.0 * gShow);
+      float hs = highlight(group, across, Ts) * (1.0 + 0.6 * gWave + 0.5 * gShow);
       float segShare = clamp(float(Ts) / 256.0, 0.0, 1.0) * 0.76 + 0.06;
       vec3 segMean = (uWarm * 0.8 + uCool * 0.2) * (0.92 * hs * segShare * area);
       vec3 mean = mix(floorMean, segMean, miniY) * on;

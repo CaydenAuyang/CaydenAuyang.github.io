@@ -14,6 +14,12 @@
 // updated on the minute; empty (and hidden) without JavaScript, never hard-coded. A "Copy email"
 // button beside GitHub copies the address and says "Copied" for 2 s (announced politely by a
 // status line). Hovering or focusing the email sends `world:arc`, an extra light along the arc.
+//
+// Lights (11b.9): a small toggle button under the small print starts and stops the harbour light
+// show (`world:lights`; the L key does the same, in interact.ts). Its aria-pressed follows the
+// scene's `world:lights-state` events, so it also resets when the show ends or a scroll stops it.
+// It shows only when the scene's interactions are running with motion on: hidden with reduced
+// motion, in snapshot and without WebGL.
 import ExternalLink from '../ui/ExternalLink.astro';
 import { LIGHT_ANCHORS } from '../../world/contract';
 import { contact } from '../../data/content';
@@ -61,6 +67,9 @@ const headline = ignite(contact.heading);
       <p class="sr-only" role="status" data-copy-status></p>
       <p class="contact__portfolio t-body">{contact.portfolio.text}</p>
       <p class="contact__small t-meta">{contact.smallPrint}</p>
+      <p class="contact__lights-wrap" data-lights-wrap hidden>
+        <button type="button" class="contact__lights" aria-pressed="false" data-lights>{ui.lights}</button>
+      </p>
     </div>
   </section>
 </footer>
@@ -186,6 +195,50 @@ const headline = ignite(contact.heading);
   }
   .contact__copy[data-copied] {
     border-color: var(--window);
+  }
+
+  /* Lights: a quiet toggle under the small print; lit (window) while the show runs. */
+  .contact__lights-wrap[hidden] {
+    display: none;
+  }
+  .contact__lights-wrap {
+    margin-top: var(--space-3) !important;
+  }
+  .contact__lights {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    border: 1px solid var(--rule);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    color: var(--text);
+    transition:
+      color var(--dur-quick) var(--ease-out),
+      border-color var(--dur-quick) var(--ease-out);
+  }
+  .contact__lights::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition:
+      background var(--dur-quick) var(--ease-out),
+      box-shadow var(--dur-quick) var(--ease-out);
+  }
+  .contact__lights:hover {
+    border-color: rgb(var(--window-rgb) / 0.45);
+  }
+  .contact__lights[aria-pressed='true'] {
+    color: var(--window);
+    border-color: rgb(var(--window-rgb) / 0.6);
+  }
+  .contact__lights[aria-pressed='true']::before {
+    background: var(--window);
+    box-shadow: 0 0 8px rgb(var(--window-rgb) / 0.8);
   }
 
   .contact__portfolio {

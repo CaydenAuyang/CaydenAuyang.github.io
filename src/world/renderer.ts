@@ -13,6 +13,7 @@ import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { createInteractions, pulseUniforms } from './pulse';
 import { createSpill, spillUniforms } from './spill';
+import { buildLightShow, showUniforms } from './lightshow';
 import { buildShooting } from './shooting';
 import { buildSky, STAR_AXIS, STAR_DRIFT, starsInView } from './sky';
 import { buildSkyline } from './skyline';
@@ -53,6 +54,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     uHi: { value: new Vector3(0, 0, 0.5) },
     ...pulseUniforms(),
     ...spillUniforms(),
+    ...showUniforms(),
   };
 
   // ---- Build the city ----
@@ -218,6 +220,10 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   const shooting = buildShooting(skyParts, camera, U, { axis: STAR_AXIS, rate: STAR_DRIFT }, () => motion);
   sky.add(shooting.mesh);
 
+  // ---- Harbour light show (11b.9): searchlights from the tallest roofs, drawn only while it runs ----
+  const show = buildLightShow(city, U, PALETTE.cool);
+  scene.add(show.mesh);
+
   // ---- Video light spill (11b.4) ----
   const spill = createSpill(U, () => motion, () => requestRender());
 
@@ -263,6 +269,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     interactions.update(now);
     spill.update(delta, canvas.width, canvas.height);
     shooting.update(now, { w: canvas.width, h: canvas.height });
+    show.update(now, motion);
     renderer.render(scene, camera);
     frames++;
   };
@@ -347,6 +354,14 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     },
     shootingStar(ndc) {
       return shooting.fire(ndc);
+    },
+    lightShow(on: boolean) {
+      // only ever with motion on
+      if (on && !motion) return;
+      show.set(on);
+    },
+    get lightShowOn() {
+      return show.on;
     },
     sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
       const hp = path.poses.hero.pos;
