@@ -1,13 +1,15 @@
-// Renders the still image shown when WebGL is missing: the assembled figure, drawn from the point
-// data by the real renderer (in headless Chromium through the harness), on a transparent
-// background. It never touches the photos.
+// Renders the still image shown when WebGL is missing, the context is lost, or the data is late:
+// the settled figure, drawn from the point data by the real renderer (in headless Chromium
+// through the harness) as dark ink points on a transparent background, so it works on the
+// vellum plate and on white. It never touches the photos.
 //
-//   node tools/figure/render-fallback.mjs [--point '#8b93a3'] [--glow '#c9ced8'] [--width 720] [--height 900]
+//   node tools/figure/render-fallback.mjs [--point '#13212D'] [--floor 0.55] [--scale 1.2]
+//                                         [--width 720] [--height 900] [--dpr 1]
 //
-// Writes public/figure/figure-fallback.png and public/figure/figure-fallback.webp (kept under
-// 120 KB by lowering the WebP quality, then the size, until it fits). Needs cwebp (Homebrew webp).
-// Pass the site's colors to match the page, for example:
-//   node tools/figure/render-fallback.mjs --point '#1a1a1a' --glow 'rgb(43 74 203 / 0.35)'
+// Writes public/figure/figure-fallback.png and public/figure/figure-fallback.webp. The WebP is
+// kept under 120 KB by lowering its quality, then its size, until it fits. Needs cwebp
+// (Homebrew webp). The image is 4:5 like the laptop plate; on the 9:10 phone plate the
+// component shows it with object-fit: cover from the top.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -18,11 +20,15 @@ import { launch } from './harness/browser.mjs';
 
 export async function renderFallback({
   repoRoot = REPO_ROOT,
-  point = '#8b93a3',
-  glow = '#c9ced8',
+  point = '#13212D',
+  floor = 0.55,
+  scale = 1.2, // points a little larger than live, since the image is shown scaled up
   width = 720,
   height = 900,
+  dpr = 1,
+  count = 60000,
   src = '/public/figure/figure-hi.bin',
+  srcmeta = '/public/figure/figure.json',
   mount = null,
   outDir = path.join(repoRoot, 'public/figure'),
   maxBytes = 115000, // stays under 120 KB with room to spare
@@ -32,8 +38,11 @@ export async function renderFallback({
   const { port, close } = await serve(repoRoot, 0, mount ? { '/__test/': mount } : {});
   const browser = await launch();
   try {
-    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
-    const q = new URLSearchParams({ still: '1', transparent: '1', bare: '1', level: 'hi', yaw: '0', src, point, glow });
+    const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: dpr });
+    const q = new URLSearchParams({
+      still: '1', transparent: '1', bare: '1', device: 'laptop', count: String(count), yaw: '0',
+      src, srcmeta, point, origin: point, floor: String(floor), scale: String(scale),
+    });
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto(`http://127.0.0.1:${port}/tools/figure/harness/index.html?${q}`);
@@ -45,23 +54,25 @@ export async function renderFallback({
     const png = path.join(outDir, 'figure-fallback.png');
     await page.locator('canvas').screenshot({ path: png, omitBackground: true });
     const webp = path.join(outDir, 'figure-fallback.webp');
+    const W = Math.round(width * dpr);
+    const H = Math.round(height * dpr);
     let done = false;
-    let scale = 1;
-    for (let attempt = 0; attempt < 4 && !done; attempt++) {
-      for (const qv of [80, 72, 64, 56, 48]) {
-        const resize = scale < 1 ? ['-resize', String(Math.round(width * scale)), String(Math.round(height * scale))] : [];
-        execFileSync('cwebp', ['-quiet', '-q', String(qv), '-alpha_q', '80', '-m', '6', ...resize, png, '-o', webp]);
+    let s = 1;
+    for (let attempt = 0; attempt < 5 && !done; attempt++) {
+      for (const qv of [82, 74, 66, 58, 50]) {
+        const resize = s < 1 ? ['-resize', String(Math.round(W * s)), String(Math.round(H * s))] : [];
+        execFileSync('cwebp', ['-quiet', '-q', String(qv), '-alpha_q', '85', '-m', '6', ...resize, png, '-o', webp]);
         const bytes = fs.statSync(webp).size;
         if (bytes <= maxBytes) {
-          log(`figure-fallback.webp ${(bytes / 1000).toFixed(1)} KB (quality ${qv}, ${Math.round(width * scale)}x${Math.round(height * scale)})`);
+          log(`figure-fallback.webp ${(bytes / 1000).toFixed(1)} KB (quality ${qv}, ${Math.round(W * s)}x${Math.round(H * s)}, ${stats.count} points)`);
           done = true;
           break;
         }
       }
-      scale *= 0.85;
+      s *= 0.88;
     }
     if (!done) throw new Error(`could not get figure-fallback.webp under ${maxBytes / 1000} KB`);
-    log(`figure-fallback.png ${(fs.statSync(png).size / 1000).toFixed(1)} KB (${width}x${height})`);
+    log(`figure-fallback.png ${(fs.statSync(png).size / 1000).toFixed(1)} KB (${W}x${H})`);
     return { png, webp, count: stats.count };
   } finally {
     await browser.close();
@@ -76,11 +87,14 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     return i >= 0 ? args[i + 1] : def;
   };
   renderFallback({
-    point: arg('point', '#8b93a3'),
-    glow: arg('glow', '#c9ced8'),
+    point: arg('point', '#13212D'),
+    floor: Number(arg('floor', 0.55)),
+    scale: Number(arg('scale', 1.2)),
     width: Number(arg('width', 720)),
     height: Number(arg('height', 900)),
+    dpr: Number(arg('dpr', 1)),
     src: arg('src', '/public/figure/figure-hi.bin'),
+    srcmeta: arg('srcmeta', '/public/figure/figure.json'),
     mount: arg('mount', null),
     outDir: arg('out', undefined),
   }).catch((e) => {

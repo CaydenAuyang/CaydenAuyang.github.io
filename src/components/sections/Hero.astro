@@ -8,8 +8,8 @@
 // two point streams start at those two ticks; their positions are exposed as --origin-a-y and
 // --origin-b-y (fractions of the plate's height) for the figure code.
 //
-// The figure itself (src/components/Figure.astro, by the figure agent) goes inside the
-// data-figure container, which carries the alt text. Until it is wired in, the plate is empty.
+// The figure itself (src/components/Figure.astro) sits inside the data-figure container, which
+// carries the alt text, so the figure's own canvas and still are decorative.
 //
 // Talking to the figure:
 //   - it fires "figure:ready" (bubbling) when drawn; detail.count = points actually rendered,
@@ -19,6 +19,7 @@
 import { hero, meta } from '../../data/content';
 import { places, ui } from '../../data/site';
 import Say from '../ui/Say.astro';
+import Figure from '../Figure.astro';
 
 // Latitude scale: 50° N at the top edge, 10° N at the bottom.
 const latY = (lat: number) => (50 - lat) / 40;
@@ -46,7 +47,9 @@ const [first, ...rest] = hero.name.split(' ');
         data-origin-a-y={pomfretY.toFixed(4)}
         data-origin-b-y={hongKongY.toFixed(4)}
       >
-        <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}></div>
+        <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}>
+          <Figure decorative />
+        </div>
         <div class="hero__chart" aria-hidden="true">
           <span class="hero__corner hero__corner--a">{places.pomfret.name}</span>
           <span class="hero__corner hero__corner--b">{places.hongKong.name}</span>
@@ -153,6 +156,12 @@ const [first, ...rest] = hero.name.split(' ');
     line-height: 1.2;
     color: var(--text-2);
   }
+  /* Labels sit on a vellum backing so points passing under them never cut into the text. */
+  .hero__corner,
+  .hero__lat {
+    background: var(--plate);
+    padding: 1px 4px;
+  }
   .hero__corner {
     position: absolute;
     top: calc(var(--tick) + var(--space-2));
@@ -179,9 +188,11 @@ const [first, ...rest] = hero.name.split(' ');
   }
   .hero__lat--a {
     left: 0;
+    padding-left: 0;
   }
   .hero__lat--b {
     right: 0;
+    padding-right: 0;
     flex-direction: row-reverse;
   }
 

@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { writeOutputs } from './lib/emit.mjs';
+import { publish, writeOutputs } from './lib/emit.mjs';
 import { placeholderModel } from './lib/placeholder.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +28,7 @@ export const DEFAULTS = {
 };
 
 export function parseArgs(argv) {
-  const args = { ...DEFAULTS, placeholder: false, fallback: true, hi: 60000, lo: 18000 };
+  const args = { ...DEFAULTS, placeholder: false, fallback: true, publish: true, hi: 60000, lo: 18000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -41,6 +41,8 @@ export function parseArgs(argv) {
     else if (a === '--hi') args.hi = Number(next());
     else if (a === '--lo') args.lo = Number(next());
     else if (a === '--fresh') args.fresh = true;
+    else if (a === '--rounds') args.rounds = Number(next());
+    else if (a === '--no-publish') args.publish = false;
     else if (a === '--help' || a === '-h') args.help = true;
     else throw new Error(`unknown option ${a}`);
   }
@@ -54,17 +56,23 @@ export function assertOutsideRepo(dir) {
   }
 }
 
-async function maybeFallback(args) {
+async function maybeFallback(args, stage) {
   if (!args.fallback) return;
   try {
     const mod = await import('./render-fallback.mjs');
-    if (typeof mod.renderFallback === 'function') {
-      const r = await mod.renderFallback({ repoRoot: REPO });
-      console.log('fallback image:', r ? JSON.stringify(r) : 'done');
-    }
+    await mod.renderFallback({ repoRoot: REPO, mount: stage, src: '/__test/figure-hi.bin', srcmeta: '/__test/figure.json', outDir: stage });
   } catch (e) {
     console.warn(`fallback image skipped: ${e.message}`);
   }
+}
+
+function finish(args, stage) {
+  if (args.publish === false) {
+    console.log(`staged in ${stage} (not published; run again without --no-publish, or copy with care)`);
+    return;
+  }
+  const files = publish(stage, OUT);
+  console.log(`published to ${OUT}: ${files.join(', ')}`);
 }
 
 async function main() {
@@ -73,26 +81,56 @@ async function main() {
     console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 11).join('\n'));
     return;
   }
-  let model;
-  let extra = {};
+  // Every build is staged first and published at the end, so public/figure never holds a mix.
+  const stage = path.join(args.placeholder ? path.join(HERE, 'work') : args.work, 'stage');
+  fs.mkdirSync(stage, { recursive: true });
   if (args.placeholder) {
-    model = placeholderModel();
-  } else {
-    assertOutsideRepo(args.work);
-    const { photoModel } = await import('./lib/photo.mjs');
-    const r = await photoModel(args);
-    model = r.model;
-    extra = r.extra || {};
+    const t0 = Date.now();
+    const { json } = writeOutputs(placeholderModel(), { hiCount: args.hi, loCount: args.lo, outDir: stage });
+    console.log(`placeholder: hi ${json.hi.count} points (${(json.hi.bytes / 1024).toFixed(0)} KB), lo ${json.lo.count} points (${(json.lo.bytes / 1024).toFixed(0)} KB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+    await maybeFallback(args, stage);
+    finish(args, stage);
+    return;
   }
-  const t0 = Date.now();
-  const { json } = writeOutputs(model, { hiCount: args.hi, loCount: args.lo, outDir: OUT, extra });
-  console.log(`wrote ${OUT}: hi ${json.hi.count} points (${(json.hi.bytes / 1024).toFixed(0)} KB), lo ${json.lo.count} points (${(json.lo.bytes / 1024).toFixed(0)} KB) in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
-  console.log('hi groups', json.hi.groups);
-  await maybeFallback(args);
-  if (!args.placeholder) {
-    const { runOverlay } = await import('./overlay.mjs');
-    await runOverlay(args);
+  assertOutsideRepo(args.work);
+  args.dataDir = stage;
+  const { photoModel } = await import('./lib/photo.mjs');
+  const { runOverlay } = await import('./overlay.mjs');
+  // Fit, check the outline against each photo, feed the best-matching yaws back into the fit, and
+  // repeat until the overlap stops improving. The best round is the one that ends up published.
+  let best = null;
+  let yawOverride = null;
+  for (let round = 1; round <= (args.rounds ?? 4); round++) {
+    console.log(`round ${round}${yawOverride ? ` (yaws ${JSON.stringify(yawOverride)})` : ''}`);
+    const r = await photoModel(args, { yawOverride });
+    writeOutputs(r.model, { hiCount: args.hi, loCount: args.lo, outDir: stage, extra: r.extra });
+    const rep = await runOverlay(args);
+    const turned = Object.entries(rep.views).filter(([n]) => n !== 'front');
+    const score = Object.values(rep.views).reduce((a, v) => a + v.iou + v.iouHeadNeck, 0) / 2;
+    console.log(`  total IoU ${score.toFixed(4)}`);
+    if (!best || score > best.score + 1e-4) best = { score, round, yawOverride };
+    else break;
+    const next = Object.fromEntries(turned.map(([n, v]) => [n, v.yawEstimatedDeg]));
+    const moved = turned.some(([n, v]) => Math.abs(v.yawEstimatedDeg - v.yawFittedDeg) > 1);
+    if (!moved) break;
+    yawOverride = next;
   }
+  if (best) {
+    console.log(`best: round ${best.round}, total IoU ${best.score.toFixed(4)}`);
+    // Rebuild the best round if a later round overwrote it.
+    const r = await photoModel(args, { yawOverride: best.yawOverride });
+    const { json } = writeOutputs(r.model, { hiCount: args.hi, loCount: args.lo, outDir: stage, extra: r.extra });
+    console.log(`staged: hi ${json.hi.count} points (${(json.hi.bytes / 1024).toFixed(0)} KB), lo ${json.lo.count} points (${(json.lo.bytes / 1024).toFixed(0)} KB)`);
+    const rep = await runOverlay(args);
+    fs.writeFileSync(path.join(args.work, 'overlay-report.json'), JSON.stringify({ ...rep, round: best.round, yawOverride: best.yawOverride }, null, 2));
+    const front = rep.views.front?.iou ?? 0;
+    if (front < (args.minFrontIoU ?? 0.97)) {
+      console.warn(`front IoU ${front.toFixed(4)} is below ${args.minFrontIoU ?? 0.97}; not publishing`);
+      args.publish = false;
+    }
+  }
+  await maybeFallback(args, stage);
+  finish(args, stage);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

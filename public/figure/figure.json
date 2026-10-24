@@ -1,18 +1,18 @@
 {
   "version": 1,
   "format": "CAFG v1, see tools/figure/lib/format.mjs",
-  "source": "placeholder",
-  "units": "m",
-  "builtAt": "2026-10-24T01:54:24.634Z",
+  "source": "photos",
+  "units": "front-photo px",
+  "builtAt": "2026-10-24T02:15:30.404Z",
   "hi": {
     "file": "figure-hi.bin",
     "count": 60000,
     "bytes": 600048,
     "groups": {
-      "body": 12225,
-      "skin": 8746,
-      "hair": 15061,
-      "contour": 23968
+      "body": 13145,
+      "skin": 7854,
+      "hair": 15003,
+      "contour": 23998
     }
   },
   "lo": {
@@ -20,33 +20,40 @@
     "count": 18000,
     "bytes": 180048,
     "groups": {
-      "body": 3659,
-      "skin": 2619,
-      "hair": 4542,
-      "contour": 7180
+      "body": 3948,
+      "skin": 2350,
+      "hair": 4504,
+      "contour": 7198
     }
   },
   "bounds": {
     "min": [
-      -0.21718502519263821,
-      0.0035169568993355486,
-      -0.11021779895731262
+      -727.6021752983396,
+      -39.93517275605893,
+      -446.12423932552565
     ],
     "max": [
-      0.21718550705977815,
-      0.6022003988528453,
-      0.1191923869087746
+      727.6025954491597,
+      1448.1974545983871,
+      394.9588256397282
     ]
   },
   "landmarks": {
-    "crownY": 0.6,
-    "eyeY": 0.462,
-    "chinY": 0.378,
-    "neckY": 0.355,
-    "shoulderY": 0.27,
-    "shoulderHalfWidth": 0.216,
+    "crownY": 1441,
+    "eyeY": 1008.4120293240517,
+    "chinY": 648.221452481841,
+    "neckY": 648,
+    "shoulderY": 243.6829407657387,
+    "shoulderHalfWidth": 724.6400000000003,
     "centerX": 0,
-    "headH": 0.222
+    "headH": 792.778547518159
   },
-  "proportions": null
+  "proportions": {
+    "headWidthWithHair": 0.752,
+    "neckWidth": 0.449,
+    "shoulderWidthFitted": 1.828,
+    "crownToEye": 0.546,
+    "chinToNeck": 0,
+    "headDepthToWidth": 1.1
+  }
 }

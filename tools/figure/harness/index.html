@@ -134,7 +134,7 @@
       document.querySelector('.hero__plate').addEventListener('figure:ready', (e) => {
         document.getElementById('count').textContent = e.detail.count.toLocaleString('en-US');
         window.__readyCount = e.detail.count;
-        document.getElementById('replay').hidden = !!(q.has('still') || html.hasAttribute('data-snapshot') || html.getAttribute('data-motion') === 'off');
+        document.getElementById('replay').hidden = !!(q.has('still') || html.hasAttribute('data-snapshot') || html.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches);
       });
       document.getElementById('replay').addEventListener('click', () => root.dispatchEvent(new CustomEvent('figure:replay', { bubbles: true })));
 
