@@ -8,6 +8,12 @@
 // right under those lights. The labels scroll with the page while the lights stay fixed, so
 // they fade in only once the page is scrolled to the very bottom (within 4px), where they line
 // up. Snapshot captures Contact at the bottom too. Without JavaScript they simply show.
+//
+// Two cities (NIGHT-SIGNAL.md 11b.7): under each label, that city's local time (America/New_York
+// for Pomfret, Asia/Hong_Kong for Hong Kong), computed in the browser with Intl.DateTimeFormat and
+// updated on the minute; empty (and hidden) without JavaScript, never hard-coded. A "Copy email"
+// button beside GitHub copies the address and says "Copied" for 2 s (announced politely by a
+// status line). Hovering or focusing the email sends `world:arc`, an extra light along the arc.
 import ExternalLink from '../ui/ExternalLink.astro';
 import { LIGHT_ANCHORS } from '../../world/contract';
 import { contact } from '../../data/content';
@@ -27,8 +33,17 @@ const headline = ignite(contact.heading);
     aria-labelledby="contact-title"
     style={`--lights-y: ${Math.max(LIGHT_ANCHORS.pomfret.y, LIGHT_ANCHORS.hongKong.y)}`}
   >
-    <p class="contact__light t-label" style={at(LIGHT_ANCHORS.pomfret)} aria-hidden="true">{contact.lights.pomfret}</p>
-    <p class="contact__light t-label" style={at(LIGHT_ANCHORS.hongKong)} aria-hidden="true">{contact.lights.hongKong}</p>
+    {
+      [
+        { name: contact.lights.pomfret, anchor: LIGHT_ANCHORS.pomfret, zone: 'America/New_York' },
+        { name: contact.lights.hongKong, anchor: LIGHT_ANCHORS.hongKong, zone: 'Asia/Hong_Kong' },
+      ].map((light) => (
+        <div class="contact__light" style={at(light.anchor)} aria-hidden="true">
+          <p class="t-label">{light.name}</p>
+          <p class="contact__time t-meta" data-clock={light.zone} />
+        </div>
+      ))
+    }
 
     <div class="contact__body wrap scrim">
       <h2 id="contact-title" class="h2" {...headline.attrs} set:html={headline.html} />
@@ -37,9 +52,13 @@ const headline = ignite(contact.heading);
           ><span class="sr-only">{ui.emailLabel}: </span>{contact.email.text}</a
         >
       </p>
-      <p>
+      <p class="contact__actions">
+        <button type="button" class="contact__copy" data-copy-email={contact.email.text} data-needs-js data-snapshot-hide>
+          {ui.copyEmail}
+        </button>
         <ExternalLink class="action-link" href={contact.github.href} arrow>{contact.github.label}</ExternalLink>
       </p>
+      <p class="sr-only" role="status" data-copy-status></p>
       <p class="contact__portfolio t-body">{contact.portfolio.text}</p>
       <p class="contact__small t-meta">{contact.smallPrint}</p>
     </div>
@@ -72,6 +91,10 @@ const headline = ignite(contact.heading);
     opacity: 0;
   }
   .contact__light {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
     transition: opacity var(--dur-fade) var(--ease-out);
     position: absolute;
     left: calc(var(--lx) * 100%);
@@ -121,6 +144,50 @@ const headline = ignite(contact.heading);
   .contact__email:hover {
     text-decoration-color: var(--window);
   }
+  /* One line each, even at the screen's edge (the labels' own text-wrap would undo an inherited
+     nowrap). */
+  .contact__light > * {
+    white-space: nowrap;
+  }
+  .contact__time {
+    font-variant-numeric: tabular-nums;
+  }
+  .contact__time:empty {
+    display: none;
+  }
+
+  /* GitHub and Copy email side by side. The button is wide enough for "Copy email" in either
+     state (monospace: 10 characters plus its padding), so "Copied" never moves GitHub. */
+  .contact__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+  .contact__copy {
+    min-height: var(--tap);
+    min-width: calc(10ch + 2 * var(--space-3) + 2px);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    border: 1px solid rgb(var(--window-rgb) / 0.45);
+    font-size: 15px;
+    font-weight: var(--fw-medium);
+    color: var(--window);
+    text-align: center;
+    transition:
+      border-color var(--dur-quick) var(--ease-out),
+      background var(--dur-quick) var(--ease-out);
+  }
+  .contact__copy:hover {
+    border-color: var(--window);
+    background: rgb(var(--window-rgb) / 0.08);
+  }
+  .contact__copy[data-copied] {
+    border-color: var(--window);
+  }
+
   .contact__portfolio {
     max-width: var(--measure);
     margin-top: var(--space-5) !important;
@@ -131,6 +198,7 @@ const headline = ignite(contact.heading);
 </style>
 
 <script>
+  import '../../scripts/contact';
   // Show the light labels only at the bottom of the page, where they sit under the lights.
   const section = document.querySelector<HTMLElement>('.contact');
   if (section) {

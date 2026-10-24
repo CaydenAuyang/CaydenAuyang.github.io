@@ -25,6 +25,7 @@ import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOption
 import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
+import { createArc } from './arc';
 
 const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F'];
 const ID: Record<Target, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
@@ -55,6 +56,9 @@ const COL_EASE = 0.2;
 /** Archive hit areas: at least this wide on screen (CSS px), and this much taller than a column. */
 const COL_HIT_MIN = 24;
 const COL_HIT_PAD = { top: 18, foot: 10 };
+/** The arc between the two lights (11b.7): how far its middle rises (share of the view height), and its half width (CSS px). */
+const ARC_RISE = 0.17;
+const ARC_HALF_WIDTH = 6;
 /** Field (F): the share of points that are clear lights, and of points lit at all (clear or faint). */
 const FIELD_CLEAR = 0.025;
 const FIELD_LIT = 0.12;
@@ -197,6 +201,7 @@ function gaussFrom(rand: () => number) {
 }
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
+const smooth01 = (x: number) => x * x * (3 - 2 * x);
 
 /** A camera pose as axes plus the numbers needed to go between screen fractions and world space. */
 interface Frame {
@@ -607,6 +612,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       uniforms.uLightR.value = R;
       const pomfret = unproject(c, LIGHT_ANCHORS.pomfret.x, LIGHT_ANCHORS.pomfret.y, De);
       const hongKong = unproject(c, LIGHT_ANCHORS.hongKong.x, LIGHT_ANCHORS.hongKong.y, De);
+      // The arc between them (11b.7): up and over through the sky, its middle a sixth of the view
+      // higher, a few pixels wide, fading out inside each light.
+      arc.place(pomfret, hongKong, c.up, ARC_RISE * viewH, (ARC_HALF_WIDTH * viewH) / Math.max(1, H), R * 0.6);
       const r = fixed[4];
       const t = T[4];
       for (let i = 0; i < N; i++) {
@@ -655,6 +663,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     if (nrmAttr) nrmAttr.needsUpdate = true;
   }
 
+  const arc = createArc({ color: COLORS.warm, motion, requestRender: () => world.requestRender() });
   build();
 
   const geometry = new BufferGeometry();
@@ -686,7 +695,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   points.name = 'signal';
   world.scene.add(points);
   // Compile the program now so the first frame that shows the signal doesn't stall.
+  world.scene.add(arc.mesh);
+  arc.mesh.visible = true;
   world.renderer.compile(world.scene, world.camera);
+  arc.mesh.visible = false;
 
   // ---- Morph state ----
   let cur = { from: 'B' as Target, to: 'B' as Target, t: 1 };
@@ -750,6 +762,12 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const home = (from === 'A' && (to === 'A' || (cut ? t < 0.5 : t <= 0))) || (to === 'A' && (cut ? t >= 0.5 : t >= 1));
     points.visible = !home;
     lift(from, to, t);
+    // The arc shows with the two lights: fully once they have gathered, fading as they leave.
+    let lights = 0;
+    if (from === 'E' && to === 'E') lights = 1;
+    else if (to === 'E') lights = cut ? (t >= 0.5 ? 1 : 0) : smooth01(clamp((t - 0.6) / 0.4, 0, 1));
+    else if (from === 'E') lights = cut ? (t < 0.5 ? 1 : 0) : 1 - smooth01(clamp(t / 0.4, 0, 1));
+    arc.setPresence(points.visible ? lights : 0);
   }
 
   apply();
@@ -762,7 +780,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     last = now;
     if (motion) uniforms.uTime.value += dt;
     uniforms.uPixelRatio.value = world.renderer.getPixelRatio();
-    if (motion) easeColumns(dt);
+    if (motion) {
+      easeColumns(dt);
+      arc.tick(dt);
+    }
   });
 
   // ---- Rebuild the view-dependent targets when the viewport changes shape ----
@@ -833,7 +854,6 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       uniforms.uColDim.value = smooth01(colHi.dim);
     }
   }
-  const smooth01 = (x: number) => x * x * (3 - 2 * x);
   // A world point on screen in CSS px (and whether it is in front of the camera).
   function toScreen(v: Vector3, out: { x: number; y: number; ok: boolean }) {
     _p.copy(v).project(world.camera);
@@ -936,8 +956,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (!_top.ok) return null;
       return { x: _top.x / window.innerWidth, y: _top.y / window.innerHeight };
     },
-    // 11b.7 (the arc between the two lights) comes next; until then this does nothing.
-    sendArc() {},
+    sendArc() {
+      if (disposed) return;
+      arc.send();
+    },
     setMorph(from: Target, to: Target, t: number) {
       if (disposed) return;
       cur = { from, to, t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
@@ -946,6 +968,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     setMotion(enabled: boolean) {
       motion = enabled;
       uniforms.uMotion.value = enabled ? 1 : 0;
+      arc.setMotion(enabled);
       last = performance.now();
       lastLift = { maxRank: -1, amount: -1 };
       apply();
@@ -957,6 +980,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       window.removeEventListener('resize', onResize);
       window.clearTimeout(resizeTimer);
       world.scene.remove(points);
+      world.scene.remove(arc.mesh);
+      arc.dispose();
       geometry.dispose();
       material.dispose();
       world.setLift(0, 0);
