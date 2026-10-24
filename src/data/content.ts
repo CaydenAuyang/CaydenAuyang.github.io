@@ -118,8 +118,11 @@ export const question = {
 // ---- 3. Summer ---------------------------------------------------------------------------------
 
 export interface MoreBlock {
-  // A short bold lead-in ("The problem."), shown before the text.
+  // A short bold lead-in ("The problem."), shown at the start of the text's paragraph.
   title?: string;
+  // A heading line of its own above the text: bold words, then the rest in regular weight
+  // ("Measuring What Matters" then "(independent study, fall 2026)").
+  head?: { bold: string; rest?: string };
   text?: Line;
   list?: Line[];
 }
@@ -223,7 +226,7 @@ export const work = {
       caption: 'Saved demo data, news from 2014 to early 2024.',
       more: [
         {
-          title: 'Measuring What Matters (independent study, fall 2026).',
+          head: { bold: 'Measuring What Matters', rest: '(independent study, fall 2026)' },
           text: {
             text: "I'm comparing official statistics with informal signals (local news, search trends and social media) for Hong Kong, New York and London across about two decades. Before any category counts, I hand-code a sample and check the AI's labels against it. Two faculty mentors advise the study, and it runs through the end of the fall term.",
             source: 'OCH §2, ISP, METH, ISC',
@@ -325,7 +328,7 @@ export const since = {
       },
       proposed: { text: 'OurCityHealth v3, with 1,000+ cities, a public API and a funding decision.', source: 'POSTER' },
       now: {
-        text: "Both funding applications were declined, HKSTP Ideation in March and Cyberport's CCMF in May. The demo still runs on saved data, and my own analysis covers three cities. I've moved from scaling it to testing whether its core signal is real.",
+        text: "both funding applications were declined, HKSTP Ideation in March and Cyberport's CCMF in May. The demo still runs on saved data, and my own analysis covers three cities. I've moved from scaling it to testing whether its core signal is real.",
         source: 'OCH §1 Funding; OCH §1, E44; OCH §2',
       },
     },
@@ -341,7 +344,7 @@ export const since = {
         source: 'POSTER',
       },
       now: {
-        text: "Eight school cases, two delivered and handed over in October. Three outside organizations are at the discovery stage. Outcomes haven't been measured yet.",
+        text: "eight school cases, two delivered and handed over in October. Three outside organizations are at the discovery stage. Outcomes haven't been measured yet.",
         source: 'CLUB §8',
       },
     },
@@ -350,10 +353,10 @@ export const since = {
       status: 'Growing.',
       text: { text: 'The summer added a third case: a nonprofit.', source: 'CEX §8' },
       proposed: {
-        text: 'A 15 to 20 page thesis comparing a city-scale case and a school-scale case.',
+        text: 'a 15 to 20 page thesis comparing a city-scale case and a school-scale case.',
         source: 'POSTER',
       },
-      now: { text: 'The summer added a third case between them, a nonprofit.', source: 'CEX §8' },
+      now: { text: 'the summer added a third case between them, a nonprofit.', source: 'CEX §8' },
     },
   ] satisfies Strand[] as Strand[],
   proposedLabel: 'Proposed:',

@@ -116,6 +116,9 @@
   --space-8: 96px;
   --space-9: 128px;
 
+  /* The side gutter, always on the 8px grid: 16px on phones, then 5vw rounded down to 8px
+     (32px at 768, 48px at 1024, 72px at 1440), at most 80px. Browsers without round() use
+     plain 5vw. A custom property can't fall back by redeclaring it, hence @supports below. */
   --gutter: clamp(16px, 5vw, 80px);
   --max-page: 1440px;
   --header-h: 64px;
@@ -138,4 +141,15 @@
   --z-header: 10;
   --z-menu: 100;
   --z-skip: 1000;
+}
+
+@supports (width: round(down, 5vw, 8px)) {
+  :root {
+    --gutter: clamp(16px, round(down, 5vw, 8px), 80px);
+  }
+}
+@media (max-width: 767px) {
+  :root {
+    --gutter: 16px;
+  }
 }

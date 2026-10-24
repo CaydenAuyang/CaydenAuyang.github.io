@@ -5,9 +5,9 @@
 // The signal gathers into two lights at the contact key (LIGHT_ANCHORS in the world contract,
 // as viewport fractions): Pomfret on the left, Hong Kong on the right. This section is at least
 // one viewport tall and ends the page, so when it fills the screen the two small labels sit
-// right under those lights. The labels fade in only once the section (nearly) fills the screen,
-// so they never float in the sky before the lights have gathered. Without JavaScript, under
-// snapshot, they simply show.
+// right under those lights. The labels scroll with the page while the lights stay fixed, so
+// they fade in only once the page is scrolled to the very bottom (within 4px), where they line
+// up. Snapshot captures Contact at the bottom too. Without JavaScript they simply show.
 import ExternalLink from '../ui/ExternalLink.astro';
 import { LIGHT_ANCHORS } from '../../world/contract';
 import { contact } from '../../data/content';
@@ -27,7 +27,7 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     <p class="contact__light" style={at(LIGHT_ANCHORS.pomfret)} aria-hidden="true">{contact.lights.pomfret}</p>
     <p class="contact__light" style={at(LIGHT_ANCHORS.hongKong)} aria-hidden="true">{contact.lights.hongKong}</p>
 
-    <div class="contact__body wrap scrim scrim--soft">
+    <div class="contact__body wrap scrim">
       <h2 id="contact-title" class="h2">{contact.heading}</h2>
       <p class="contact__email-wrap">
         <a class="contact__email" href={`mailto:${contact.email.text}`}
@@ -37,8 +37,8 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
       <p>
         <ExternalLink class="action-link" href={contact.github.href} arrow>{contact.github.label}</ExternalLink>
       </p>
-      <p class="contact__portfolio t-body t-dim">{contact.portfolio.text}</p>
-      <p class="contact__small t-small t-dim">{contact.smallPrint}</p>
+      <p class="contact__portfolio t-body">{contact.portfolio.text}</p>
+      <p class="contact__small t-small">{contact.smallPrint}</p>
     </div>
   </section>
 </footer>
@@ -57,11 +57,12 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     justify-content: flex-start;
     padding-top: calc(var(--lights-y) * 100vh + var(--space-9));
     padding-top: calc(var(--lights-y) * 100dvh + var(--space-9));
+    padding-top: round(nearest, calc(var(--lights-y) * 100dvh + var(--space-9)), 8px);
     padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   }
 
   /* Under each light: centered on its x, a little below its y. */
-  :global(html.js:not([data-snapshot])) .contact:not(.is-home) .contact__light {
+  :global(html.js) .contact:not(.is-home) .contact__light {
     opacity: 0;
   }
   .contact__light {
@@ -122,13 +123,23 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
 </style>
 
 <script>
-  // Show the light labels once the contact section (nearly) fills the screen.
+  // Show the light labels only at the bottom of the page, where they sit under the lights.
   const section = document.querySelector<HTMLElement>('.contact');
-  if (section && 'IntersectionObserver' in window) {
-    new IntersectionObserver(([entry]) => section.classList.toggle('is-home', entry.intersectionRatio >= 0.85), {
-      threshold: [0, 0.85, 1],
-    }).observe(section);
-  } else {
-    section?.classList.add('is-home');
+  if (section) {
+    let queued = false;
+    const check = () => {
+      queued = false;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      section.classList.toggle('is-home', max - window.scrollY <= 4);
+    };
+    const queue = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(check);
+    };
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('resize', queue);
+    window.addEventListener('world:layout', queue);
+    check();
   }
 </script>

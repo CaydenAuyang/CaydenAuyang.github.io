@@ -16,7 +16,7 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
-import type { SceneKey, Signal, Target, World } from './contract';
+import { usePhoneLayout, type SceneKey, type Signal, type Target, type World } from './contract';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -43,7 +43,7 @@ const BEATS: Record<SceneKey, Beat> = {
   more: { key: 'more', arrive: 0.6, morph: { hold: 'A' } },
   since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'F', over: [0.05, 0.7] } },
   people: { key: 'people', arrive: 0.6, morph: { hold: 'F' } },
-  contact: { key: 'contact', arrive: 0.7, morph: { from: 'F', to: 'E', over: [0, 0.6] } },
+  contact: { key: 'contact', arrive: 0.5, morph: { from: 'F', to: 'E', over: [0, 0.6] } },
 };
 
 /**
@@ -113,14 +113,23 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   }
 
   // ---- Hero text reveals and the scroll cue ----
+  // The text wipes in at 600, 950 and 1,150 ms on the same clock as the sky and the windows: it
+  // starts when the world attaches, or after 1.2 s if the world isn't coming (no WebGL, slow load).
   const introEls = (['name', 'line', 'small'] as const).map((k) => document.querySelector<HTMLElement>(`[data-intro="${k}"]`));
   const introTimers: number[] = [];
+  let textStarted = false;
+  const startText = () => {
+    if (textStarted) return;
+    textStarted = true;
+    [600, 950, 1150].forEach((ms, i) => introTimers.push(window.setTimeout(() => introEls[i]?.classList.add('is-in'), ms)));
+  };
   const revealAll = () => {
+    textStarted = true;
     introTimers.forEach((t) => window.clearTimeout(t));
     introEls.forEach((el) => el?.classList.add('is-in'));
   };
   if (html.classList.contains('js-intro')) {
-    [600, 950, 1150].forEach((ms, i) => introTimers.push(window.setTimeout(() => introEls[i]?.classList.add('is-in'), ms)));
+    introTimers.push(window.setTimeout(startText, 1200));
   } else {
     revealAll();
   }
@@ -132,6 +141,12 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     cue?.classList.add('is-gone');
     if (!introSkipped) {
       introSkipped = true;
+      // Skipping means the end state now: the text snaps open instead of finishing its wipe.
+      introEls.forEach((el) => {
+        if (!el || el.classList.contains('is-in')) return;
+        el.style.transition = 'none';
+        el.style.animation = 'none';
+      });
       revealAll();
       listeners.forEach((fn) => fn());
     }
@@ -143,18 +158,61 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   // ---- Scenes, pins and progress ----
   const scenes = sceneElements();
-  const pinned = motion && !snapshot && desktop.matches;
+  const pinning = motion && !snapshot && desktop.matches;
+  let triggers: ScrollTrigger[] = [];
 
-  // One trigger per scene, in page order (ScrollTrigger needs pins created in order).
-  const triggers: ScrollTrigger[] = scenes.map(({ el }) =>
-    pinned && el.hasAttribute('data-pin')
-      ? // A pinned project holds for about 120vh of scroll (spec section 6).
-        ScrollTrigger.create({ trigger: el, start: 'top top', end: '+=120%', pin: true, pinSpacing: true })
-      : ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center' }),
-  );
+  /**
+   * One trigger per scene, in page order (ScrollTrigger needs pins created in order).
+   *   - Project stops start when their top reaches the top of the window, so the top of Work (the
+   *     archive columns dissolving back into the city) gets real scroll length on phones too. On
+   *     desktop they pin for about 120vh (spec section 6), unless an opened More panel makes the
+   *     project taller than the window: then it scrolls normally so nothing is cut off.
+   *   - Contact starts as soon as it enters the window, so the two lights have room to gather.
+   *   - Everything else starts when its top reaches the middle of the window.
+   */
+  function build() {
+    triggers.forEach((st) => st.kill(true));
+    triggers = scenes.map(({ key, el }) => {
+      if (el.hasAttribute('data-pin')) {
+        el.style.height = 'auto';
+        const fits = el.scrollHeight <= window.innerHeight + 1;
+        el.style.height = pinning && fits ? '' : 'auto';
+        if (pinning && fits) {
+          return ScrollTrigger.create({ trigger: el, start: 'top top', end: '+=120%', pin: true, pinSpacing: true });
+        }
+        return ScrollTrigger.create({ trigger: el, start: 'top top', end: 'bottom top' });
+      }
+      if (key === 'contact') return ScrollTrigger.create({ trigger: el, start: 'top bottom', end: 'bottom bottom' });
+      return ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center' });
+    });
+    ScrollTrigger.refresh();
+  }
+  build();
 
-  // A More toggle changes the page height: measure again.
-  window.addEventListener('world:layout', () => ScrollTrigger.refresh());
+  // A More toggle changes a section's height: rebuild the triggers (and the pins) from scratch.
+  window.addEventListener('world:layout', build);
+
+  // On phones (and portrait tablets) the hero text sits under the figure, so it fades out as it
+  // scrolls up into it, and is gone before it reaches the figure's shoulders. Not in snapshot.
+  const heroText = document.querySelector<HTMLElement>('.hero__text');
+  const heroFigure = document.querySelector<HTMLElement>('.hero__figure');
+  const heroSection = document.querySelector<HTMLElement>('[data-scene="hero"]');
+  if (heroText && heroFigure && heroSection && !snapshot) {
+    const fadeDistance = () => {
+      const gap = heroText.getBoundingClientRect().top + window.scrollY - (heroFigure.getBoundingClientRect().bottom + window.scrollY);
+      return Math.max(60, gap);
+    };
+    ScrollTrigger.create({
+      trigger: heroSection,
+      start: 'top top',
+      end: () => `+=${fadeDistance()}`,
+      invalidateOnRefresh: true,
+      onUpdate: (self) => {
+        const phone = usePhoneLayout(window.innerWidth, window.innerHeight);
+        heroText.style.opacity = phone ? String(1 - self.progress) : '';
+      },
+    });
+  }
 
   /**
    * The scene the viewport is in (the last one whose start we have passed) and how far through it
@@ -191,13 +249,18 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     introTl
       .to(intro, { sky: 1, duration: 0.7, ease: 'none' }, 0)
       .to(intro, { wake: 1, duration: 1.6, ease: 'power2.inOut' }, 0.3)
-      .to(intro, { lift: 1, duration: 2.0, ease: 'power2.inOut' }, 1.6);
+      .to(intro, { lift: 1, duration: 1.8, ease: 'power2.inOut' }, 1.6); // done by 3.4 s
     const finishIntro = () => {
       introTl.progress(1);
       introRunning = false;
     };
-    if (introRunning) introTl.play();
-    else finishIntro();
+    if (introRunning) {
+      startText();
+      introTl.play();
+    } else {
+      finishIntro();
+      revealAll();
+    }
     listeners.push(finishIntro);
 
     function apply() {

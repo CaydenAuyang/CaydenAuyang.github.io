@@ -48,16 +48,14 @@ const imageUrl = new URL(site.ogImage, Astro.site);
 
 // The lead's still renders of the hero scene, used where WebGL is missing and until the canvas
 // is ready. Checked at build time: until a file exists the CSS gradient stands in, and a phone
-// still that doesn't exist yet falls back to the desktop one.
+// still that doesn't exist yet falls back to the desktop one. Not preloaded: with WebGL they are
+// rarely needed, so the browser fetches one only when the CSS actually paints it.
 const STILL_DESKTOP = '/world/fallback-hero.webp';
 const STILL_PHONE = '/world/fallback-hero-phone.webp';
 const exists = (path: string) => existsSync(join(process.cwd(), 'public', path));
 const stillDesktop = exists(STILL_DESKTOP) ? STILL_DESKTOP : exists(STILL_PHONE) ? STILL_PHONE : null;
 const stillPhone = exists(STILL_PHONE) ? STILL_PHONE : stillDesktop;
 const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --still-phone: url('${stillPhone}')` : undefined;
-// The same rule as usePhoneLayout() in the world contract.
-const PHONE_MEDIA = '(max-width: 767px), (max-width: 1023px) and (orientation: portrait)';
-const DESKTOP_MEDIA = '(min-width: 1024px), (min-width: 768px) and (orientation: landscape)';
 ---
 
 <!doctype html>
@@ -75,8 +73,6 @@ const DESKTOP_MEDIA = '(min-width: 1024px), (min-width: 768px) and (orientation:
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/favicon-180.png" />
-    {stillDesktop && <link rel="preload" as="image" href={stillDesktop} media={DESKTOP_MEDIA} />}
-    {stillPhone && <link rel="preload" as="image" href={stillPhone} media={PHONE_MEDIA} />}
 
     <!-- What a link preview shows when someone shares this page. -->
     <meta property="og:type" content="website" />
@@ -95,7 +91,13 @@ const DESKTOP_MEDIA = '(min-width: 1024px), (min-width: 768px) and (orientation:
 
     <!-- Fonts: the two faces the first screen needs are preloaded. -->
     <Font cssVariable="--font-unbounded" preload={[{ weight: 700, style: 'normal' }]} />
-    <Font cssVariable="--font-geist" preload={[{ weight: 400, style: 'normal' }]} />
+    <Font
+      cssVariable="--font-geist"
+      preload={[
+        { weight: 400, style: 'normal' },
+        { weight: 500, style: 'normal' },
+      ]}
+    />
 
     <!--
       Runs before the page is drawn. Sets on <html>:

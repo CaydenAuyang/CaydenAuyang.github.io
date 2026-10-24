@@ -5,10 +5,10 @@
 // draw calls, leaving plenty of the 40-call budget for the signal.
 
 import { PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
-import { usePhoneLayout, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
+import { SCENE_ORDER, usePhoneLayout, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
 import { applyPose, buildCameraPath, FOV, poseToCameraPose, type CameraPath, type KeyPose } from './camera-path';
 import { generateCity } from './city';
-import { buildHarbour } from './harbour';
+import { BAKE_SLOTS, buildHarbour } from './harbour';
 import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { buildSky } from './sky';
@@ -76,7 +76,42 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   const heroPos = path.poses.hero.pos.clone();
   let vis = visibleFrom(city, wins, heroPos.x, heroPos.y, heroPos.z);
   let visFor = heroPos.clone();
-  const harbour = buildHarbour(city, wins, vis, heroPos, U);
+  const harbour = buildHarbour(city, wins, U);
+  harbour.bake(0, heroPos, vis);
+  for (let k = 1; k < BAKE_SLOTS; k++) harbour.copy(0, k);
+  // Reflection profiles per camera stop: the hero now, the others in idle time (about 15 ms
+  // each), so oblique stops reflect the towers they actually see.
+  const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, summer: 2, och: 3, ais: 4, club: 5, more: 6, since: 6, people: 6, contact: 6 };
+  const SLOT_KEYS: SceneKey[] = ['hero', 'question', 'summer', 'och', 'ais', 'club', 'more'];
+  let bakeGen = 0;
+  let bakesDone = 1;
+  const idle = (cb: () => void) => {
+    if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(cb, { timeout: 2000 });
+    else setTimeout(cb, 60);
+  };
+  const scheduleBakes = () => {
+    const gen = ++bakeGen;
+    const queue = SLOT_KEYS.map((_, i) => i);
+    const step = () => {
+      if (gen !== bakeGen || disposed) return;
+      const i = queue.shift();
+      if (i === undefined) return;
+      const p = path.poses[SLOT_KEYS[i]].pos;
+      if (i === 0) {
+        if (p.distanceTo(visFor) > 1) {
+          vis = visibleFrom(city, wins, p.x, p.y, p.z);
+          visFor = p.clone();
+          harbour.bake(0, p, vis);
+        }
+      } else {
+        harbour.bake(i, p, visibleFrom(city, wins, p.x, p.y, p.z));
+      }
+      bakesDone++;
+      if (frozen) requestRender();
+      if (queue.length) idle(step);
+    };
+    idle(step);
+  };
 
   scene.add(sky, peak, skyline, harbour.mesh, lights.points);
 
@@ -103,6 +138,8 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
 
   const placeCamera = () => {
     path.pose(u, base);
+    const seg = path.segment(u);
+    harbour.setBlend(SLOT[SCENE_ORDER[seg.i]], SLOT[SCENE_ORDER[seg.i + 1]], seg.s);
     const on = motion && !touch;
     applyPose(camera, base, on ? par.x * 1.5 * DEG : 0, on ? -par.y * 0.8 * DEG : 0);
     sky.position.copy(camera.position);
@@ -118,6 +155,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     camera.updateProjectionMatrix();
     path = buildCameraPath(city, camera.aspect, isPhoneFrame());
     placeCamera();
+    scheduleBakes();
     requestRender();
   };
 
@@ -281,6 +319,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       segments: city.towers.reduce((s, t) => s + t.segs.length, 0),
       litFrontWindows: wins.length,
       litShareFront: (wins.length / frontCells).toFixed(3),
+      reflectionBakes: bakesDone,
       visibleLitFront: vis.reduce((s, v) => s + v, 0),
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,

@@ -24,6 +24,13 @@ import { site, ui } from '../data/site';
     min-height: 100svh;
     padding-block: var(--space-9);
   }
+  /* Unbounded sets "Page not found" on two lines on phones where the stand-in font fits one;
+     reserve both lines so the swap doesn't move the page. */
+  @media (max-width: 767px) {
+    .nf h1 {
+      min-height: calc(2em * 0.95);
+    }
+  }
   .nf__body > * + * {
     margin-top: var(--space-4);
   }

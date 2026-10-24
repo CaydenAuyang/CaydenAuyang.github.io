@@ -11,7 +11,7 @@ import {
   Vector3,
   type IUniform,
 } from 'three';
-import { ridgeHeight, type CityLayout } from './city';
+import { PEAK_HALF, ridgeHeight, ridgeZ, type CityLayout } from './city';
 import { PALETTE } from './palette';
 import { mulberry32 } from './random';
 import { aviationPoints, cityFog } from './skyline';
@@ -28,9 +28,6 @@ export interface PeakUniforms {
   uWake: IUniform<number>;
 }
 
-/** The ridge stands this far behind the shoreline. */
-export const PEAK_Z = -2700;
-const PEAK_HALF = 9000;
 
 export function buildPeak(city: CityLayout, shared: PeakUniforms): Mesh {
   const N = 900;
@@ -38,9 +35,7 @@ export function buildPeak(city: CityLayout, shared: PeakUniforms): Mesh {
   const idx: number[] = [];
   for (let i = 0; i <= N; i++) {
     const x = city.centralX - PEAK_HALF + (2 * PEAK_HALF * i) / N;
-    // The ridge bends gently toward the camera at its ends so pans never see past it.
-    const bend = Math.pow(Math.abs(x - city.centralX) / PEAK_HALF, 2) * 1800;
-    const z = PEAK_Z + bend;
+    const z = ridgeZ(x, city);
     const y = ridgeHeight(x, city);
     pos.set([x, y, z, x, -30, z], i * 6);
     if (i < N) {
@@ -96,7 +91,7 @@ export function buildLights(city: CityLayout, shared: PeakUniforms, density: num
     const top = ridgeHeight(x, city);
     const y = 18 + Math.pow(r(), 1.9) * (top - 40);
     if (y > top - 12) continue;
-    const z = PEAK_Z + 8 + Math.pow(Math.abs(x - city.centralX) / PEAK_HALF, 2) * 1800;
+    const z = ridgeZ(x, city) + 8;
     const col = r() < 0.82 ? warm : cool;
     add(x, y, z, col, 0.3 + 0.45 * r(), 1.3 + r() * 0.9, 0, 0, across(x));
   }
@@ -113,7 +108,7 @@ export function buildLights(city: CityLayout, shared: PeakUniforms, density: num
       const top = ridgeHeight(x, city);
       const y = top * share + amp * Math.sin(x * freq + k * 1.7);
       if (y > top - 14 || y < 10) continue;
-      const z = PEAK_Z + 8 + Math.pow(Math.abs(x - city.centralX) / PEAK_HALF, 2) * 1800;
+      const z = ridgeZ(x, city) + 8;
       add(x, y, z, warm, 0.45 + 0.3 * r(), 1.4 + r() * 0.5, 0, 0, across(x));
     }
   }

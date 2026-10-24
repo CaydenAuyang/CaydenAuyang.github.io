@@ -77,7 +77,7 @@ const height = src?.height ?? 800;
       }
     </div>
   </div>
-  <figcaption class="vf__cap scrim">{caption}</figcaption>
+  <figcaption class="vf__cap">{caption}</figcaption>
 </figure>
 
 <script>
@@ -163,12 +163,12 @@ const height = src?.height ?? 800;
     text-align: center;
   }
 
-  /* Text color, not dim, on a soft scrim: the caption sits at the height of the skyline and
-     its reflections. */
+  /* Text color, not dim, with the tight strong halo: the caption sits at the height of the
+     skyline and its reflections. (No scrim here: a wide one reached over the text column.) */
   .vf__cap {
     font-size: var(--fs-small);
     line-height: 1.5;
     color: var(--text);
-    text-shadow: var(--halo);
+    text-shadow: var(--halo-strong);
   }
 </style>

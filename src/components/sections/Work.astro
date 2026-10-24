@@ -44,6 +44,12 @@ import { ui } from '../../data/site';
                 <More id={`${project.stop}-more`} label={ui.moreAbout(project.name)} class="stop__more">
                   {project.more.map((block) => (
                     <>
+                      {block.head && (
+                        <p>
+                          <strong>{block.head.bold}</strong>
+                          {block.head.rest && ` ${block.head.rest}`}
+                        </p>
+                      )}
                       {block.text && (
                         <p>
                           {block.title && <strong>{block.title}</strong>} {block.text.text}
@@ -90,13 +96,15 @@ import { ui } from '../../data/site';
 <style>
   .work {
     position: relative;
-    padding-top: 22vh;
-    padding-bottom: 22vh;
+    padding-block: 22vh;
+    padding-block: round(nearest, 22vh, 8px);
   }
   @media (min-width: 768px) {
     .work {
       padding-top: 40vh;
       padding-bottom: 30vh;
+      padding-top: round(nearest, 40vh, 8px);
+      padding-bottom: round(nearest, 30vh, 8px);
     }
   }
 
@@ -188,13 +196,14 @@ import { ui } from '../../data/site';
       right: 0;
       margin: 0;
     }
+    /* min-height, not height: the timeline sets an inline height: auto on unpinned stops. */
     :global(html[data-snapshot]) .stop {
-      height: 100vh;
-      min-height: 0;
+      min-height: 100vh;
       padding-block: var(--space-6);
     }
     :global(html[data-snapshot]) .stop[data-stop='och'] {
       padding-top: calc(var(--space-6) + var(--fs-h2) * 0.95 + var(--space-5));
+      padding-bottom: var(--space-5);
     }
     :global(html[data-snapshot]) .more-work {
       min-height: 100vh;

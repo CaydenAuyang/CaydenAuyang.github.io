@@ -124,7 +124,8 @@ const vars = [
     max-width: 44ch;
     font-size: var(--fs-small);
     line-height: 1.5;
-    color: var(--dim);
+    /* Text color: on phones this line can pass over the figure as the page scrolls. */
+    color: var(--text);
   }
 
   /* Desktop: left of the figure, ending above the tower tops. */

@@ -485,6 +485,15 @@ function makeTower(r: Rng, s: TowerSpec): Tower {
   return t;
 }
 
+/** The Peak's ridge stands this far behind the shoreline, and runs this far each side of Central. */
+export const PEAK_Z = -2700;
+export const PEAK_HALF = 9000;
+
+/** z of the ridge at x: it bends gently toward the camera at its ends so pans never see past it. */
+export function ridgeZ(x: number, city: CityLayout): number {
+  return PEAK_Z + Math.pow(Math.abs(x - city.centralX) / PEAK_HALF, 2) * 1800;
+}
+
 /** The Peak's ridge height at x (meters above the water), shared by the Peak mesh and its lights. */
 export function ridgeHeight(x: number, city: CityLayout): number {
   // Hills keep their real size on every tier (a narrower phone city just sees less of them).

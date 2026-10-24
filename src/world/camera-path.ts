@@ -12,7 +12,7 @@
 
 import { CatmullRomCurve3, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import { HERO_FRAMING, SCENE_ORDER, type CameraPose, type SceneKey } from './contract';
-import type { CityLayout } from './city';
+import { PEAK_HALF, ridgeHeight, ridgeZ, type CityLayout } from './city';
 
 export const FOV = 38;
 const T = Math.tan(((FOV / 2) * Math.PI) / 180);
@@ -119,11 +119,46 @@ function pitchForWaterline(pos: Vector3, fy: number): number {
   return Math.atan((hgt - n * T * f) / (f + n * T * hgt));
 }
 
+/**
+ * The lowest pitch (raised from pose.pitch) at which every tower tip and the whole Peak ridge sit
+ * below the bottom of the frame by at least margin (a share of the frame height, so the pointer
+ * parallax can't tip them back into view).
+ */
+function clearOfSkyline(city: CityLayout, pose: KeyPose, aspect: number, margin: number): number {
+  const pts: Vector3[] = [];
+  for (const t of city.towers) pts.push(new Vector3(t.x, t.tip + 2, t.z));
+  for (let x = city.centralX - PEAK_HALF; x <= city.centralX + PEAK_HALF; x += 40) pts.push(new Vector3(x, ridgeHeight(x, city), ridgeZ(x, city)));
+  const cam = tmpCam;
+  const v = new Vector3();
+  let pitch = pose.pitch;
+  for (let i = 0; i < 160; i++) {
+    cam.position.copy(pose.pos);
+    cam.lookAt(tmpV.copy(pose.pos).add(dirFrom(pose.yaw, pitch)));
+    cam.updateMatrixWorld(true);
+    let clear = true;
+    for (const p of pts) {
+      v.copy(p).applyMatrix4(cam.matrixWorldInverse);
+      if (v.z >= -1) continue; // behind the camera
+      const nx = v.x / -v.z / (T * aspect);
+      const ny = v.y / -v.z / T;
+      if (Math.abs(nx) <= 1.05 && (1 - ny) / 2 < 1 + margin) {
+        clear = false;
+        break;
+      }
+    }
+    if (clear) break;
+    pitch += 0.25 * DEG;
+  }
+  return pitch;
+}
+
 export interface CameraPath {
   keys: Record<SceneKey, number>;
   poses: Record<SceneKey, KeyPose>;
   heroDistance: number;
   pose(u: number, out?: { pos: Vector3; yaw: number; pitch: number }): KeyPose;
+  /** Which segment of SCENE_ORDER u falls in (keys i and i + 1), and the eased share s along it. */
+  segment(u: number): { i: number; s: number };
 }
 
 export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean): CameraPath {
@@ -144,11 +179,13 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const sPos = new Vector3(c.x - Math.sin(sYaw) * sDist, 34, c.z + Math.cos(sYaw) * sDist);
   const summer = aimAt(sPos, c, phone ? 0.5 : 0.62, phone ? 0.74 : 0.7, aspect);
 
-  // och: a wide look along the city so the brightness wave crosses every window.
-  const oSubject = new Vector3(city.xMin + 0.4 * W, 90, -150);
-  const oDist = Math.max(Dh * 0.78, 600);
-  const oPos = new Vector3(oSubject.x + 0.04 * oDist, 22, oDist);
-  const och: KeyPose = { pos: oPos, yaw: 2 * DEG, pitch: pitchForWaterline(oPos, phone ? 0.84 : 0.82) };
+  // och: the first stop along the shoreline. Low and close, just left of Central, looking left
+  // down the waterfront: the skyline recedes in perspective toward the low clusters (the next
+  // stop) and the far end (club), and the brightness wave runs down a long line of windows.
+  const oDist = Math.min(720, Math.max(320, 0.16 * W));
+  const oPos = new Vector3(city.centralX - 0.03 * W, 12, oDist);
+  const oSubject = new Vector3(city.centralX - 0.3 * W, 45, city.zFront - 40);
+  const och = aimAt(oPos, oSubject, phone ? 0.5 : 0.46, phone ? 0.74 : 0.72, aspect);
 
   // ais: the three small low clusters, spread across the middle of the frame.
   const cl = city.clusters;
@@ -175,9 +212,11 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const since: KeyPose = { pos: sincePos, yaw: 16 * DEG, pitch: 36 * DEG };
   // people: hold on the sky, drifting a touch further.
   const people: KeyPose = { pos: sincePos.clone().add(new Vector3(40, 10, 0)), yaw: 20 * DEG, pitch: 42 * DEG };
-  // contact: hold on the sky and pull back slightly, so the tops of the towers just show below.
-  const cPos = sincePos.clone().add(new Vector3(140, 40, 520));
-  const contact: KeyPose = { pos: cPos, yaw: 18 * DEG, pitch: 23 * DEG };
+  // contact: hold on the sky and pull back, pitched high enough that no tower or ridge shows
+  // anywhere in the frame (the Contact text sits low; the two lights sit at y 0.30).
+  const cPos = sincePos.clone().add(new Vector3(140, 60, 1400));
+  const contact: KeyPose = { pos: cPos, yaw: 18 * DEG, pitch: 20 * DEG };
+  contact.pitch = clearOfSkyline(city, contact, aspect, 0.05);
 
   const poses: Record<SceneKey, KeyPose> = { hero, question, summer, och, ais, club, more, since, people, contact };
   const order = SCENE_ORDER;
@@ -193,6 +232,12 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
     keys: { ...KEY_U },
     poses,
     heroDistance: Dh,
+    segment(u: number) {
+      const uu = Math.min(1, Math.max(0, u));
+      let i = 0;
+      while (i < n - 2 && uu > us[i + 1]) i++;
+      return { i, s: ease(Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i])))) };
+    },
     pose(u: number, out?: KeyPose): KeyPose {
       const uu = Math.min(1, Math.max(0, u));
       let i = 0;

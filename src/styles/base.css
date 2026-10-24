@@ -327,6 +327,8 @@ main,
   flex-direction: column;
   justify-content: center;
   padding-block: 22vh;
+  /* Rounded to the 8px grid where round() works; the line above is the fallback. */
+  padding-block: round(nearest, 22vh, 8px);
   scroll-margin-top: 0;
 }
 @media (min-width: 768px) {
@@ -434,8 +436,10 @@ main,
   background: var(--dim);
 }
 
-/* Links that act as actions: window color, 18px and up, a 44px tall target. */
+/* Links that act as actions: window color, 18px and up, a 44px tall target. The tight strong
+   halo keeps window-colored words clear where they cross lit windows. */
 .action-link {
+  text-shadow: var(--halo-strong);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
@@ -467,8 +471,20 @@ main,
   frame; here every section is one 1440 x 900 screen where its words fit, so one capture per
   section (per project stop inside Work) works. The header is interface, so it goes.
 */
-html[data-snapshot] .site-header {
+html[data-snapshot] .site-header,
+html[data-snapshot] .skip-link {
   display: none;
+}
+/* Printing the page itself (as well as screenshots): keep the night, drop the controls. */
+@media print {
+  html {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .skip-link,
+  [data-snapshot-hide] {
+    display: none !important;
+  }
 }
 @media (min-width: 1024px) {
   html[data-snapshot] .scene {

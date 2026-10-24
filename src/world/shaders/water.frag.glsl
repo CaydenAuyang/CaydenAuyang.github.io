@@ -2,7 +2,8 @@
 // streak running toward the camera, about 1.5 times as long as its tower is tall, broken by
 // scrolling ripples (thin and frequent near the shore, stretched near the camera), fading with
 // distance from the shore. Most of the water stays dark. Not a mirror, not a glossy floor.
-uniform sampler2D uProfile; // 2048 x 2. Row 0: column light (rgb). Row 1: r lit top, g roof (of height span)
+uniform sampler2D uProfile; // 2048 x PROFILE_ROWS: per camera stop, a light row (rgb) and a height row (r lit top, g roof)
+uniform vec3 uBake; // slot a, slot b, blend
 uniform vec4 uProfRange; // x0, x span, height span, z of the projection plane
 uniform float uProfGain;
 uniform vec3 uNight;
@@ -56,11 +57,17 @@ void main() {
   float zig = sin(ym * 0.21 + warp * 9.0 - t * 1.2) * (0.8 + ym * 0.008);
   float xw = xs + wob * (2.0 + ym * 0.03) + zig;
   float u = (xw - uProfRange.x) / uProfRange.y;
-  vec3 L = texture2D(uProfile, vec2(u, 0.25)).rgb;
-  vec2 H = texture2D(uProfile, vec2(u, 0.75)).rg * uProfRange.z;
+  // The two camera stops either side of the camera, blended.
+  float ra = uBake.x * 2.0;
+  float rb = uBake.y * 2.0;
+  vec3 L = mix(texture2D(uProfile, vec2(u, (ra + 0.5) / PROFILE_ROWS)).rgb, texture2D(uProfile, vec2(u, (rb + 0.5) / PROFILE_ROWS)).rgb, uBake.z);
+  vec2 H = mix(texture2D(uProfile, vec2(u, (ra + 1.5) / PROFILE_ROWS)).rg, texture2D(uProfile, vec2(u, (rb + 1.5) / PROFILE_ROWS)).rg, uBake.z) * uProfRange.z;
 
   // Length: each streak reaches about 1.5 times its lights' height toward the camera.
-  float len = 1.0 - smoothstep(H.x * 0.45, H.x * 1.35 + 12.0, ym);
+  // Each streak ends at its own ragged length, so no straight line forms where tall and low
+  // towers meet.
+  float rag = 0.75 + 0.5 * vnoise(vec2(xs * 0.045, 7.3));
+  float len = 1.0 - smoothstep(H.x * 0.35 * rag, H.x * 1.4 * rag + 12.0, ym);
   // Fade with distance from the shore.
   float fall = exp(-ym / 300.0);
   // Thin streaks: only part of each lit column catches the light. Where the pattern would
@@ -87,13 +94,12 @@ void main() {
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);
   skyRefl += uSky * 0.08 * exp(-ym / 900.0);
-  skyRefl *= 0.85 + 0.3 * dN;
 
   // Near the camera: faint ripples catching the glow, so the foreground water moves too.
-  vec2 wq = vWorld.xz * vec2(0.035, 0.11) + vec2(t * 0.05, -t * 0.22);
-  float sheenAA = 1.0 - smoothstep(0.25, 0.6, max(fwidth(wq.x), fwidth(wq.y)));
-  float sheen = pow(vnoise(wq) * vnoise(wq * 2.3 + 1.7), 1.5) * sheenAA;
-  skyRefl += uGlow * 0.22 * sheen;
+  vec2 wq = vWorld.xz * vec2(0.05, 0.09) + vec2(t * 0.05, -t * 0.22);
+  float sheenAA = 1.0 - smoothstep(0.05, 1.2, max(fwidth(wq.x), fwidth(wq.y)));
+  float sheen = pow(vnoise(wq) * vnoise(wq * 2.3 + 1.7), 1.5) * sheenAA * exp(-dist / 500.0);
+  skyRefl += uGlow * 0.12 * sheen;
 
   vec3 col = uNight + skyRefl * uSkyFade + refl;
   col = mix(col, uGlow * 0.8, fogF * 0.3);
