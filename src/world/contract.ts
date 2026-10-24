@@ -50,20 +50,24 @@ export interface TierInfo {
 // so the HTML can lay text out around them. The signal builds its targets from these through the
 // camera pose of the matching scene key.
 
-/** The figure (target B) at the hero key: its center, and its height as a share of viewport height. */
+/**
+ * The figure (target B) at the hero key: its center, and its height as a share of viewport height.
+ * Desktop puts it right of center so the hero text (a wide two-line name plus two short lines)
+ * sits to its left over dark sky; phones stack the figure above the text.
+ */
 export const FIGURE_ANCHOR = {
-  desktop: { x: 0.5, y: 0.33, height: 0.44 },
-  phone: { x: 0.5, y: 0.31, height: 0.36 },
+  desktop: { x: 0.64, y: 0.36, height: 0.5 },
+  phone: { x: 0.5, y: 0.27, height: 0.3 },
 };
 
 /**
  * Hero framing the world's camera must hit at the hero key: the tallest tower tops sit at
- * skylineTop and the waterline at horizon (fractions of viewport height from the top). The hero
- * text sits between the figure's shoulders and the skyline, over dark sky.
+ * skylineTop and the waterline at horizon (fractions of viewport height from the top). Hero text
+ * stays above skylineTop, over dark sky.
  */
 export const HERO_FRAMING = {
-  desktop: { skylineTop: 0.62, horizon: 0.86 },
-  phone: { skylineTop: 0.74, horizon: 0.9 },
+  desktop: { skylineTop: 0.66, horizon: 0.86 },
+  phone: { skylineTop: 0.76, horizon: 0.9 },
 };
 
 /** Phones use the phone anchors and framing below this width (CSS px). */
