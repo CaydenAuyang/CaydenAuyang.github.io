@@ -6,7 +6,7 @@ uniform vec3 uGlow;
 uniform float uSkyFade;
 uniform float uTime;
 uniform float uMotion;
-uniform vec4 uShow; // light show: strength, seconds in, seconds per beat
+uniform vec4 uShow; // light show: pulse strength, seconds in, seconds per beat, glow strength
 uniform vec2 uPulseRes; // drawing buffer, device px
 uniform vec3 uWarm;
 varying vec3 vDir;
@@ -56,13 +56,15 @@ void main() {
   // Light show: a soft glow along the bottom of the frame, pulsing with the windows' beats as
   // they run across the city, so the show reads as the city lighting up below even when the
   // camera sees only sky.
-  if (uShow.x > 0.0) {
+  if (uShow.w > 0.0) {
     vec2 sc = gl_FragCoord.xy / uPulseRes;
     float low = exp(-sc.y / 0.17);
     vec3 gc = mix(uGlow * 2.2, uWarm, 0.45);
-    // the windows' beat, broadened: one soft swell per beat running across the frame
+    // the windows' beat, broadened: one soft swell per beat running across the frame (steady
+    // with motion off, when nothing pulses)
     float swell = 0.5 + 0.5 * cos(6.2831853 * (uShow.y / uShow.z - sc.x));
-    c += gc * low * uShow.x * (0.1 + 0.2 * swell * swell);
+    float pulse = uShow.x > 0.0 ? swell * swell : 0.25;
+    c += gc * low * uShow.w * (0.1 + 0.2 * pulse);
   }
   // dither so the dark gradient doesn't band
   c += (h12(gl_FragCoord.xy) - 0.5) / 255.0;

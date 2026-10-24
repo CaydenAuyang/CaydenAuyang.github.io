@@ -1,55 +1,55 @@
 ---
-// QuestionPanel.astro: the May question, edited in place into the October question, on a glass
-// panel, with the four notes that say what caused each edit.
+// MissionPanel.astro: the mission's question as it was (Previously), edited in place into what it
+// is now (Now), on a glass panel, with the three notes that say what caused each edit.
 //
-// A May / Edits / October switch shows the clean May text, the marked version, or the clean
-// October text. Default: Edits. It is a real radio group that works with CSS alone (:has), so it
-// needs no JavaScript; browsers without :has hide the switch and show Edits.
+// A Previously / Edits / Now switch shows the clean Previously text, the marked version, or the
+// clean Now text. Default: Now. It is a real radio group that works with CSS alone (:has), so it
+// needs no JavaScript; browsers without :has hide the switch and show Now.
 //
-// The marked version:
-//   - struck words are a real <del>, dimmed with a thin line through, plus a hidden "deleted";
-//   - inserted words are a real <ins> in window, plus a hidden "inserted", followed by a small
+// The marked version (phrase level):
+//   - each old phrase is a real <del>, dimmed with a thin line through, plus a hidden "deleted";
+//   - its new phrase follows as a real <ins> in window, plus a hidden "inserted", and a small
 //     superscript note number.
 // The notes sit beside the panel on desktop and below it on phones.
 // The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
 // alone.
 //
-// The scrubber (NIGHT-SIGNAL.md 11b.5, src/scripts/question.ts): under the question, a native
-// range input from May to October in seven stops. 0 is May (clean), 1 to 5 apply the five edits
-// one by one in reading order (marked as in the Edits view), 6 is October (clean). The switch
-// becomes three presets that move it: May 0, Edits 5 (the default), October 6. Each strike draws
-// and each insertion lights as the handle passes it, and its note number glows. Arrow keys move one
+// The scrubber (NIGHT-SIGNAL.md 11b.5, src/scripts/mission.ts): under the text, a native range
+// input from Previously to Now, one stop per edit: 0 is Previously (clean), 1 to 3 apply the edits
+// one by one in reading order (marked as in the Edits view), 4 is Now (clean). The switch becomes
+// three presets that move it: Previously 0, Edits 3, Now 4 (the default). Each strike draws and
+// each insertion lights as the handle passes it, and its note number glows. Arrow keys move one
 // edit at a time; aria-valuetext says what each stop shows. With JavaScript the one marked
 // paragraph shows every stop (each edit is a span the script turns on and off); without it, the
-// switch shows the three fixed views as before. Snapshot: the marked version, no scrubber.
+// switch shows the three fixed views. Snapshot: the marked version, no scrubber.
 //
-// At build time it checks that the edits turn the May text into the October text exactly; if
+// At build time it checks that the edits turn the Previously text into the Now text exactly; if
 // not, the build stops with an error, so a typo can't ship.
 import type { Edit, Line } from '../../data/content';
 import { ui } from '../../data/site';
 
 interface Props {
-  views: { may: string; edits: string; october: string };
-  may: Line;
-  october: Line;
+  views: { from: string; edits: string; to: string };
+  from: Line;
+  to: Line;
   edits: Edit[];
   notes: Line[];
 }
 
-const { views, may, october, edits, notes } = Astro.props;
+const { views, from, to, edits, notes } = Astro.props;
 
 const fail = (message: string): never => {
-  throw new Error(`QuestionPanel: ${message}`);
+  throw new Error(`MissionPanel: ${message}`);
 };
 
 type Piece = { kind: 'keep'; text: string } | { kind: 'edit'; del?: string; ins?: string; note?: number };
 
-// Turn the May text plus the edits into kept text and edits.
+// Turn the Previously text plus the edits into kept text and edits.
 const pieces: Piece[] = [];
 let cursor = 0;
 const find = (needle: string) => {
-  const at = may.text.indexOf(needle, cursor);
-  if (at === -1) fail(`"${needle}" is not in the May text after position ${cursor}.`);
+  const at = from.text.indexOf(needle, cursor);
+  if (at === -1) fail(`"${needle}" is not in the Previously text after position ${cursor}.`);
   return at;
 };
 for (const edit of edits) {
@@ -57,18 +57,18 @@ for (const edit of edits) {
   if (edit.type === 'del' || edit.type === 'replace') {
     if (edit.type === 'replace' && !edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
     const at = find(edit.text);
-    if (at > cursor) pieces.push({ kind: 'keep', text: may.text.slice(cursor, at) });
+    if (at > cursor) pieces.push({ kind: 'keep', text: from.text.slice(cursor, at) });
     cursor = at + edit.text.length;
     pieces.push({ kind: 'edit', del: edit.text, ins: edit.insertText, note: edit.note });
   } else {
     const end = edit.after ? find(edit.after) + edit.after.length : cursor;
     if (edit.after === undefined) fail(`the insert "${edit.text}" needs an "after" ('' for right after the last edit).`);
-    if (end > cursor) pieces.push({ kind: 'keep', text: may.text.slice(cursor, end) });
+    if (end > cursor) pieces.push({ kind: 'keep', text: from.text.slice(cursor, end) });
     cursor = end;
     pieces.push({ kind: 'edit', ins: edit.text, note: edit.note });
   }
 }
-if (cursor < may.text.length) pieces.push({ kind: 'keep', text: may.text.slice(cursor) });
+if (cursor < from.text.length) pieces.push({ kind: 'keep', text: from.text.slice(cursor) });
 
 // The edits must produce the October text exactly. A struck word leaves a double space behind
 // it ("to  hear"); that collapses, and nothing else is forgiven.
@@ -76,15 +76,15 @@ const produced = pieces
   .map((p) => (p.kind === 'keep' ? p.text : (p.ins ?? '')))
   .join('')
   .replace(/ {2,}/g, ' ');
-if (produced !== october.text) fail(`the edits produce\n  "${produced}"\nwhich is not the October text\n  "${october.text}".`);
+if (produced !== to.text) fail(`the edits produce\n  "${produced}"\nwhich is not the Now text\n  "${to.text}".`);
 
 // The marked sentence is one HTML string: line breaks between tags would put stray spaces
 // around words. Every piece of text is escaped.
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // A word joiner keeps a note number on the same line as the word before it.
 const WJ = '⁠';
-// Each edit is a span the scrubber turns on (applied) and off (the May words); on is the default,
-// which is the Edits view. A replacement's space sits inside its insertion, so it goes with it.
+// Each edit is a span the scrubber turns on (applied) and off (the Previously words); on, with the
+// paragraph's .is-clean, is the default Now view; on without it is the Edits view. A replacement's space sits inside its insertion, so it goes with it.
 let step = 0;
 const marked = pieces
   .map((p) => {
@@ -103,37 +103,39 @@ const marked = pieces
 const editPieces = pieces.filter((p): p is Extract<Piece, { kind: 'edit' }> => p.kind === 'edit');
 const trimWords = (t: string) => t.replace(/^[,\s]+/, '');
 const stopTexts = [
-  views.may,
+  views.from,
   ...editPieces.map((p, i) => {
     const what = p.del && p.ins ? ui.scrubReplaced(p.del, trimWords(p.ins)) : p.del ? ui.scrubStruck(p.del) : ui.scrubInserted(trimWords(p.ins ?? ''));
     const text = ui.scrubStep(i + 1, editPieces.length, what + (p.note ? ui.scrubNote(p.note) : ''));
     return i === editPieces.length - 1 ? `${views.edits}. ${text}` : text;
   }),
-  views.october,
+  views.to,
 ];
 const EDITS_STOP = editPieces.length;
 const LAST_STOP = editPieces.length + 1;
+// The default view is Now: the last stop.
+const START_STOP = LAST_STOP;
 ---
 
 <div class="qp">
   <div class="qp__panel glass">
     <fieldset class="qp__switch" data-snapshot-hide>
       <legend class="sr-only">{ui.viewLegend}</legend>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-may" value="may" />
-      <label for="qp-may">{views.may}</label>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-edits" value="edits" checked />
+      <input class="sr-only" type="radio" name="qp-view" id="qp-from" value="from" />
+      <label for="qp-from">{views.from}</label>
+      <input class="sr-only" type="radio" name="qp-view" id="qp-edits" value="edits" />
       <label for="qp-edits">{views.edits}</label>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-october" value="october" />
-      <label for="qp-october">{views.october}</label>
+      <input class="sr-only" type="radio" name="qp-view" id="qp-to" value="to" checked />
+      <label for="qp-to">{views.to}</label>
     </fieldset>
 
     <div class="qp__views" aria-live="polite" data-qp-views>
-      <p class="qp__text qp__view qp__view--may">{may.text}</p>
+      <p class="qp__text qp__view qp__view--from">{from.text}</p>
       <p class="qp__text qp__view qp__view--edits" data-qp-marked set:html={marked} />
-      <p class="qp__text qp__view qp__view--october">{october.text}</p>
+      <p class="qp__text qp__view qp__view--to">{to.text}</p>
     </div>
 
-    <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide hidden>
+    <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide>
       <label class="qp__scrub-label" for="qp-scrub">{ui.scrubLabel}</label>
       <div class="qp__track" style={`--stops: ${LAST_STOP}`}>
         <input
@@ -143,8 +145,8 @@ const LAST_STOP = editPieces.length + 1;
           min="0"
           max={LAST_STOP}
           step="1"
-          value={EDITS_STOP}
-          aria-valuetext={stopTexts[EDITS_STOP]}
+          value={START_STOP}
+          aria-valuetext={stopTexts[START_STOP]}
           data-texts={JSON.stringify(stopTexts)}
           data-edits-stop={EDITS_STOP}
         />
@@ -171,12 +173,13 @@ const LAST_STOP = editPieces.length + 1;
 </div>
 
 <script>
-  import '../../scripts/question';
+  import '../../scripts/mission';
 </script>
 
 <style>
   .qp {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-5);
   }
   /* Desktop: the page's 12 columns. The panel takes 1 to 7, the notes start on column 8, the
@@ -185,7 +188,8 @@ const LAST_STOP = editPieces.length + 1;
     .qp {
       grid-template-columns: repeat(12, minmax(0, 1fr));
       column-gap: var(--space-5);
-      align-items: center;
+      /* Top-aligned, so the notes hold still while the panel grows and shrinks with the scrubber. */
+      align-items: start;
     }
     .qp__panel {
       grid-column: 1 / span 7;
@@ -224,7 +228,9 @@ const LAST_STOP = editPieces.length + 1;
   .qp__switch label {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     min-height: var(--tap);
+    min-width: var(--tap);
     padding: 0 var(--space-3);
     border-radius: var(--radius-control);
     font-size: 15px;
@@ -238,6 +244,12 @@ const LAST_STOP = editPieces.length + 1;
   @media (min-width: 768px) {
     .qp__switch label {
       padding: 0 var(--space-4);
+    }
+  }
+  /* The narrowest phones: "Previously" needs the room. */
+  @media (max-width: 359px) {
+    .qp__switch label {
+      padding: 0 var(--space-2);
     }
   }
   .qp__switch label:hover {
@@ -254,23 +266,23 @@ const LAST_STOP = editPieces.length + 1;
   }
 
   .qp__text {
-    font-size: var(--fs-question);
-    line-height: 1.4;
+    font-size: var(--fs-mission);
+    line-height: 1.45;
     max-width: 34ch;
     text-wrap: pretty;
   }
 
-  /* Edits is the default and the only view without :has. */
-  .qp__view--may,
-  .qp__view--october {
+  /* Now is the default and the only view without :has. */
+  .qp__view--from,
+  .qp__view--edits {
     display: none;
   }
-  .qp:has(#qp-may:checked) .qp__view--may,
-  .qp:has(#qp-october:checked) .qp__view--october {
+  .qp:has(#qp-from:checked) .qp__view--from,
+  .qp:has(#qp-edits:checked) .qp__view--edits {
     display: block;
   }
-  .qp:has(#qp-may:checked) .qp__view--edits,
-  .qp:has(#qp-october:checked) .qp__view--edits {
+  .qp:has(#qp-from:checked) .qp__view--to,
+  .qp:has(#qp-edits:checked) .qp__view--to {
     display: none;
   }
   @supports not selector(:has(*)) {
@@ -282,15 +294,15 @@ const LAST_STOP = editPieces.length + 1;
   :global(html[data-snapshot]) .qp__view--edits {
     display: block !important;
   }
-  :global(html[data-snapshot]) .qp__view--may,
-  :global(html[data-snapshot]) .qp__view--october {
+  :global(html[data-snapshot]) .qp__view--from,
+  :global(html[data-snapshot]) .qp__view--to {
     display: none !important;
   }
 
   /*
     The marked paragraph. Each edit is on (applied: struck words dim with a line through,
-    insertions in window with their note number) or off (the May words, plain; insertions and
-    numbers gone). .is-clean is October: struck words gone, insertions plain. The line through is a
+    insertions in window with their note number) or off (the Previously words, plain; insertions
+    and numbers gone). .is-clean is Now: struck words gone, insertions plain. The line through is a
     1px background, so it can draw left to right as the scrubber passes; forced colors get a real
     line-through.
   */
@@ -363,8 +375,8 @@ const LAST_STOP = editPieces.length + 1;
   }
 
   /* With the scrubber, the one marked paragraph shows every stop. */
-  .qp:global(.is-scrub) .qp__view--may,
-  .qp:global(.is-scrub) .qp__view--october {
+  .qp:global(.is-scrub) .qp__view--from,
+  .qp:global(.is-scrub) .qp__view--to {
     display: none !important;
   }
   .qp:global(.is-scrub) .qp__view--edits {
@@ -377,15 +389,13 @@ const LAST_STOP = editPieces.length + 1;
     margin-top: var(--space-5);
     max-width: 34rem;
   }
-  .qp__scrub[hidden] {
-    display: none;
-  }
+  /* Text color, not dim: the glass can sit over the lit skyline, and this is a control's label. */
   .qp__scrub-label {
     display: block;
     margin-bottom: var(--space-1);
     font-size: var(--fs-small);
     line-height: 1.5;
-    color: var(--dim);
+    color: var(--text);
   }
   .qp__track {
     --thumb: 22px;

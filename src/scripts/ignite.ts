@@ -14,6 +14,8 @@ const html = document.documentElement;
 // Three strike patterns (base.css): a = one flicker, b = two flickers, c = one late flicker.
 const PATTERNS = ['a', 'b', 'c', 'a', 'c', 'b'];
 
+// Letters keep their word's span (.tw, which carries the word's color), so each letter strikes in
+// its word's color. Spaces stay plain text between the words.
 function split(el: HTMLElement) {
   const text = el.textContent ?? '';
   const hidden = document.createElement('span');
@@ -23,17 +25,28 @@ function split(el: HTMLElement) {
   letters.className = 'ign';
   letters.setAttribute('aria-hidden', 'true');
   let i = 0;
-  for (const c of text) {
-    if (!c.trim()) {
-      letters.append(c);
-      continue;
+  const addLetters = (into: Node, str: string) => {
+    for (const c of str) {
+      if (!c.trim()) {
+        into.appendChild(document.createTextNode(c));
+        continue;
+      }
+      const n = i++;
+      const span = document.createElement('span');
+      span.className = `ign__l ign__l--${PATTERNS[(n * 5 + text.length) % PATTERNS.length]}`;
+      span.style.setProperty('--i', String(n));
+      span.textContent = c;
+      into.appendChild(span);
     }
-    const n = i++;
-    const span = document.createElement('span');
-    span.className = `ign__l ign__l--${PATTERNS[(n * 5 + text.length) % PATTERNS.length]}`;
-    span.style.setProperty('--i', String(n));
-    span.textContent = c;
-    letters.append(span);
+  };
+  for (const node of Array.from(el.childNodes)) {
+    if (node instanceof HTMLElement) {
+      const word = node.cloneNode(false) as HTMLElement;
+      addLetters(word, node.textContent ?? '');
+      letters.appendChild(word);
+    } else {
+      addLetters(letters, node.textContent ?? '');
+    }
   }
   el.replaceChildren(hidden, letters);
   el.classList.add('is-split');

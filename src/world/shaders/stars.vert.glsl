@@ -11,6 +11,9 @@ uniform float uDrift;
 uniform vec4 uPulse[PULSES]; // .w: pulse age in s (< 0: none)
 uniform vec4 uPulseTap[PULSES]; // .xy: the tap in NDC
 uniform float uPulseOn;
+uniform vec3 uBeamBase[BEAMS]; // searchlights: lamp (world), direction times length, brightness and radius
+uniform vec3 uBeamDir[BEAMS];
+uniform vec4 uBeamK[BEAMS];
 varying vec3 vColor;
 varying vec3 vSz; // point size (px), core sigma (px), halo weight
 
@@ -75,6 +78,28 @@ void main() {
   }
 
   float b = aStar.y * tw + flash * (1.3 + 0.5 * aStar.y);
+
+  // Stars seen through a searchlight's beam brighten a little: the line of sight to the star (from
+  // the camera) passes through the cone.
+  vec3 sd = normalize(p);
+  for (int i = 0; i < BEAMS; i++) {
+    vec4 K = uBeamK[i];
+    if (K.x <= 0.0) continue;
+    vec3 D = uBeamDir[i];
+    float L = length(D);
+    D /= L;
+    vec3 w0 = cameraPosition - uBeamBase[i];
+    float bb = dot(sd, D);
+    float den = max(1.0 - bb * bb, 1e-4);
+    float dd = dot(sd, w0);
+    float ee = dot(D, w0);
+    float uc = clamp((ee - bb * dd) / den, 0.0, L);
+    float sc = max(0.0, bb * uc - dd);
+    vec3 q = w0 + sd * sc - D * uc;
+    float r = K.y + uc * K.z;
+    float inside = exp(-dot(q, q) / (r * r) * 2.2) * (1.0 - uc / L);
+    b *= 1.0 + 3.5 * K.x * inside;
+  }
   float size = aStar.x * uPixelRatio * (0.75 + 0.25 * haze) * (1.0 + 1.4 * flash);
   // A core narrower than a pixel changes shape as the star drifts across the pixel grid, so the
   // core never gets narrower than 0.6 px (sigma), the point grows to hold it, and the light is

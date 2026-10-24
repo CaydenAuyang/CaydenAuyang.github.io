@@ -1,12 +1,13 @@
-// question.ts: the question scrubber (QuestionPanel.astro, NIGHT-SIGNAL.md 11b.5).
+// mission.ts: the mission scrubber (MissionPanel.astro, NIGHT-SIGNAL.md 11b.5).
 //
-// Seven stops on a native range input: 0 is May (no edits, plain), 1 to 5 apply the edits one by
-// one in reading order, 6 is October (every edit, clean). Moving the handle turns each edit's span
-// on or off in the one marked paragraph; an edit switched on gets .is-new for a moment, so its
-// strike draws, its insertion lights, and its note number glows (here and in the notes list). The
-// May, Edits and October switch becomes three presets that move the handle (0, 5, 6) and shows
-// which one the handle is on. Reduced motion: the same changes, instant (base.css). Snapshot keeps
-// the fixed Edits view, so this doesn't run there; without JavaScript the switch's CSS views stay.
+// One stop per edit on a native range input: 0 is Previously (no edits, plain), 1 to 3 apply the
+// edits one by one in reading order, 4 is Now (every edit, clean; the default). Moving the handle
+// turns each edit's span on or off in the one marked paragraph; an edit switched on gets .is-new
+// for a moment, so its strike draws, its insertion lights, and its note number glows (here and in
+// the notes list). The Previously, Edits and Now switch becomes three presets that move the handle
+// (0, 3, 4) and shows which one the handle is on. Reduced motion: the same changes, instant
+// (base.css). Snapshot keeps the fixed Edits view, so this doesn't run there; without JavaScript
+// the switch's CSS views stay.
 
 const html = document.documentElement;
 const root = document.querySelector<HTMLElement>('.qp');
@@ -25,9 +26,9 @@ if (root && range && scrub && marked && !html.hasAttribute('data-snapshot')) {
     Array.from(root.querySelectorAll<HTMLElement>('.qp__note-n[data-note]')).map((el) => [el.dataset.note, el]),
   );
   const presets: [HTMLInputElement | null, number][] = [
-    [root.querySelector<HTMLInputElement>('#qp-may'), 0],
+    [root.querySelector<HTMLInputElement>('#qp-from'), 0],
     [root.querySelector<HTMLInputElement>('#qp-edits'), editsStop],
-    [root.querySelector<HTMLInputElement>('#qp-october'), last],
+    [root.querySelector<HTMLInputElement>('#qp-to'), last],
   ];
 
   // Restart a one-shot animation class.
@@ -58,40 +59,12 @@ if (root && range && scrub && marked && !html.hasAttribute('data-snapshot')) {
     for (const [radio, at] of presets) if (radio) radio.checked = at === stop;
   };
 
-  // The paragraph keeps the height of its longest stop (Edits, every edit marked), so the panel
-  // and the notes beside it hold still while the handle moves. Measured again when the width
-  // changes.
-  const holdHeight = () => {
-    const on = edits.map((edit) => edit.classList.contains('is-on'));
-    const clean = marked.classList.contains('is-clean');
-    marked.style.minHeight = '';
-    edits.forEach((edit) => edit.classList.add('is-on'));
-    marked.classList.remove('is-clean');
-    const tallest = marked.getBoundingClientRect().height;
-    edits.forEach((edit, i) => edit.classList.toggle('is-on', on[i]));
-    marked.classList.toggle('is-clean', clean);
-    marked.style.minHeight = `${Math.ceil(tallest)}px`;
-  };
-
   // Scrubber mode: the one marked paragraph shows every stop. The slider's value text says what
   // changed, so the paragraph stops announcing itself on every step.
   root.classList.add('is-scrub');
   root.querySelector('[data-qp-views]')?.setAttribute('aria-live', 'off');
-  scrub.hidden = false;
-  holdHeight();
   // A reload may bring back the handle where the visitor left it.
   set(Number(range.value), false);
-  let width = marked.clientWidth;
-  if ('ResizeObserver' in window) {
-    new ResizeObserver(() => {
-      if (marked.clientWidth === width) return;
-      width = marked.clientWidth;
-      holdHeight();
-    }).observe(marked);
-  }
-  // The real font can wrap a line differently from its stand-in (it doesn't for this monospace
-  // face, but a missing font file could): measure again once fonts are in.
-  document.fonts?.ready.then(holdHeight);
 
   range.addEventListener('input', () => set(Number(range.value), true));
   for (const [radio, at] of presets) radio?.addEventListener('change', () => radio.checked && set(at, true));

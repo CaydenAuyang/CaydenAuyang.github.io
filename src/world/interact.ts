@@ -14,7 +14,8 @@
 //   - Pulse (11b.1): a click or tap on the sky, city or water sends a pulse, and tells the page
 //     (`world:pulse`) so the hero hint can go. A tap on a bright star also fires a shooting star (11b.8).
 //   - Archive (11b.3): hovering or tapping a column of light lights it and shows its label.
-//   - Spill (11b.4), arc (11b.7) and light show (11b.9) come in as window events from the page.
+//   - Spill (11b.4) and the arc (11b.7) come in as window events from the page. The light show
+//     (11b.9) has no control since v3: the timeline runs it while Contact is on screen.
 //
 // Every feature checks that the world or signal offers it, so this file works with any subset.
 // With motion off (reduced motion) there is no pointer-follow, sway or spring: a drag turns the
@@ -370,7 +371,7 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     if (hero) hero.style.touchAction = 'pan-y pinch-zoom';
   }
 
-  // ---- Page events: spill, arc, light show --------------------------------------------------------
+  // ---- Page events: spill and arc --------------------------------------------------------
   on('world:spill', (e) => {
     const d = (e as CustomEvent<{ color: Rgb | null; strength: number; rect?: DOMRect }>).detail;
     if (!d || typeof world.setSpill !== 'function') return;
@@ -381,39 +382,6 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   });
 
   on('world:arc', () => signal?.sendArc?.());
-
-  if (typeof world.lightShow === 'function' && motion) {
-    let showing = false;
-    let startY = 0;
-    const tell = () => window.dispatchEvent(new CustomEvent('world:lights-state', { detail: { on: showing } }));
-    const set = (next: boolean) => {
-      if (next === showing) return;
-      showing = next;
-      startY = window.scrollY;
-      world.lightShow(next);
-      tell();
-    };
-    on('world:lights', () => set(!showing));
-    on('keydown', (e) => {
-      if (e.key !== 'l' && e.key !== 'L') return;
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
-      const t = e.target as Element | null;
-      if (t?.closest?.('input, textarea, select, [contenteditable]')) return;
-      set(!showing);
-    });
-    // Any scroll stops it; so does its own end, after 12 s.
-    on('scroll', () => {
-      if (showing && Math.abs(window.scrollY - startY) > 4) set(false);
-    }, { passive: true });
-    off.push(
-      world.onFrame(() => {
-        if (showing && !world.lightShowOn) {
-          showing = false;
-          tell();
-        }
-      }),
-    );
-  }
 
   html.classList.add('has-interactions');
   return {

@@ -3,8 +3,8 @@
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
 // spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
 // never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
-// the camera settles into every key, except the move into Since May, which the timeline eases on
-// its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
+// the camera settles into every key, except the moves into Since May and the first work stop,
+// which the timeline eases on its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
 // world up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
@@ -25,6 +25,7 @@ export const KEY_U: Record<SceneKey, number> = {
   hero: 0,
   question: 0.16,
   experience: 0.29,
+  wisers: 0.355,
   och: 0.42,
   ais: 0.54,
   club: 0.66,
@@ -33,6 +34,9 @@ export const KEY_U: Record<SceneKey, number> = {
   people: 0.91,
   contact: 1,
 };
+
+/** The wisers key's drift from the experience pose: sideways (share of the distance), up (m), and turns (radians). */
+const WISERS_DRIFT = { side: 0.03, rise: 6, yaw: 1.5 * DEG, pitch: 7.5 * DEG, pitchPhone: 1.5 * DEG };
 
 export interface KeyPose {
   pos: Vector3;
@@ -182,6 +186,16 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const sPos = new Vector3(c.x - Math.sin(sYaw) * sDist, 34, c.z + Math.cos(sYaw) * sDist);
   const experience = aimAt(sPos, c, phone ? 0.5 : 0.3, phone ? 0.74 : 0.7, aspect);
 
+  // wisers: holds near the experience view while the Wisers pictures draw in the sky (left sky on
+  // desktop, above the text on phones; WISERS_ANCHOR): a slight drift right and up, tilting up a
+  // little so the skyline sinks below the pictures.
+  const wDrift = new Vector3(Math.cos(experience.yaw), 0, Math.sin(experience.yaw)).multiplyScalar(sDist * WISERS_DRIFT.side);
+  const wisers: KeyPose = {
+    pos: experience.pos.clone().add(wDrift).add(new Vector3(0, WISERS_DRIFT.rise, 0)),
+    yaw: experience.yaw + WISERS_DRIFT.yaw,
+    pitch: experience.pitch + (phone ? WISERS_DRIFT.pitchPhone : WISERS_DRIFT.pitch),
+  };
+
   // och: the first stop along the shoreline. Low and close, just left of Central, looking left
   // down the waterfront: the skyline recedes in perspective toward the low clusters (the next
   // stop) and the far end (club), and the brightness wave runs down a long line of windows.
@@ -223,7 +237,7 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const contact: KeyPose = { pos: cPos, yaw: 18 * DEG, pitch: 20 * DEG };
   contact.pitch = clearOfSkyline(city, contact, aspect, 0.05);
 
-  const poses: Record<SceneKey, KeyPose> = { hero, question, experience, och, ais, club, more, since, people, contact };
+  const poses: Record<SceneKey, KeyPose> = { hero, question, experience, wisers, och, ais, club, more, since, people, contact };
   const order = SCENE_ORDER;
   const posCurve = new CatmullRomCurve3(order.map((k) => poses[k].pos.clone()), false, 'centripetal');
   const yawK = order.map((k) => poses[k].yaw);
@@ -241,9 +255,10 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
     const b = poses[order[i + 1]];
     return a.pos.distanceTo(b.pos) < 1e-6 && a.yaw === b.yaw && a.pitch === b.pitch;
   });
-  // The move into Since May is not eased or curved here: the timeline eases it already, and easing
-  // it twice packed the whole tilt into the middle of the scroll (about 3.4 degrees per 20 px).
-  const linear = order.map((_, i) => i < n - 1 && order[i + 1] === 'since');
+  // The moves into Since May and into the first work stop are not eased or curved here: the
+  // timeline eases them already, and easing them twice packed each turn into the middle of its
+  // scroll (Since May about 3.4 degrees per 20 px, the 55 degree turn into Work about 9.5).
+  const linear = order.map((_, i) => i < n - 1 && (order[i + 1] === 'since' || order[i + 1] === 'och'));
   const shape = (i: number, raw: number) => (linear[i] ? raw : ease(raw));
 
   return {

@@ -1,30 +1,39 @@
 ---
 // Experience.astro: section 3. Civic Exchange first with the full block (place, meta, lead, four
-// facts, and the full summer section from the long copy behind More), then the two Wisers
-// summers, one line each with their meta.
+// facts, and the full summer section from the long copy behind More), then Wisers: one entry with
+// two summers, 2024 first.
 //
 // The archive (NIGHT-SIGNAL.md 11b.3): the twelve columns of light the signal raises over Central
 // are sized by the notebooks' real document counts. Screen readers get the same data as a
 // visually hidden list under the "12 searchable notebooks" fact. The small label the lead's
 // interact.ts shows over a hovered or tapped column is `[data-archive-label]`: it sets the text,
 // `hidden`, and left/top in viewport pixels (the column's top); the CSS centers it just above.
+//
+// Wisers (`data-scene="wisers"`): with motion on, a tall track whose one-screen frame holds still
+// for about 160vh of scroll while the signal draws the 2024 feed and shoe, then the 2025 screen
+// agent, inside WISERS_ANCHOR (contract.ts). The text keeps out of that box: the right column on
+// desktop, the bottom of the screen on phones. The timeline sets data-beat="2024" or "2025" on the
+// track; that summer's label lights and the other dims (with no attribute both read evenly).
+// Snapshot: the track is two screens with the frame held, one per summer. On phones the text fades
+// out as the held frame leaves, so it never rises through the pictures (src/scripts/wisers.ts).
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { archive, experience } from '../../data/content';
 import { ignite } from '../ui/ignite';
+import { titleHtml } from '../ui/title';
 
-const { civic, roles } = experience;
+const { civic, wisers } = experience;
 const headline = ignite(experience.heading);
 ---
 
 <section id="experience" class="scene xp" data-scene="experience" aria-labelledby="experience-title">
-  <div class="wrap grid">
+  <div class="wrap grid xp__wrap">
     <div class="xp__block scrim">
       <div class="xp__main">
-        <h2 id="experience-title" class="h2" {...headline.attrs}>{experience.heading}</h2>
+        <h2 id="experience-title" class="h2" {...headline.attrs} set:html={titleHtml(experience.heading)} />
         <div class="xp__civic stack">
           <div class="xp__where">
-            <h3 class="t-sub">{civic.name}</h3>
+            <h3 class="t-project xp__org" set:html={titleHtml(civic.name, 'Civic Exchange')} />
             <p class="t-meta">{civic.meta.text}</p>
           </div>
           <p class="t-lead">{civic.lead.text}</p>
@@ -72,29 +81,43 @@ const headline = ignite(experience.heading);
           ))
         }
       </More>
-
-      <ul class="xp__roles">
-        {
-          roles.map((role) => (
-            <li class="xp__role">
-              <h3 class="t-sub xp__role-name">{role.name}</h3>
-              <p class="t-meta">{role.meta.text}</p>
-              <p class="t-body xp__role-line">{role.line.text}</p>
-              {role.link && (
-                <p>
-                  <ExternalLink class="action-link" href={role.link.href} arrow>
-                    {role.link.label}
-                  </ExternalLink>
-                </p>
-              )}
-            </li>
-          ))
-        }
-      </ul>
     </div>
   </div>
+
+  <div class="wisers" data-scene="wisers">
+    <div class="wisers__frame">
+      <div class="wrap grid">
+        <div class="wisers__block scrim">
+          <h3 class="t-project xp__org" set:html={titleHtml(wisers.name, 'Wisers')} />
+          <p class="t-meta">{wisers.meta.text}</p>
+          <ol class="wisers__summers">
+            {
+              wisers.summers.map((summer) => (
+                <li class="wisers__summer" data-summer={summer.beat}>
+                  <h4 class="wisers__label">{summer.label}</h4>
+                  <p class="t-body">{summer.line.text}</p>
+                  {summer.link && (
+                    <p>
+                      <ExternalLink class="action-link" href={summer.link.href} arrow>
+                        {summer.link.label}
+                      </ExternalLink>
+                    </p>
+                  )}
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <p class="archive-label" data-archive-label aria-hidden="true" hidden></p>
 </section>
+
+<script>
+  import '../../scripts/wisers';
+</script>
 
 <style>
   .xp {
@@ -112,29 +135,6 @@ const headline = ignite(experience.heading);
   }
   .xp :global(.xp__more) {
     margin-top: var(--space-3);
-  }
-
-  /* The two Wisers summers: one line each, under a hairline. */
-  .xp__roles {
-    display: grid;
-    gap: var(--space-5);
-    margin-top: var(--space-6);
-  }
-  .xp__role {
-    display: grid;
-    align-content: start;
-    gap: var(--space-2);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--rule);
-  }
-  .xp__role-name {
-    font-size: clamp(22px, 0.4vw + 20.5px, 26px);
-  }
-  .xp__role-line {
-    margin-top: var(--space-1);
-  }
-  .xp__role .action-link {
-    margin-top: calc(var(--space-2) * -1);
   }
 
   /* The column label: fixed to the window, centered just above the point interact.ts gives it (the
@@ -167,57 +167,173 @@ const headline = ignite(experience.heading);
   }
 
   /* Phones (and portrait tablets, the phone layout): the twelve columns fill the band from about
-     15% to 52% of the screen while this section scrolls, and the full-width text covers them.
-     About 55vh of empty world at the end lets the text clear the band before Selected work
-     comes in below it. */
-  @media (max-width: 767px) {
-    .xp {
-      padding-bottom: calc(22vh + 55vh);
-      padding-bottom: round(nearest, 77vh, 8px);
+     15% to 52% of the screen while Civic Exchange scrolls, and the full-width text covers them.
+     About 55vh of empty world after it lets the text clear the band before Wisers comes in. */
+  @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+    .xp__wrap {
+      margin-bottom: 55vh;
+      margin-bottom: round(nearest, 55vh, 8px);
     }
   }
-  @media (min-width: 768px) and (max-width: 1023px) and (orientation: portrait) {
-    .xp {
-      padding-bottom: calc(var(--space-9) + 55vh);
-      padding-bottom: calc(var(--space-9) + round(nearest, 55vh, 8px));
-    }
-  }
-
 
   /* Tablets (768 to 1023px, portrait or landscape): the page grid has 12 narrow columns there, so
-     the block spans all of them, as on phones. */
+     the blocks span all of them, as on phones. */
   @media (min-width: 768px) and (max-width: 1023px) {
-    .xp__block {
+    .xp__block,
+    .wisers__block {
       grid-column: 1 / -1;
     }
   }
 
-  /* Desktop: the right column (the same edge as the work text), clear of the archive rising
-     over Central, left of center. The block's scrim stops short of the columns: it is masked off
-     from 13% of the block's width left of the text (about 0.54 of the window at 1024 to 1440,
-     0.53 at 1920; the columns end near 0.51) and fades in to full by the text's edge, so it never
-     dims some columns and not others. */
+  /* Desktop: the right column (the same edge as the work text), clear of the archive rising over
+     Central and of the Wisers pictures (WISERS_ANCHOR, left sky, x 0.1 to 0.5). Each block's scrim
+     stops short of the pictures: it is masked off from 13% of the block's width left of the text
+     (about 0.54 of the window at 1024 to 1440, 0.53 at 1920; the columns end near 0.51) and fades
+     in to full by the text's edge, so it never dims some columns and not others. Titles are capped
+     to the column's width (--col-right), so a long single word never overflows it. */
   @media (min-width: 1024px) {
-    .xp__block {
+    .xp__block,
+    .wisers__block {
       grid-column: 8 / span 5;
     }
-    .xp__block.scrim::before {
+    .xp__block.scrim::before,
+    .wisers__block.scrim::before {
       /* The pseudo is 2.6 block widths wide; the block starts at 0.8 / 2.6 = 30.77% of it. */
       -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
+    .xp__block .h2 {
+      /* "EXPERIENCE" is 4.47em wide in Barlow Condensed 700. */
+      font-size: min(var(--fs-h2), var(--col-right) / 4.6);
+    }
+    .xp__org {
+      /* "CIVIC EXCHANGE," is 6.18em. */
+      font-size: min(var(--fs-project), var(--col-right) / 6.3);
+    }
+  }
+
+  /* ---- Wisers: one entry, two summers ---- */
+  .wisers {
+    position: relative;
+    margin-top: var(--space-8);
+  }
+  .wisers__frame {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .wisers__block > .t-meta {
+    margin-top: var(--space-2);
+  }
+  .wisers__summers {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+  }
+  /* Phones: tighter, so the block fits under the pictures (below 0.48 of the height). */
+  @media (max-width: 767px) {
+    .wisers__summers {
+      gap: var(--space-3);
+      margin-top: var(--space-3);
+    }
+    .wisers__summer {
+      gap: var(--space-1);
+    }
+    .wisers__block > .t-meta {
+      margin-top: var(--space-1);
+    }
+    .wisers__block :global(.t-tail) {
+      margin-top: 0.15em;
+    }
+  }
+  .wisers__summer {
+    position: relative;
+    display: grid;
+    gap: var(--space-2);
+    padding-left: var(--space-4);
+  }
+  /* A small lamp beside each summer; the one the signal is drawing lights up. */
+  .wisers__summer::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.1em;
+    width: 3px;
+    height: 1.4em;
+    border-radius: 2px;
+    background: var(--rule);
+    transition:
+      background 400ms var(--ease-out),
+      box-shadow 400ms var(--ease-out);
+  }
+  .wisers__label {
+    font-family: var(--font-display);
+    font-size: var(--fs-summer);
+    font-weight: var(--fw-display);
+    line-height: var(--lh-display);
+    letter-spacing: var(--track-display);
+    text-transform: uppercase;
+    color: var(--c-sub);
+    transition: color 400ms var(--ease-out);
+  }
+  /* The timeline's beat: that summer lit, the other's label dimmed. The lines stay in text color, so
+     both stay readable. */
+  .wisers[data-beat] .wisers__label {
+    color: var(--c-meta);
+  }
+  .wisers[data-beat='2024'] [data-summer='2024'] .wisers__label,
+  .wisers[data-beat='2025'] [data-summer='2025'] .wisers__label {
+    color: var(--window);
+  }
+  .wisers[data-beat='2024'] [data-summer='2024']::before,
+  .wisers[data-beat='2025'] [data-summer='2025']::before {
+    background: var(--window);
+    box-shadow: 0 0 10px rgb(var(--window-rgb) / 0.7);
+  }
+
+  /* Held (motion on): a 260vh track whose one-screen frame stays still for 160vh of scroll, like the
+     work stops. Desktop: the text centered in the right column. Phones: the text at the bottom of
+     the screen, below the pictures (WISERS_ANCHOR.phone ends at 0.48 of the height). */
+  :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers {
+    height: 260vh;
+  }
+  :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers__frame,
+  :global(html[data-snapshot]) .wisers__frame {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100svh;
+    padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+  }
+  @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers__frame,
+    :global(html[data-snapshot]) .wisers__frame {
+      justify-content: flex-end;
+      padding-top: calc(48vh + var(--space-3));
+      padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    }
+  }
+  /* Snapshot: two screens, the frame held across both (2024, then 2025). */
+  :global(html[data-snapshot]) .wisers {
+    height: 200vh;
+    margin-top: 0;
+  }
+  /* Reduced motion and no JavaScript: one screen of its own in the flow. */
+  @media (min-width: 768px) {
+    .wisers__frame {
+      min-height: 100vh;
+    }
   }
 
   /*
-    Snapshot (desktop): two screens. The first is the live layout: the chart clear on the left, the
-    headline, the Civic Exchange short copy and the two Wisers summers on the right, centered in
-    the screen. The second holds the open More text, in two columns in the same right column, so
-    the chart stays clear there too. The block's scrim becomes a band down the right side
-    (feathered over 120px at the top and bottom of the section, masked off on the left as live).
+    Snapshot (desktop): Civic Exchange takes two screens. The first is the live layout: the chart
+    clear on the left, the headline and the Civic Exchange short copy on the right, centered. The
+    second holds the open More text, in two columns in the same right column, so the chart stays
+    clear there too. The block's scrim becomes a band down the right side (feathered over 120px at
+    the top and bottom, masked off on the left as live). Wisers follows in two screens.
   */
   @media (min-width: 1024px) {
     :global(html[data-snapshot]) .xp {
-      min-height: 200vh;
       padding-block: 0;
     }
     :global(html[data-snapshot]) .xp__block {
@@ -236,23 +352,9 @@ const headline = ignite(experience.heading);
       );
     }
     :global(html[data-snapshot]) .xp__main {
-      order: 1;
-      margin-top: auto;
-    }
-    :global(html[data-snapshot]) .xp__civic {
-      margin-top: var(--space-4);
-    }
-    :global(html[data-snapshot]) .xp__roles {
-      order: 2;
-      gap: var(--space-4);
-      margin-top: var(--space-4);
-      margin-bottom: auto;
-    }
-    :global(html[data-snapshot]) .xp__role {
-      padding-top: var(--space-3);
+      margin-block: auto;
     }
     :global(html[data-snapshot]) .xp__block > :global(.xp__more) {
-      order: 3;
       min-height: 100vh;
       margin-top: 0;
       display: flex;

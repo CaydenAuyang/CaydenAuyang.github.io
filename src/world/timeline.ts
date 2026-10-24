@@ -28,15 +28,38 @@ interface Beat {
   key: SceneKey;
   /** Camera moves from the previous key into this one over this share of the scene. */
   arrive: number;
-  /** Signal morph shown in this scene, and the share of the scene it takes. */
-  morph: { from: Target; to: Target; over: [number, number] } | { hold: Target };
+  /**
+   * Signal morph shown in this scene and the share of the scene it takes; or several morphs in a
+   * row (steps), holding each picture between them. Snapshot shows each step's picture finished.
+   */
+  morph: Morph | { hold: Target } | { steps: Morph[] };
   highlight?: HighlightKey;
+}
+
+interface Morph {
+  from: Target;
+  to: Target;
+  over: [number, number];
 }
 
 const BEATS: Record<SceneKey, Beat> = {
   hero: { key: 'hero', arrive: 0, morph: { hold: 'B' } },
   question: { key: 'question', arrive: 0.9, morph: { from: 'B', to: 'C', over: [0.05, 0.75] } },
   experience: { key: 'experience', arrive: 0.8, morph: { from: 'C', to: 'D', over: [0.05, 0.7] } },
+  // Wisers is held on screen (spec v3: 320 to 480vh): the columns become the 2024 feed, the feed
+  // folds into the shoe, then the shoe becomes the 2025 screen agent. Summer 2024 is the
+  // highlighted line for the first half, Summer 2025 for the second (data-beat on the section).
+  wisers: {
+    key: 'wisers',
+    arrive: 0.3,
+    morph: {
+      steps: [
+        { from: 'D', to: 'F1', over: [0.02, 0.16] },
+        { from: 'F1', to: 'F2', over: [0.26, 0.42] },
+        { from: 'F2', to: 'G', over: [0.54, 0.68] },
+      ],
+    },
+  },
   och: { key: 'och', arrive: 0, morph: { hold: 'A' }, highlight: 'och' },
   ais: { key: 'ais', arrive: 0.45, morph: { hold: 'A' }, highlight: 'ais' },
   club: { key: 'club', arrive: 0.45, morph: { hold: 'A' }, highlight: 'club' },
@@ -44,18 +67,19 @@ const BEATS: Record<SceneKey, Beat> = {
   // People holds Since May's view (spec: "Holds on the sky"): the people key's pose is the since
   // pose, and People is too short for a camera move of its own. Since May must arrive at its own
   // key in one segment; lerping through two keys stalls at the middle one (each segment eases).
-  since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'F', over: [0.05, 0.7] } },
-  people: { key: 'people', arrive: 0, morph: { hold: 'F' } },
+  since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'S', over: [0.05, 0.7] } },
+  people: { key: 'people', arrive: 0, morph: { hold: 'S' } },
   // The lights gather once People's text has scrolled away (Contact starts as it enters the window).
-  contact: { key: 'contact', arrive: 0.5, morph: { from: 'F', to: 'E', over: [0.35, 0.9] } },
+  // The harbour light show runs while Contact is the current scene (spec v3, 11b.9).
+  contact: { key: 'contact', arrive: 0.5, morph: { from: 'S', to: 'E', over: [0.35, 0.9] } },
 };
 
 /**
  * The top of Work (its headline, before the first project): the camera travels to the first stop
- * while the archive columns dissolve back into the city, so they are gone before OurCityHealth's
- * text arrives.
+ * while the screen agent dissolves back into the city, so it is gone before OurCityHealth's text
+ * arrives.
  */
-const WORK_INTRO: Beat = { key: 'och', arrive: 1, morph: { from: 'D', to: 'A', over: [0, 0.8] } };
+const WORK_INTRO: Beat = { key: 'och', arrive: 1, morph: { from: 'G', to: 'A', over: [0, 0.8] } };
 
 interface Scene {
   key: SceneKey;
@@ -71,6 +95,7 @@ function sceneElements(): Scene[] {
   add('hero', pick('[data-scene="hero"]'));
   add('question', pick('[data-scene="question"]'));
   add('experience', pick('[data-scene="experience"]'));
+  add('wisers', pick('[data-scene="wisers"]'));
   add('och', pick('[data-scene="work"]'), WORK_INTRO);
   add('och', pick('[data-stop="och"]'));
   add('ais', pick('[data-stop="ais"]'));
@@ -205,6 +230,11 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         const start = pinning || key === 'och' ? 'top top' : 'top 35%';
         return ScrollTrigger.create({ trigger: el, start, end: 'bottom top' });
       }
+      if (key === 'wisers') {
+        // Held on screen while its pictures draw (a tall section with a sticky frame in CSS), so
+        // its progress runs from its top reaching the top of the window.
+        return ScrollTrigger.create({ trigger: el, start: 'top top', end: 'bottom bottom' });
+      }
       if (key === 'contact') {
         // Snapshot freezes People on the star field and Contact on the two lights, so Contact
         // starts at the middle of the window there; live, it starts as soon as it enters.
@@ -218,6 +248,31 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   // A More toggle changes a section's height: rebuild the triggers from scratch.
   window.addEventListener('world:layout', build);
+
+  // Wisers: which summer's line is highlighted, 2024 for the first half of the section and 2025
+  // for the second, in step with the pictures (the page styles [data-beat]). Runs without WebGL.
+  const wisersIndex = scenes.findIndex((sc) => sc.key === 'wisers');
+  const wisersEl = wisersIndex >= 0 ? scenes[wisersIndex].el : null;
+  const markWisers = () => {
+    if (!wisersEl) return;
+    const { index, p } = current();
+    const beat = index < wisersIndex || (index === wisersIndex && p < 0.5) ? '2024' : '2025';
+    if (wisersEl.dataset.beat !== beat) wisersEl.dataset.beat = beat;
+  };
+  if (wisersEl) {
+    let queued = false;
+    const queue = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        markWisers();
+      });
+    };
+    window.addEventListener('scroll', queue, { passive: true });
+    window.addEventListener('world:layout', queue);
+    markWisers();
+  }
 
   // On phones (and portrait tablets) the hero text sits under the figure, so it fades out as it
   // scrolls up into it, and is gone before it reaches the figure's shoulders. Not in snapshot.
@@ -292,10 +347,20 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     }
     listeners.push(finishIntro);
 
+    let lightsOn = false;
+
     function apply() {
       const { index, p } = current();
       const scene = scenes[index];
       if (!scene) return;
+
+      // The harbour light show runs while Contact is the current scene (spec v3, 11b.9); the
+      // world fades it in and out and holds it still with motion off.
+      const show = scene.key === 'contact';
+      if (show !== lightsOn) {
+        lightsOn = show;
+        world.lightShow?.(show);
+      }
       const beat = scene.beat;
       const prevKey = index > 0 ? scenes[index - 1].beat.key : beat.key;
 
@@ -315,6 +380,18 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         world.setIntro({ sky: 1, wake: 1 });
         if ('hold' in beat.morph) {
           signal?.setMorph(beat.morph.hold, beat.morph.hold, 1);
+        } else if ('steps' in beat.morph) {
+          // Several morphs in a row: the last one that has started (or the first, before any).
+          // Snapshot looks 0.3 ahead with each picture finished, so a section's first screen
+          // shows its second picture (the shoe) and its second screen the last (the screen agent).
+          const steps = beat.morph.steps;
+          const at = snapshot ? p + 0.3 : p;
+          let k = 0;
+          steps.forEach((st, i) => {
+            if (at >= st.over[0]) k = i;
+          });
+          const { from, to, over } = steps[k];
+          signal?.setMorph(from, to, snapshot ? 1 : span(at, over[0], over[1]));
         } else {
           const { from, to, over } = beat.morph;
           let t = span(p, over[0], over[1]);

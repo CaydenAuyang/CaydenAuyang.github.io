@@ -4,6 +4,7 @@
 import More from '../ui/More.astro';
 import { since } from '../../data/content';
 import { ignite } from '../ui/ignite';
+import { titleHtml } from '../ui/title';
 
 const headline = ignite(since.heading);
 ---
@@ -12,7 +13,7 @@ const headline = ignite(since.heading);
   <div class="wrap">
     <div class="since__block scrim">
       <div class="since__head stack">
-        <h2 id="since-title" class="h2" {...headline.attrs}>{since.heading}</h2>
+        <h2 id="since-title" class="h2" {...headline.attrs} set:html={titleHtml(since.heading)} />
         <p class="t-lead">{since.lead.text}</p>
       </div>
       <ol class="strands">

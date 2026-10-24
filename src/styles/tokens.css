@@ -2,9 +2,10 @@
   tokens.css: every color, size, space, easing and layer the site uses, in one place.
   Spec: NIGHT-SIGNAL.md section 3 (art direction).
 
-  Text colors (Cayden's call, never all one white): headlines in window, project names and
-  subheads in cool, small uppercase labels in neon (16px, never body text), body in text, meta in
-  dim. AA needs 4.5:1 for text under 24px (18.66px bold) and 3:1 above, and for focus rings.
+  Text colors (Cayden's call, never all one white): every title word has its own color
+  (content.ts titleColors: window, cool, neon or text), project names and subheads in cool, small
+  uppercase labels in neon (16px, never body text), body in text, meta in dim. AA needs 4.5:1 for
+  text under 24px (18.66px bold) and 3:1 above, and for focus rings.
 
   Measured against the real pixels behind each line (2026-10-24): every frame of a full scroll at
   1440 x 900 and 390 x 844, live (motion on), in ?snapshot and without WebGL (the still), with the
@@ -12,14 +13,15 @@
   luminance of each line's box; the number is the worst frame anywhere on the page.
 
     pairing                                size        worst   needs   where the worst frame is
-    window: headlines and the name         48-153px     4.50    3      a letter of Experience (snapshot)
-    window: links, inserted words          18-28px      5.70    4.5    GitHub, Contact (390)
-    cool: project names, subheads          22-65px      8.99    3      Civic Exchange (snapshot)
-    neon: small labels                     16px         5.42    4.5    Reflect. over the still
-    text: body, lead, facts, captions      12-20px      5.60    4.5    a Civic AI Club fact (snapshot)
-    dim: meta lines                        12-13px      5.44    4.5    the small print, Contact
-    dim: lift floors (desktop)             14px         5.30    4.5    G, over the skyline
-    dim: struck words, switch labels       15-28px      4.21    3/4.5  "down to a school" (28px)
+    window: title words, links, inserts    18-224px     4.51    3/4.5  a lit letter, Selected work (390)
+    cool: title words, subheads            22-189px     8.00    3      Club over the city (snapshot, 390)
+    neon: title words                      44-176px     4.19    3      "work" of Selected work (snapshot, 390)
+    neon: small labels                     16px         6.17    4.5    Build. (390)
+    text: title words (Exchange, More)     44-86px     12.94    3      Exchange, (snapshot, 390)
+    text: body, lead, facts, captions      12-20px      5.45    4.5    a Civic AI Club fact (1440)
+    dim: meta lines, organisation tails    12-30px      5.17    4.5/3  Information Limited, Hong Kong
+    dim: lift floors (desktop)             14px         5.62    4.5    1, over the skyline
+    dim: struck words, switch labels       15-34px      4.72    3/4.5  a struck phrase (34px)
     night on text: the chosen switch       15px        16.67    4.5    flat
 
   Flat, for reference (WCAG 2.x formula in node):
@@ -33,11 +35,12 @@
 
   What makes the city frames pass: over a fully lit window, the block scrim (night at 60%) keeps
   text at 6.44 (cool 5.96), but dim drops to 2.60, neon to 2.50 and window to 4.48. So every
-  block over the city carries a dark halo (--halo) around its letters; links and note numbers
-  carry the tighter --halo-strong; and small neon and dim lines also get a small scrim of their
-  own that hugs the words (base.css): two 60% layers leave 16% of the light, where dim keeps
-  5.13 and neon 4.93 even over a fully lit window. The focus ring is window on a night halo:
-  11.60 against it.
+  block over the city carries a dark halo (--halo) around its letters; links, note numbers and
+  neon title words carry the tighter --halo-strong; and small neon and dim lines, links, note
+  numbers and project and organisation names also get a small scrim of their own that hugs the
+  words (base.css), as do the Contact light labels (darker, under the light show's beams): two
+  60% layers leave 16% of the light, where dim keeps 5.13 and neon 4.93 even over a fully lit
+  window. The focus ring is window on a night halo: 11.60 against it.
 */
 
 :root {
@@ -54,6 +57,8 @@
   /* Channels, for transparent mixes: rgb(var(--night-rgb) / 0.6) */
   --night-rgb: 5 7 13;
   --window-rgb: 255 182 92;
+  --cool-rgb: 207 227 255;
+  --neon-rgb: 255 79 139;
   --text-rgb: 238 233 225;
 
   /* ---- Surfaces ---- */
@@ -106,9 +111,13 @@
   --font-display: var(--font-barlow), sans-serif;
   --font-body: var(--font-mono), monospace;
 
-  --fs-name: clamp(64px, 11vw, 200px);
-  --fs-h2: clamp(48px, 7vw, 128px);
-  --fs-project: clamp(36px, 4.5vw, 80px);
+  /* v3, bigger titles (NIGHT-SIGNAL.md section 3). */
+  --fs-name: clamp(88px, 15vw, 224px);
+  --fs-h2: clamp(64px, 10vw, 176px);
+  /* Organisation and project names (Civic Exchange, Wisers, OurCityHealth...). */
+  --fs-project: clamp(44px, 6vw, 112px);
+  /* The Wisers summer labels ("Summer 2024"), and the smaller tail of a long organisation name. */
+  --fs-summer: clamp(22px, 2.2vw, 30px);
   /* Subheads (Civic Exchange, Wisers, Lawrence Iu, the Since May statuses, the More work cards). */
   --fs-sub: clamp(26px, 1vw + 22px, 36px);
   /* Small uppercase labels. Neon text is never smaller than 14px. */
@@ -116,8 +125,8 @@
   --fs-lead: clamp(18px, 0.19vw + 17.26px, 20px); /* 18px at 390, 20px at 1440 */
   --fs-body: clamp(15px, 0.095vw + 14.63px, 16px); /* 15px at 390, 16px at 1440 */
   --fs-small: clamp(12px, 0.095vw + 11.63px, 13px); /* 12px at 390, 13px at 1440 */
-  /* The question itself, inside the glass panel. */
-  --fs-question: clamp(19px, 0.86vw + 15.6px, 28px);
+  /* The mission text (Previously and Now), inside the glass panel, at line height 1.45. */
+  --fs-mission: clamp(22px, 2.4vw, 34px);
   /* The email: the largest link on the page. 22 characters at 0.6em each fit 390px at 26px. */
   --fs-email: clamp(24px, 3.6vw + 12px, 64px);
 
@@ -140,7 +149,7 @@
   --measure: 60ch;
 
   /* ---- Text colors: never all one white (NIGHT-SIGNAL.md section 3) ---- */
-  --c-headline: var(--window); /* the name and the section headlines */
+  --c-headline: var(--window); /* titles, unless a word has its own color (content.ts titleColors) */
   --c-sub: var(--cool); /* project names and subheads */
   --c-label: var(--neon); /* small uppercase labels, 14px and up; never body text */
   --c-body: var(--text);
@@ -161,6 +170,10 @@
      (32px at 768, 48px at 1024, 72px at 1440), at most 80px. Browsers without round() use
      plain 5vw. A custom property can't fall back by redeclaring it, hence @supports below. */
   --gutter: clamp(16px, 5vw, 80px);
+  /* Desktop (1024px and up): the width of the right text column (grid columns 8 to 12), for
+     capping a title so its longest word always fits: 37.5vw - 19px up to the page's 1440px width,
+     514px beyond it. */
+  --col-right: min(37.5vw - 19px, 514px);
   --max-page: 1440px;
   --header-h: 64px;
   --tap: 44px;

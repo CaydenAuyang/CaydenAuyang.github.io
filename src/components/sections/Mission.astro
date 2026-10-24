@@ -1,0 +1,60 @@
+---
+// Mission.astro: section 2. The headline, the lead, and the Previously / Edits / Now panel with its
+// three notes (MissionPanel.astro). The camera stop keeps its internal name: data-scene="question".
+import MissionPanel from '../ui/MissionPanel.astro';
+import { mission } from '../../data/content';
+import { ignite } from '../ui/ignite';
+import { titleHtml } from '../ui/title';
+
+const headline = ignite(mission.heading);
+---
+
+<section id="mission" class="scene mission" data-scene="question" aria-labelledby="mission-title">
+  <div class="wrap">
+    <div class="mission__head stack scrim">
+      <h2 id="mission-title" class="h2" {...headline.attrs} set:html={titleHtml(mission.heading)} />
+      <p class="t-lead">{mission.lead.text}</p>
+    </div>
+    <MissionPanel views={mission.views} from={mission.from} to={mission.to} edits={mission.edits} notes={mission.notes} />
+  </div>
+</section>
+
+<style>
+  .mission {
+    --scene-h: 120vh;
+  }
+  .mission__head {
+    margin-bottom: var(--space-6);
+  }
+  /* Snapshot (desktop): one screen. The headline, lead and notes on the left, the panel (the marked
+     Edits view) on the right, so the long marked text fits beside them. */
+  @media (min-width: 1024px) {
+    :global(html[data-snapshot]) .mission .wrap {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--space-5);
+      align-items: start;
+    }
+    :global(html[data-snapshot]) .mission__head {
+      grid-column: 1 / span 5;
+      grid-row: 1;
+      margin-bottom: var(--space-5);
+    }
+    /* "MISSION", on its own line here, must fit the five columns (the left five are as wide as the
+       right five, --col-right). */
+    :global(html[data-snapshot]) .mission .h2 {
+      font-size: min(var(--fs-h2), var(--col-right) / 3.6);
+    }
+    :global(html[data-snapshot]) .mission :global(.qp) {
+      display: contents;
+    }
+    :global(html[data-snapshot]) .mission :global(.qp__panel) {
+      grid-column: 6 / -1;
+      grid-row: 1 / span 2;
+    }
+    :global(html[data-snapshot]) .mission :global(.qp__notes) {
+      grid-column: 1 / span 5;
+      grid-row: 2;
+    }
+  }
+</style>

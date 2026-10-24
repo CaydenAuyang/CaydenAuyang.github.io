@@ -13,6 +13,7 @@ import ExternalLink from '../ui/ExternalLink.astro';
 import { clipFor } from '../ui/previews';
 import { work } from '../../data/content';
 import { ignite } from '../ui/ignite';
+import { titleHtml } from '../ui/title';
 import { ui } from '../../data/site';
 
 const headline = ignite(work.heading);
@@ -20,7 +21,7 @@ const headline = ignite(work.heading);
 
 <section id="work" class="work" data-scene="work" aria-labelledby="work-title">
   <div class="wrap work__head scrim">
-    <h2 id="work-title" class="h2" {...headline.attrs}>{work.heading}</h2>
+    <h2 id="work-title" class="h2" {...headline.attrs} set:html={titleHtml(work.heading)} />
   </div>
 
   {
@@ -29,9 +30,7 @@ const headline = ignite(work.heading);
         <div class="wrap grid stop__grid">
           <LoopVideo class="stop__video" name={project.name} caption={project.caption} src={clipFor(project.previewId)} />
           <div class="stop__text stack scrim">
-            <h3 id={`${project.stop}-name`} class="t-project">
-              {project.name}
-            </h3>
+            <h3 id={`${project.stop}-name`} class="t-project" set:html={titleHtml(project.name)} />
             <p class="t-meta stop__role">{project.role.text}</p>
             <p class="t-lead">{project.lead.text}</p>
             <ul class="facts">
@@ -78,7 +77,7 @@ const headline = ignite(work.heading);
 
   <div class="more-work" data-stop="more">
     <div class="wrap scrim">
-      <h3 class="more-work__title t-label">{work.moreWork.heading}</h3>
+      <h3 class="more-work__title t-project" set:html={titleHtml(work.moreWork.heading)} />
       <ul class="more-work__list">
         {
           work.moreWork.items.map((item) => (
@@ -170,6 +169,10 @@ const headline = ignite(work.heading);
     .stop__text {
       grid-column: 8 / span 5;
     }
+    /* The longest project name, "OURCITYHEALTH", is 5.89em: capped so it fits the column. */
+    .stop__text .t-project {
+      font-size: min(var(--fs-project), var(--col-right) / 6);
+    }
     .stop__text .t-lead {
       font-size: var(--fs-lead);
     }
@@ -220,8 +223,8 @@ const headline = ignite(work.heading);
       padding-block: var(--space-6);
     }
     :global(html[data-snapshot]) .stop[data-stop='och'] {
-      padding-top: calc(var(--space-6) + var(--fs-h2) * 0.95 + var(--space-5));
-      padding-bottom: var(--space-5);
+      padding-top: calc(var(--space-6) + var(--fs-h2) * 0.9 + var(--space-4));
+      padding-bottom: var(--space-3);
     }
     :global(html[data-snapshot]) .more-work {
       min-height: 100vh;

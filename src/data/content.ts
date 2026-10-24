@@ -33,10 +33,31 @@ export const meta = {
   figureAlt: 'Cayden, drawn in points of light above the Hong Kong skyline.',
 };
 
+// ---- Title colors -----------------------------------------------------------------------------
+
+// Every title's words in their own color (content.md, Interface labels, Title colors). Keys are the
+// titles as written in this file; one color per word, in order. Tokens: tokens.css.
+export type TitleColor = 'window' | 'cool' | 'neon' | 'text';
+export const titleColors: Record<string, TitleColor[]> = {
+  'Cayden Auyang': ['window', 'cool'],
+  'The mission': ['cool', 'window'],
+  Experience: ['cool'],
+  'Civic Exchange': ['window', 'text'],
+  Wisers: ['neon'],
+  'Selected work': ['window', 'neon'],
+  OurCityHealth: ['cool'],
+  'AI Simply': ['neon', 'cool'],
+  'Civic AI Club': ['cool', 'neon', 'cool'],
+  'More work': ['text', 'window'],
+  'Since May': ['cool', 'window'],
+  People: ['neon'],
+  'Say hello': ['window', 'cool'],
+};
+
 // ---- Navigation --------------------------------------------------------------------------------
 
 export const nav: Link[] = [
-  { label: 'Question', href: '#question' },
+  { label: 'Mission', href: '#mission' },
   { label: 'Experience', href: '#experience' },
   { label: 'Work', href: '#work' },
   { label: 'Since May', href: '#since' },
@@ -48,7 +69,7 @@ export const nav: Link[] = [
 // section, R (the roof) for Contact. `name` is the section it stands for; G's is the hero's name.
 export const floors: { floor: string; name: string; href: string }[] = [
   { floor: 'G', name: 'Cayden Auyang', href: '#hero' },
-  { floor: '1', name: 'Question', href: '#question' },
+  { floor: '1', name: 'Mission', href: '#mission' },
   { floor: '2', name: 'Experience', href: '#experience' },
   { floor: '3', name: 'Work', href: '#work' },
   { floor: '4', name: 'Since May', href: '#since' },
@@ -73,17 +94,17 @@ export const hero = {
   scrollCue: 'Scroll',
 };
 
-// ---- 2. The question ---------------------------------------------------------------------------
+// ---- 2. The mission ----------------------------------------------------------------------------
 
-// One tracked change to the May question. Edits apply in order, left to right, each searching the
-// May text from where the previous edit ended.
-//   del:      strike `text` (words in the May question).
-//   ins:      insert `text` right after the May words in `after`. `after: ''` means directly after
-//             the previous edit.
-//   replace:  strike `text` and insert `insertText` in its place.
-// `note` is the number of the note that says what caused the edit (one edit has none).
+// One tracked change, from the Previously text to the Now text. Edits apply in order, left to
+// right, each searching the Previously text from where the previous edit ended.
+//   del:      strike `text`.
+//   ins:      insert `text` right after the words in `after`. `after: ''` means directly after the
+//             previous edit.
+//   replace:  strike `text` and insert `insertText` right after it.
+// `note` is the number of the note that says what caused the edit.
 // The build stops with an error if a `text` or `after` can't be found, or if the edits don't turn
-// the May text into the October text exactly (QuestionPanel.astro).
+// the Previously text into the Now text exactly (MissionPanel.astro).
 export interface Edit {
   type: 'del' | 'ins' | 'replace';
   text: string;
@@ -92,38 +113,49 @@ export interface Edit {
   note?: number;
 }
 
-export const question = {
-  heading: 'The question',
+export const mission = {
+  heading: 'The mission',
   lead: {
-    text: "What I'm trying to answer, and how this year changed it.",
-    source: 'POSTER; CEX; OCH §2',
+    text: "What I'm working towards, and how the question behind it changed.",
+    source: 'content.md, Oct 24',
   } satisfies Line,
-  views: { may: 'May', edits: 'Edits', october: 'October' },
-  may: {
-    text: 'Most institutions struggle to actually hear the people they serve. What would it take for AI to change that, from a city down to a school?',
-    source: 'POSTER',
+  // The switch, left to right. The default view is Now.
+  views: { from: 'Previously', edits: 'Edits', to: 'Now' },
+  from: {
+    text: "If money is what separates people, what could I build that's big enough to close the gap? Which tool finally makes it fair?",
+    source: 'Cayden, Oct 24 chat',
   } satisfies Line,
-  october: {
-    text: 'Most institutions struggle to hear the people they serve, or even their own records. What would it take for AI to help, and how would we know it heard them correctly, from a city to a nonprofit to a school?',
-    source: 'Cayden, October 2026',
+  // Cayden's draft; he may still edit it.
+  to: {
+    text: 'Why does know-how move so easily among the people who already have it, and so rarely reach the people who need it most? What does it take to get it across, and how do I pass it on in a way that lets them pass it on too?',
+    source: 'Cayden, Oct 24 chat; angle from his Common App essay',
   } satisfies Line,
-  // In reading order.
+  // In reading order. Phrase level: each old phrase is struck, the new one inserted right after it.
   edits: [
-    { type: 'del', text: 'actually' },
-    { type: 'ins', text: ', or even their own records', after: 'the people they serve', note: 1 },
-    { type: 'replace', text: 'change that', insertText: 'help', note: 2 },
-    { type: 'ins', text: ', and how would we know it heard them correctly', after: '', note: 3 },
-    { type: 'replace', text: 'down to a school', insertText: 'to a nonprofit to a school', note: 4 },
-  ] satisfies Edit[] as Edit[],
-  // One line each, numbered 1 to 4 on the page.
-  notes: [
-    { text: 'At Civic Exchange, 25 years of research sat in folders no one could search.', source: 'CEX §3b, ER §1' },
-    { text: 'AI is good at finding and drafting. Deciding what matters stays with people.', source: 'CEX §3g, FD P43' },
     {
-      text: 'Every answer had to cite its source. My independent study checks its AI the same way.',
-      source: 'CEX §6, ER §6.3; OCH §2, METH',
+      type: 'replace',
+      text: 'If money is what separates people,',
+      insertText: 'Why does know-how move so easily among the people who already have it, and so rarely reach the people who need it most?',
+      note: 1,
     },
-    { text: 'A nonprofit became the middle case.', source: 'CEX §8, J15' },
+    { type: 'replace', text: "what could I build that's big enough to close the gap?", insertText: 'What does it take to get it across,', note: 2 },
+    {
+      type: 'replace',
+      text: 'Which tool finally makes it fair?',
+      insertText: 'and how do I pass it on in a way that lets them pass it on too?',
+      note: 3,
+    },
+  ] satisfies Edit[] as Edit[],
+  // One line each, numbered 1 to 3 on the page.
+  notes: [
+    { text: 'At Civic Exchange, 25 years of research already existed. Staff just couldn\'t reach it.', source: 'CEX §3b, ER §1' },
+    { text: 'I did 11 interviews before building anything. Getting it across started with listening.', source: 'CEX §3a, UR, FD P2' },
+    {
+      // CONFIRM: the second sentence comes from Cayden's essay; keep it only if he's happy to say
+      // it publicly.
+      text: 'I handed the notebooks over with a 39-page manual and a staff workshop. In my club, a member I mentored now helps newer members.',
+      source: 'CEX §3g, FD P42; §3f, FD P38; Common App essay',
+    },
   ] satisfies Line[],
 };
 
@@ -139,10 +171,10 @@ export interface MoreBlock {
   list?: Line[];
 }
 
-// Civic Exchange first, with the full block; then the two Wisers summers, one line each.
-export interface Role {
-  name: string;
-  meta: Line;
+// Civic Exchange first, with the full block; then Wisers, one entry with two summers.
+export interface Summer {
+  beat: '2024' | '2025';
+  label: string;
   line: Line;
   link?: Link;
 }
@@ -215,27 +247,32 @@ export const experience = {
     ] satisfies MoreBlock[] as MoreBlock[],
     moreLabel: 'about Civic Exchange',
   },
-  roles: [
-    {
-      name: 'Wisers Information Limited, Hong Kong',
-      // CONFIRM: the title. Records say Data Intern, AI Team Intern and AI Engineering Intern, so
-      // the page says plain "Intern" until Cayden picks one.
-      meta: { text: 'Intern, July to August 2025', source: 'OCH §3, CV' },
-      line: {
-        text: "Built a prototype agent that reads a Mac's screen with computer vision and OCR, then plans its steps with a language model.",
-        source: 'OCH §3, GUI',
+  // Wisers: one entry, two summers, 2024 first. The signal draws each summer as you reach it.
+  wisers: {
+    name: 'Wisers Information Limited, Hong Kong',
+    // CONFIRM: the title. Records say Data Intern, AI Team Intern and AI Engineering Intern, so
+    // the page says plain "Intern" until Cayden picks one.
+    meta: { text: 'Intern, two summers (2024 and 2025)', source: 'OCH §3, CV' } satisfies Line,
+    summers: [
+      {
+        beat: '2024',
+        label: 'Summer 2024',
+        line: {
+          text: 'Built a pipeline that turned thousands of RedNote posts into brand analysis for four sportswear brands.',
+          source: 'POSTER; OCH §3; Drive: Sportswear Brand Trend Analysis Report, July 2024',
+        },
       },
-      link: { label: 'View the code', href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent' },
-    },
-    {
-      name: 'Wisers Information Limited, Hong Kong',
-      meta: { text: 'Intern, July to August 2024', source: 'OCH §3, CV' },
-      line: {
-        text: 'Built a pipeline that turned thousands of RedNote posts into brand analysis for four sportswear brands.',
-        source: 'POSTER; OCH §3; Drive: Sportswear Brand Trend Analysis Report, July 2024',
+      {
+        beat: '2025',
+        label: 'Summer 2025',
+        line: {
+          text: "Built a prototype agent that reads a Mac's screen with computer vision and OCR, then plans its steps with a language model.",
+          source: 'OCH §3, GUI',
+        },
+        link: { label: 'View the code', href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent' },
       },
-    },
-  ] satisfies Role[] as Role[],
+    ] satisfies Summer[] as Summer[],
+  },
 };
 
 /**
@@ -448,10 +485,6 @@ export const contact = {
   heading: 'Say hello',
   email: { text: 'caydenauyang@gmail.com', source: 'POSTER' } satisfies Line,
   github: { label: 'GitHub', href: 'https://github.com/CaydenAuyang' } satisfies Link,
-  portfolio: {
-    text: 'My certificate portfolio lives in my school Drive and on the program\'s Google Site.',
-    source: 'program/Instructions for Portfolios',
-  } satisfies Line,
   smallPrint: 'Cayden Auyang. Pomfret School, Class of 2027.',
   // The labels under the two lights the signal draws at the contact key.
   lights: { pomfret: 'Pomfret', hongKong: 'Hong Kong' },

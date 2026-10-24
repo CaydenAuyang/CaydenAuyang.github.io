@@ -3,7 +3,9 @@
 // value (brightness, or the current's phase). The shader adds each target's live motion, then
 // flows between the two along a curved path with a per-point delay and curl noise that peaks
 // mid-flight. Target ids: 0 A city, 1 B figure, 2 C current, 3 D archive, 4 E two lights, 5 S star
-// field. The figure (B) places itself from its own attributes (the video-built point set).
+// field, 6 F1 feed, 7 F2 shoe, 8 G screen agent. The figure (B) places itself from its own
+// attributes (the video-built point set). In the Wisers pictures (6 to 8) w is the colour class
+// (0 window, 1 cool, 2 neon, 3 white) plus the brightness (0 to 0.99).
 
 precision highp float;
 precision highp int;
@@ -18,6 +20,7 @@ in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows 
 // The figure (B), point i of the video-built set (site-handoff/figure-video): its position in
 // figure heights (y up from the crop line, the yaw axis at x = z = 0, z toward the viewer), its
 // horizontal surface normal, and the video's brightness at head yaw -30 to +30 in 10 degree steps.
+in vec4 aShape; // the screen agent's loop (G): role (0 still, 1 box, 2 path, 3 cursor, 4 ripple) and its parameters
 in vec3 aFigPos;
 in vec2 aFigN;
 in vec4 aFigViewA;
@@ -72,6 +75,19 @@ uniform float uFigDot;
 uniform float uFigGain;
 uniform float uFigCore; // the figure's white core, low so its skin stays amber and its T-shirt dark
 uniform float uScan;
+// The Wisers pictures (F1, F2, G): the box's centre and its axes in the world (one box height
+// each), the point size of each picture (CSS px), their brightness, the feed's loop (its lowest v,
+// length, scroll speed in box heights a second, and the fade at the box's top and bottom), the
+// screen agent's loop time (seconds into its 6 s) and the knots of the cursor's path (u, v).
+uniform vec3 uPicOrigin;
+uniform vec3 uPicX;
+uniform vec3 uPicY;
+uniform float uPicDot[3];
+uniform float uPicGain;
+uniform vec4 uFeed;
+uniform float uAgentPhase;
+uniform vec2 uAgentKnots[5];
+uniform vec3 uNeon;
 // Brightness a point carries up from its window in flight, and how it is shared out: x the share
 // of points that carry most of it, y their multiple of uCarry, z everyone else's, w how much
 // larger the carriers draw in flight toward a dark target (the field).
@@ -156,6 +172,33 @@ vec3 curl(vec3 p) {
 
 const float TAU = 6.28318530718;
 
+// The cursor's path: Catmull-Rom through the five box centres, as cubics (shapes/wisers.ts
+// samples the same curve for the dotted path). u runs 0 to 4, one per segment.
+vec2 knot(int i) {
+  return uAgentKnots[clamp(i, 0, 4)];
+}
+vec2 agentPath(float u) {
+  int i = int(clamp(floor(u), 0.0, 3.0));
+  float t = clamp(u - float(i), 0.0, 1.0);
+  vec2 p0 = knot(i - 1);
+  vec2 p1 = knot(i);
+  vec2 p2 = knot(i + 1);
+  vec2 p3 = knot(i + 2);
+  vec2 c1 = p1 + (p2 - p0) / 6.0;
+  vec2 c2 = p2 - (p3 - p1) / 6.0;
+  float s = 1.0 - t;
+  return s * s * s * p1 + 3.0 * s * s * t * c1 + 3.0 * s * t * t * c2 + t * t * t * p2;
+}
+vec3 picWorld(vec2 uv) {
+  return uPicOrigin + uPicX * uv.x + uPicY * uv.y;
+}
+vec3 classColor(float cls) {
+  if (cls < 0.5) return uWarm;
+  if (cls < 1.5) return uCool;
+  if (cls < 2.5) return uNeon;
+  return vec3(1.0, 0.97, 0.92);
+}
+
 // Live position of a point in target k from its base b. alpha is its brightness there; fade is
 // the part of that which hides a wrap (the current and the columns loop), so a point in flight
 // toward a wrapping target can hide its jump; size scales the point there.
@@ -237,6 +280,50 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out ve
     alpha = b.w * (0.8 + 0.2 * sin(t * (1.1 + 1.7 * aRand.w) + aRand.z * TAU));
     return p;
   }
+  if (k >= 6) {
+    // The Wisers pictures: colour class and brightness from w.
+    float cls = floor(b.w + 1e-4);
+    col = classColor(cls);
+    alpha = (b.w - cls) * uPicGain;
+    vec3 p = b.xyz;
+    if (k == 6) {
+      // F1, the feed: it scrolls up like a feed, looping, and fades at the box's top and bottom.
+      float v = dot(b.xyz - uPicOrigin, uPicY) / dot(uPicY, uPicY);
+      float v2 = uFeed.x + mod(v + t * uFeed.z - uFeed.x, uFeed.y);
+      p = b.xyz + uPicY * (v2 - v);
+      fade = smoothstep(-0.5, -0.5 + uFeed.w, v2) * (1.0 - smoothstep(0.5 - uFeed.w, 0.5, v2));
+      alpha *= fade;
+    } else if (k == 8) {
+      // G, the screen agent's 6 s loop: five boxes draw in one after another (the screen being
+      // read), a dotted path through them (the plan), then the cursor travels it with a click
+      // ripple at each box (the action); everything but the screen fades out at the end.
+      int role = int(aShape.x + 0.5);
+      float ph = uAgentPhase;
+      float endFade = 1.0 - smoothstep(5.6, 5.95, ph);
+      if (role == 1) {
+        float pr = clamp((ph - 0.3 - 0.38 * aShape.z) / 0.35, 0.0, 1.0);
+        alpha *= step(aShape.y, pr) * endFade;
+      } else if (role == 2) {
+        float pr = clamp((ph - 2.3) / 0.7, 0.0, 1.0);
+        alpha *= step(aShape.y, pr) * endFade;
+      } else if (role == 3) {
+        float ct = max(ph - 3.1, 0.0);
+        float seg = floor(ct / 0.55);
+        float u = seg >= 4.0 ? 4.0 : seg + smoothstep(0.1, 0.75, fract(ct / 0.55));
+        p = picWorld(agentPath(u) + aShape.yz);
+        alpha *= smoothstep(2.85, 3.05, ph) * endFade;
+      } else if (role == 4) {
+        float bi = aShape.z;
+        float tc = bi < 0.5 ? 3.1 : 3.1 + 0.55 * (bi - 1.0) + 0.4125;
+        float age = ph - tc;
+        float on = step(0.0, age) * (1.0 - smoothstep(0.35, 0.6, age));
+        float r = (0.012 + 0.09 * clamp(age, 0.0, 0.6)) * (1.0 + 0.55 * aShape.w);
+        p = picWorld(uAgentKnots[int(bi + 0.5)] + vec2(cos(aShape.y), sin(aShape.y)) * r);
+        alpha *= on;
+      }
+    }
+    return p;
+  }
   // Field: a slow drift, about as fast on screen as the stars' own (90% of points under 2.5 times
   // it), and a twinkle.
   vec3 p = b.xyz + curl(b.xyz * (2.0 / uScale) + vec3(t * 0.002)) * uScale * 0.02;
@@ -305,7 +392,7 @@ void main() {
     // Each point reads the noise a little off its neighbours' (aRand), so a long hold mid-flight
     // can't fold the cloud into a bright seam where the drifting field steepens.
     // Low into and out of the figure (30%), so its rings land cleanly.
-    float curlK = (uFrom == 1 || uTo == 1) ? 0.3 : 1.0;
+    float curlK = (uFrom == 1 || uTo == 1) ? 0.3 : (uFrom >= 6 || uTo >= 6) ? 0.6 : 1.0;
     pos += curl(pos * (2.2 / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7) + (aRand.zxw - 0.5) * 0.3) * min(L, uScale * 0.6) * 0.16 * flight * curlK;
   }
 
@@ -342,8 +429,11 @@ void main() {
   vAlpha = alpha;
   // One core for every point in the figure; elsewhere each point's own.
   float core = 0.55 + 0.45 * aRand.y;
-  vCore = mix(uFrom == 1 ? uFigCore : core, uTo == 1 ? uFigCore : core, e);
-  vDot = mix(uFrom == 1 ? 1.0 : 0.0, uTo == 1 ? 1.0 : 0.0, e);
+  // The figure and the Wisers pictures are tidy lattices of crisp, even dots.
+  bool tidyF = uFrom == 1 || uFrom >= 6;
+  bool tidyT = uTo == 1 || uTo >= 6;
+  vCore = mix(tidyF ? uFigCore : core, tidyT ? uFigCore : core, e);
+  vDot = mix(tidyF ? 1.0 : 0.0, tidyT ? 1.0 : 0.0, e);
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   if (alpha < 0.002) {
@@ -357,7 +447,7 @@ void main() {
   // The figure's points are all one size (its rings' spacing on screen times FIGURE_DOT).
   float px = mix(1.5, 3.1, clamp(0.35 * aRand.y + 0.65 * min(alpha / max(uGain, 1e-3), 1.0), 0.0, 1.0));
   px = clamp(px * clamp(uScale / max(-mv.z, 1.0), 0.75, 1.4) * (1.0 + 0.15 * flight), 1.5, 3.5);
-  float pxF = uFrom == 1 ? uFigDot : px * sF;
-  float pxT = uTo == 1 ? uFigDot : px * sT;
+  float pxF = uFrom == 1 ? uFigDot : uFrom >= 6 ? uPicDot[uFrom - 6] : px * sF;
+  float pxT = uTo == 1 ? uFigDot : uTo >= 6 ? uPicDot[uTo - 6] : px * sT;
   gl_PointSize = mix(pxF, pxT, e) * carrySize * uPixelRatio;
 }

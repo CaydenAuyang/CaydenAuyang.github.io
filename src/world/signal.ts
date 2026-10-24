@@ -1,17 +1,20 @@
 // signal.ts: the particle system that moves between the city and the pictures (NIGHT-SIGNAL.md
 // section 5). Owned by the Signal agent.
 //
-// One THREE.Points, one draw call. Every point has a base position in each of the six built targets
-// (A city, B figure, C current, D archive, E two lights, S star field), built once on the CPU here and
-// again only when the viewport changes shape. The vertex shader does everything per frame: each
-// target's live motion (the current flows, the columns rise, the field drifts), and the morph
+// One THREE.Points, one draw call. Every point has a base position in each of the nine targets
+// (A city, B figure, C current, D archive, E two lights, S star field, and the Wisers pictures F1
+// feed, F2 shoe and G screen agent, authored as SVG paths in shapes/), built once on the CPU here
+// and again only when the viewport changes shape. The vertex shader does everything per frame:
+// each target's live motion (the current flows, the columns rise, the field drifts, the feed
+// scrolls, the screen agent runs its loop), and the morph
 // between two targets with a per-point delay of up to 30%, a curved path and curl noise that
 // peaks mid-flight. No per-frame loops over points on the CPU.
 //
 // Window dimming: the points sit on lit windows in A, taken from the lowest lift ranks first, so
 // when they leave, setLift(maxRank, amount) dims exactly the windows they came from, in the same
 // order they leave, and relights them as they land. Into the figure they leave in its scan order
-// (the crown first), which the windows' ranks follow.
+// (the crown first), which the windows' ranks follow. The Wisers pictures use only the lowest
+// tenth of the ranks; while one shows, every other window is lit.
 //
 // The figure (target B, NIGHT-SIGNAL.md 5 B and 5.1) is built from Cayden's video:
 // public/figure/figure-{hi|lo|phone}.bin (format in its .json; see site-handoff/figure-video).
@@ -23,25 +26,16 @@
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
-import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
+import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout, WISERS_ANCHOR } from './contract';
+import { AGENT, agentKnots, buildFeed, buildScreen, buildShoe, FEED, ROLE, type Picture } from './shapes/wisers';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
 import { createArc } from './arc';
 
-/** The targets with their own positions on the geometry (S is the star field, 5 in the shader). */
-type Built = 'A' | 'B' | 'C' | 'D' | 'E' | 'S';
-const BUILT: Built[] = ['A', 'B', 'C', 'D', 'E', 'S'];
-const ID: Record<Built, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, S: 5 };
-/**
- * Any target name to one that is built: 'F' is the star field's old name (the timeline still uses
- * it until the v3 timeline lands), and the Wisers pictures (F1, F2, G) stay in the city (A) until
- * they are built.
- */
-function built(t: Target | 'F'): Built {
-  if (t === 'F' || t === 'S') return 'S';
-  if (t === 'F1' || t === 'F2' || t === 'G') return 'A';
-  return t;
-}
+/** Every target has its own positions on the geometry; the shader knows them by these ids. */
+const BUILT: Target[] = ['A', 'B', 'C', 'D', 'E', 'S', 'F1', 'F2', 'G'];
+const ID: Record<Target, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, S: 5, F1: 6, F2: 7, G: 8 };
+const isPicture = (t: Target) => t === 'F1' || t === 'F2' || t === 'G';
 
 /** Share of the lit windows the signal lifts: the lowest ranks. Raised only if the city is thin. */
 const LIFT_RANK = 0.1;
@@ -96,6 +90,19 @@ const CARRY_MIX = { desktop: [0.25, 3.2, 0.27, 1], phone: [0.5, 8, 0.3, 1.45] };
 /** Star field (S): the share of points that are clear lights, and of points lit at all (clear or faint). */
 const FIELD_CLEAR = 0.025;
 const FIELD_LIT = 0.12;
+/**
+ * The Wisers pictures (F1 feed, F2 shoe, G screen agent): the share of the particles each uses
+ * (about 6,000 on the high tier; the rest stay in their windows), their depth as a share of the
+ * distance to the Central cluster (in front of the towers), their point size as a share of their
+ * line spacing on screen, and their brightness.
+ */
+const PICTURE_SHARE = 0.1;
+const PICTURE_DEPTH = 0.55;
+const PICTURE_DOT = { k: 0.62, min: 1.5, max: 2.8 };
+const PICTURE_GAIN = 2;
+/** The screen agent's loop with motion off: every box drawn, the path drawn, the cursor at the last box. */
+const AGENT_STILL = 5.35;
+const NEON = '#FF4F8B';
 /** Share of archive points that drift loose instead of joining a column. */
 const STRAYS = 0.04;
 /** The archive columns: one per notebook, each count / largest count of the full height. */
@@ -383,6 +390,15 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   const T = BUILT.map(() => new Float32Array(N * 4));
   const attrs = T.map((arr) => new BufferAttribute(arr, 4));
 
+  // The Wisers pictures use the first KP particles (the lowest window ranks, so their windows are
+  // the ones that stay dim while a picture shows); the rest go home to their windows. aShape holds
+  // each particle's role in the screen agent's loop (G): role, then its parameters.
+  const KP = Math.min(N, Math.max(1, Math.round(N * PICTURE_SHARE)));
+  let rPic = 0;
+  for (let i = 0; i < KP; i++) rPic = Math.max(rPic, wRank[winOf[i]]);
+  rPic += 1e-5;
+  const aShape = new Float32Array(N * 4);
+
   // Fixed randoms per target, so a rebuild on resize lands every point in the same place.
   const fixed = Array.from({ length: 6 }, () => {
     const r = new Float32Array(N * 4);
@@ -471,6 +487,15 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uScan: { value: 0 },
     uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
     uCarryMix: { value: (world.tier.tier === 'phone' ? CARRY_MIX.phone : CARRY_MIX.desktop).slice() },
+    uPicOrigin: { value: new Vector3() },
+    uPicX: { value: new Vector3(1, 0, 0) },
+    uPicY: { value: new Vector3(0, 1, 0) },
+    uPicDot: { value: [2, 2, 2] },
+    uPicGain: { value: PICTURE_GAIN },
+    uFeed: { value: [-FEED.loop / 2, FEED.loop, FEED.speed, FEED.fade] },
+    uAgentPhase: { value: AGENT_STILL },
+    uAgentKnots: { value: Array.from({ length: 5 }, () => new Vector2()) },
+    uNeon: { value: new Color(NEON) },
     uColAmt: { value: new Float32Array(COLS) },
     uColDim: { value: 0 },
   };
@@ -485,6 +510,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   const info: SignalInfo = { windows: used, liftRank: rMax, pointsPerWindow: N / used, figurePoints: F, phone: false, scale: 1 };
 
   let infoAttr: BufferAttribute | null = null;
+  let shapeAttr: BufferAttribute | null = null;
 
   function build() {
     const W = world.renderer.domElement.clientWidth || window.innerWidth;
@@ -639,6 +665,62 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
+    // ---- F1, F2, G: the Wisers pictures inside WISERS_ANCHOR through the wisers pose (the
+    // experience pose if the world has no wisers key), on a plane facing the camera in front of
+    // the towers.
+    {
+      const pose = world.getCameraPose(keys.wisers ?? keys.experience);
+      const f = frameOf(pose, aspect);
+      const anchor = phone ? WISERS_ANCHOR.phone : WISERS_ANCHOR.desktop;
+      const depth = Math.max(depthOf(f, cluster) * PICTURE_DEPTH, S * 0.1);
+      const unit = 2 * f.tanHalf * depth * anchor.height; // world length of one box height
+      const origin = unproject(f, anchor.x, anchor.y, depth);
+      const X = f.right.clone().multiplyScalar(unit);
+      const Y = f.up.clone().multiplyScalar(unit);
+      uniforms.uPicOrigin.value.copy(origin);
+      uniforms.uPicX.value.copy(X);
+      uniforms.uPicY.value.copy(Y);
+      const boxPx = anchor.height * H;
+      const picAspect = (anchor.width * W) / boxPx;
+      const pics: Picture[] = [buildFeed(picAspect, KP), buildShoe(picAspect, KP), buildScreen(picAspect, KP)];
+      agentKnots.forEach(([u, v], k) => uniforms.uAgentKnots.value[k].set(u, v));
+      pics.forEach((pic, n) => {
+        uniforms.uPicDot.value[n] = clamp(PICTURE_DOT.k * pic.spacing * boxPx, PICTURE_DOT.min, PICTURE_DOT.max);
+        const t = T[ID.F1 + n];
+        // Particles not in the picture go home: their window, unlit.
+        for (let i = KP; i < N; i++) {
+          t[i * 4] = T[0][i * 4];
+          t[i * 4 + 1] = T[0][i * 4 + 1];
+          t[i * 4 + 2] = T[0][i * 4 + 2];
+          t[i * 4 + 3] = 0;
+        }
+        // The picture's points sorted by angle about its centre, spread over the KP particles in
+        // that order, so each particle sits at about the same angle in all three pictures and the
+        // light flows across rather than criss-crossing. Particles left over sit unlit at the
+        // nearest point.
+        const pts = pic.points.slice().sort((a, b) => Math.atan2(a.v, a.u) - Math.atan2(b.v, b.u));
+        const n0 = pts.length;
+        for (let i = 0; i < KP; i++) {
+          const at = (j: number) => Math.min(n0 - 1, Math.floor(((j + 0.5) * n0) / KP));
+          const m = at(i);
+          // The first particle on each point shows it.
+          const own = i === 0 || at(i - 1) !== m;
+          const q = pts[m];
+          t[i * 4] = origin.x + X.x * q.u + Y.x * q.v;
+          t[i * 4 + 1] = origin.y + X.y * q.u + Y.y * q.v;
+          t[i * 4 + 2] = origin.z + X.z * q.u + Y.z * q.v;
+          // w: the colour class plus the brightness (0 to 0.99).
+          t[i * 4 + 3] = q.cls + (own ? Math.min(0.99, q.alpha) : 0);
+          if (ID.F1 + n === ID.G) {
+            aShape[i * 4] = own ? q.role : ROLE.still;
+            aShape[i * 4 + 1] = q.p1;
+            aShape[i * 4 + 2] = q.p2;
+            aShape[i * 4 + 3] = q.p3;
+          }
+        }
+      });
+    }
+
     // Depth of the sky pictures: the same distance as the figure.
     const skyDepth = (f: Frame) => Math.max(depthOf(f, cluster), S * 0.6);
 
@@ -708,20 +790,23 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
 
     for (const a of attrs) a.needsUpdate = true;
     if (infoAttr) infoAttr.needsUpdate = true;
+    if (shapeAttr) shapeAttr.needsUpdate = true;
   }
 
   const arc = createArc({ color: COLORS.warm, motion, requestRender: () => world.requestRender() });
   build();
 
   const geometry = new BufferGeometry();
-  // All six built targets stay on the geometry so they upload once; position and aTo point at the
-  // two the current morph uses.
+  // All nine targets stay on the geometry so they upload once; position and aTo point at the two
+  // the current morph uses.
   BUILT.forEach((k, i) => geometry.setAttribute(`t${k}`, attrs[i]));
   geometry.setAttribute('position', attrs[ID.B]);
   geometry.setAttribute('aTo', attrs[ID.B]);
   geometry.setAttribute('aRand', new BufferAttribute(aRand, 4));
   infoAttr = new BufferAttribute(aInfo, 4);
   geometry.setAttribute('aInfo', infoAttr);
+  shapeAttr = new BufferAttribute(aShape, 4);
+  geometry.setAttribute('aShape', shapeAttr);
   geometry.setAttribute('aFigPos', new BufferAttribute(aFigPos, 3));
   geometry.setAttribute('aFigN', new BufferAttribute(aFigN, 2));
   geometry.setAttribute('aFigViewA', new BufferAttribute(aFigViewA, 4, true));
@@ -750,15 +835,48 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   arc.mesh.visible = false;
 
   // ---- Morph state ----
-  let cur = { from: 'B' as Built, to: 'B' as Built, t: 1 };
+  let cur = { from: 'B' as Target, to: 'B' as Target, t: 1 };
+  let agentStart = 0;
+  let agentWas = false;
   let lastLift = { maxRank: -1, amount: -1 };
 
-  function lift(from: Built, to: Built, t: number) {
+  function lift(from: Target, to: Target, t: number) {
     let maxRank = 0;
     let amount = 0;
     const full = rMax + 1e-5;
+    const pf = isPicture(from);
+    const pt = isPicture(to);
     if (from === 'A' && to === 'A') {
       // all home
+    } else if (pf && pt) {
+      // A picture to a picture: only its particles are out.
+      maxRank = rPic;
+      amount = LIFT_AMOUNT;
+    } else if ((pf || pt) && from !== 'A' && to !== 'A') {
+      // A full picture (all particles out) to a picture or back: the particles beyond the picture
+      // go home (or leave) in rank order, the highest ranks first home and last out.
+      amount = LIFT_AMOUNT;
+      if (!motion) maxRank = (pt ? t >= 0.5 : t < 0.5) ? rPic : full;
+      else if (pt) {
+        const k = 1 - (t - (1 - DELAY) * (1 - LIFT_LAG)) / DELAY;
+        maxRank = Math.max(rPic, k >= 1 ? full : rMax * Math.max(0, k));
+      } else {
+        const k = (t - (1 - DELAY) * LIFT_LAG) / DELAY;
+        maxRank = Math.max(rPic, k >= 1 ? full : rMax * Math.max(0, k));
+      }
+    } else if (pf || pt) {
+      // A picture to the city or back: only the picture's particles move.
+      amount = LIFT_AMOUNT;
+      const toCity = to === 'A';
+      if (!motion) maxRank = (toCity ? t < 0.5 : t >= 0.5) ? rPic : 0;
+      else if (toCity) {
+        const k = 1 - (t - (1 - DELAY) * (1 - LIFT_LAG)) / DELAY;
+        maxRank = k > 0 ? Math.min(rPic, k >= 1 ? full : rMax * k) : 0;
+      } else {
+        const k = (t - (1 - DELAY) * LIFT_LAG) / DELAY;
+        maxRank = k > 0 ? Math.min(rPic, k >= 1 ? full : rMax * k) : 0;
+      }
+      if (maxRank === 0) amount = 0;
     } else if (from !== 'A' && to !== 'A') {
       maxRank = full;
       amount = LIFT_AMOUNT;
@@ -820,6 +938,11 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     } else if (to === 'A' && from !== 'A') {
       u.uDelaySrc.value = 1;
       u.uDelayFlip.value = 1;
+    } else if (isPicture(to) !== isPicture(from)) {
+      // Into a picture from a full state, the particles beyond it go home highest rank first (the
+      // windows relight in rank order); out of it, they leave lowest rank first.
+      u.uDelaySrc.value = 1;
+      u.uDelayFlip.value = isPicture(to) ? 1 : 0;
     } else {
       u.uDelaySrc.value = 0;
       u.uDelayFlip.value = ID[from] > ID[to] ? 1 : 0;
@@ -828,6 +951,11 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const home = (from === 'A' && (to === 'A' || (cut ? t < 0.5 : t <= 0))) || (to === 'A' && (cut ? t >= 0.5 : t >= 1));
     points.visible = !home;
     lift(from, to, t);
+    // The screen agent's loop starts over whenever G comes into play.
+    const agentNow = from === 'G' || to === 'G';
+    if (agentNow && !agentWas) agentStart = uniforms.uTime.value;
+    agentWas = agentNow;
+    uniforms.uAgentPhase.value = motion ? (uniforms.uTime.value - agentStart) % AGENT.seconds : AGENT_STILL;
     // The arc shows with the two lights: fully once they have gathered, fading as they leave.
     let lights = 0;
     if (from === 'E' && to === 'E') lights = 1;
@@ -849,6 +977,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     if (motion) {
       easeColumns(dt);
       arc.tick(dt);
+      uniforms.uAgentPhase.value = (uniforms.uTime.value - agentStart) % AGENT.seconds;
     }
   });
 
@@ -1036,9 +1165,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (disposed) return;
       arc.send();
     },
-    setMorph(from: Target | 'F', to: Target | 'F', t: number) {
+    setMorph(from: Target, to: Target, t: number) {
       if (disposed) return;
-      cur = { from: built(from), to: built(to), t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
+      if (!(from in ID) || !(to in ID)) return;
+      cur = { from, to, t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
       apply();
     },
     setMotion(enabled: boolean) {

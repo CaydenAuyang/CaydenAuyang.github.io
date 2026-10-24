@@ -29,8 +29,10 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 | `src/styles/tokens.css` | Colors with measured contrast ratios, type scale, 8px spacing, easings and durations. |
 | `src/styles/base.css` | Reset, focus rings, skip link, scrims and glass, the fixed canvas and fallback still, snapshot and print rules. |
 | `src/layouts/Base.astro` | The page frame: meta tags, share image, fonts, the pre-paint script, the canvas. |
-| `src/components/sections/` | One component per section, in page order: Hero, Question, Experience, Work, Since, People, Contact. |
-| `src/components/ui/` | The question panel, the preview video, the More toggle, external links. |
+| `src/components/sections/` | One component per section, in page order: Hero, Mission, Experience (Civic Exchange, then Wisers), Work, Since, People, Contact. |
+| `src/components/ui/` | The mission panel, per-word title colors (`title.ts`), the preview video, the More toggle, external links. |
+| `src/scripts/` | The page's own scripts: the mission slider, the held Wisers block, the laser cursor (`laser.ts`), the menu, More panels, videos, the lift indicator, the clocks. |
+| `src/world/shapes/` | The Wisers pictures (a feed, a shoe, a screen agent), drawn as SVG paths in code and sampled at one fixed spacing. |
 | `src/world/contract.ts` | The one interface the world, the signal and the timeline use to talk to each other, plus the hero's screen anchors. |
 | `src/world/renderer.ts` and the files beside it | The world: tiers, camera path, sky, Peak, skyline (windows lit by a shared hash rule in `windows.ts`), harbour. |
 | `src/world/signal.ts` | The particle system and its six states. |
@@ -45,7 +47,7 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 ## Modes
 
 - **Reduced motion** (the device setting): no intro, no smooth scrolling, no pins; the camera and the signal cut to each section's view instead of moving; stars hold still; videos wait for Play.
-- **Snapshot** (`?snapshot`, for poster screenshots): motion off, the intro skipped, pins off, every More panel open, interface controls hidden, and the world frozen at each section's best frame. At 1440 x 900 each section is one screen, except Experience, which is two (its chart and short copy, then the open More text): scroll a section's top to the top of the window (for Experience's second screen, 900 px further; Contact: scroll to the bottom). The dark background is kept for print.
+- **Snapshot** (`?snapshot`, for poster screenshots): motion off, the intro skipped, pins off, every More panel open, interface controls hidden, and the world frozen at each section's best frame. At 1440 x 900 each section is one screen, except Experience, which is four (Civic Exchange with the chart, its open More text, Wisers 2024 with the shoe, Wisers 2025 with the screen agent): scroll a section's top to the top of the window (for Experience's later screens, 900 px further each time; Contact: scroll to the bottom). The dark background is kept for print.
 - **No WebGL**: a still of the hero scene sits behind the page; every word is still there.
 
 ## Motion
@@ -60,8 +62,8 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A tenth of the lit windows stream up into the figure, which locks in ring by ring from the crown down; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
 | The intro jumps to its end | the first scroll, touch or key | at once | `timeline.ts` |
 | The canvas fades in over the page background | when the scene is ready | 600 ms | `base.css` |
-| The camera moves along the skyline | scroll, every section | eased into each section's view; headings use capped tangents, so the camera never swings past a stop | `timeline.ts`, `camera-path.ts` |
-| Figure to current, current to columns, columns to city, city to star field, field to two lights | scroll: Question, Experience, the top of Work, Since May, Contact | per point, a delay of up to 30%, curved paths, curl noise peaking mid-flight | `signal.ts` |
+| The camera moves along the skyline | scroll, every section | eased into each section's view, once (the long turns into Since May and Work are not eased twice); headings use capped tangents, so the camera never swings past a stop; People holds Since May's view; Wisers holds near Experience's, drifting slightly | `timeline.ts`, `camera-path.ts` |
+| Figure to current, current to columns, columns to the Wisers feed, feed to shoe, shoe to screen agent, screen agent to city, city to star field, field to two lights | scroll: Mission, Experience, Wisers (held for about 160vh), the top of Work, Since May, Contact | per point, a delay of up to 30%, curved paths, curl noise peaking mid-flight | `signal.ts` |
 | Project highlights: a brightness wave (OurCityHealth), three small clusters (AI Simply), one low-rise block (Civic AI Club) | scroll, each project | fades in and out across the stop | `skyline.ts` |
 | Each project pins while you read it | scroll, desktop | about 120vh | `timeline.ts` |
 | The hero text fades as it scrolls up toward the figure | scroll, phones | until it would reach the shoulders | `timeline.ts` |
@@ -79,18 +81,22 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Section headlines light up like neon tubes, letter by letter from the left, each striking with a flicker or two, then holding a faint glow | the first time each headline comes into view | all lit within 700 ms; once per headline | `ignite.ts` (components and scripts), `base.css` |
 | Hovering or tapping one of the twelve archive columns brightens it, dims the rest and shows its topic and document count above it | hover or tap, in Experience | 200 ms | `interact.ts`, `signal.ts`, `Experience.astro` |
 | A playing project video tints the windows nearest it and the harbour reflections with its average color, up to 20% | while a video plays | sampled about 4 times a second off the main thread, eased over about 250 ms | `loop-video.ts`, `spill-worker.ts`, `spill.ts` |
-| Under the question, a slider runs from May to October and applies the five edits one by one: each strike draws across, each insertion lights, its note number glows; May, Edits and October move the handle | drag, tap, arrow keys | short wipes as the handle passes each edit | `QuestionPanel.astro` |
+| Under the mission, a slider runs from Previously to Now and applies the three edits one by one: each old phrase is struck, its new phrase lights, its note number glows; Previously, Edits and Now move the handle (Now is the default) | drag, tap, arrow keys | short wipes as the handle passes each edit | `MissionPanel.astro`, `mission.ts` |
+| The Wisers feed drifts upward; the screen agent loops: five boxes draw around its interface, a dotted path joins them, a small cursor travels it and clicks each | while shown | the feed slowly; the agent every 6 s | `signal.ts`, `shapes/` |
+| The summer being drawn is highlighted (2024, then 2025) | scroll, Wisers | at the halfway point | `timeline.ts`, `Experience.astro` |
+| A searchlight on the tallest Central roof sweeps the sky in a lazy figure-eight, dimming while it passes behind text; stars brighten slightly inside it | after the intro, wherever the sky shows | 14 s a loop | `lightshow.ts`, `sky.ts` |
+| A laser-pointer dot with a short tapering tail replaces the cursor; a ring over links and buttons, the normal text cursor over text | mouse or trackpad | drawn from the latest pointer event every frame; tail 180 ms | `laser.ts` |
 | A slim floor display on the right edge, like a Hong Kong lift's (G, 1 to 5, R), lights the current section; a floor is a link there | scroll, 1024px and wider | follows the section under the middle of the window | `Lift.astro`, `lift.ts` |
 | Live local times sit under Pomfret and Hong Kong; an arc of light travels between the two lights about every 6 s, and hovering or focusing the email sends another; Copy email confirms with Copied | Contact | 2.6 s an arc; Copied for 2 s | `Contact.astro`, `arc.ts` |
 | A faint shooting star crosses the sky, never across text; tapping one of the brightest stars sends one from it | every 20 to 40 s; a tap | under a second | `shooting.ts` |
-| Lights (the footer button, or the L key) starts a 12 s show: slim searchlights sweep from the tallest roofs while the windows pulse in rhythm | a click or L; any scroll stops it | 100 beats a minute | `lightshow.ts`, `Contact.astro`, `interact.ts` |
+| The harbour light show: five searchlight beams sweep from rooftops across the island while the windows and a glow along the horizon pulse in rhythm | on its own while Contact is on screen | 100 beats a minute; fades out over 1 s when Contact leaves | `lightshow.ts`, `timeline.ts` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
 | More panels open and close | click | 420 ms height | `More.astro`, `more.ts` |
 | The menu opens, its links step in | click | 240 ms; 420 ms | `Header.astro` |
 | Previews play | at least half visible | pause when not | `loop-video.ts` |
 | The Pomfret and Hong Kong labels fade in | at the bottom of the page | 400 ms | `Contact.astro` |
 
-With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The question's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars. There is no light show (the Lights button is hidden).
+With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The mission's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars. The searchlight and the light show's beams hold still and nothing pulses. The Wisers pictures hold a still frame. The system cursor stays (no laser pointer).
 
 ## Accessibility
 

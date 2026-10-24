@@ -18,7 +18,7 @@
 // the first scroll). The figure's description is a role="img" box at the figure's place, shown
 // to assistive tech only once the world (or its still) is drawn.
 import { FIGURE_ANCHOR, HERO_FRAMING, PHONE_MAX_WIDTH, usePhoneLayout } from '../../world/contract';
-import { hero, meta } from '../../data/content';
+import { hero, meta, titleColors } from '../../data/content';
 
 // The CSS mirrors usePhoneLayout() with media queries. If the contract's rule moves, stop the
 // build so the queries get updated with it.
@@ -59,7 +59,7 @@ const vars = [
         hero.nameLines.map((line, i) => (
           <>
             {i > 0 && ' '}
-            <span class="hero__name-line">{line}</span>
+            <span class:list={['hero__name-line', 'tw', `tw--${titleColors[hero.name][i]}`]}>{line}</span>
           </>
         ))
       }
@@ -109,7 +109,9 @@ const vars = [
     position: absolute;
     left: var(--gutter);
     right: var(--gutter);
-    top: calc((var(--fig-y-p) + var(--fig-h-p) / 2) * 100% + var(--space-3));
+    /* The name's letters stand about 0.1em above its 0.9 line box, so that much more air keeps
+       them off the figure's box. */
+    top: calc((var(--fig-y-p) + var(--fig-h-p) / 2) * 100% + var(--space-3) + 0.1 * var(--fs-name));
   }
   .hero__name {
     font-size: var(--fs-name);
@@ -144,16 +146,25 @@ const vars = [
       top: auto;
       right: auto;
       bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-6));
-      /* Left of the figure. The width comes from the name's size, not the loaded font, so the
-         block and its scrim don't change size when the font arrives: "Auyang" in Barlow
-         Condensed 800 is about 2.9em wide, and the line under it is 34 characters of 20px mono
-         (408px). */
-      width: max(calc(min(var(--fs-name), 17vh) * 3.1), calc(var(--fs-lead) * 34 * 0.6));
-      max-width: 52%;
+      /*
+        The name stays on two lines here too: on one line at the spec's 15vw it would run about
+        1,340px wide at 1440 and straight through the figure (FIGURE_ANCHOR, right of center). The
+        spec's size is held down twice:
+          - by height, so the block (two name lines of 0.9em, then about 120px of lines) fits
+            between the header and the tower tops: 21vh;
+          - by width, so "Auyang" (about 2.97em in Barlow Condensed 800) ends 40px short of the
+            figure's shoulders (about 0.64 of the width minus a quarter of the height):
+            (64vw - 25vh - gutter - 40px) / 3.
+        At 1440 x 900 that is 189px (the spec's 216px would collide), 168px at 1280 x 800, 125px
+        at 1024 x 768, and the spec's 224px at 1920 x 1080. The block's width comes from that
+        size, not the loaded font, so it doesn't change when the font arrives.
+      */
+      --name-size: min(var(--fs-name), 21vh, calc((64vw - 25vh - var(--gutter) - 40px) / 3));
+      width: max(calc(var(--name-size) * 3.1), calc(var(--fs-lead) * 34 * 0.6));
+      max-width: 60%;
     }
-    /* The spec's scale, held down on short windows so the block clears the header. */
     .hero__name {
-      font-size: min(var(--fs-name), 17vh);
+      font-size: var(--name-size);
     }
     .hero__line {
       margin-top: var(--space-4);

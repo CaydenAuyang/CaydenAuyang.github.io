@@ -25,9 +25,9 @@ export const ui = {
   more: 'More',
   less: 'Less',
   viewLegend: 'Show the question as',
-  // The question scrubber (NIGHT-SIGNAL.md 11b.5): its label (content.md Interface labels) and what
+  // The mission scrubber (NIGHT-SIGNAL.md 11b.5): its label (content.md Interface labels) and what
   // each stop says to screen readers.
-  scrubLabel: 'Drag from May to October',
+  scrubLabel: 'Drag from Previously to Now',
   scrubStep: (k: number, n: number, what: string) => `Edit ${k} of ${n}: ${what}`,
   scrubStruck: (words: string) => `"${words}" struck`,
   scrubInserted: (words: string) => `"${words}" inserted`,
@@ -42,8 +42,6 @@ export const ui = {
   // Contact (NIGHT-SIGNAL.md 11b.7, content.md Interface labels).
   copyEmail: 'Copy email',
   copied: 'Copied',
-  // The harbour light show's button in the footer (NIGHT-SIGNAL.md 11b.9).
-  lights: 'Lights',
   // The lift indicator (NIGHT-SIGNAL.md 11b.6): the nav's label for screen readers.
   liftLabel: 'Floors',
   // The one-time hint in the hero (NIGHT-SIGNAL.md 11b.1, content.md Interface labels).

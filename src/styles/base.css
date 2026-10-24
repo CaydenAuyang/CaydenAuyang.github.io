@@ -187,6 +187,28 @@ html.menu-open .site-header {
   transform: none;
 }
 
+/*
+  The laser pointer (src/scripts/laser.ts): desktop with a fine pointer, motion on. Its canvas sits
+  above everything and takes no clicks. While it's on, the system cursor is hidden, except over
+  selectable text and text fields (.laser-text: the normal text cursor comes back) and while the
+  menu is open (the dialog sits above any page layer, so the laser steps aside).
+*/
+.laser {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+html.menu-open .laser {
+  visibility: hidden;
+}
+html.laser-on:not(.menu-open):not(.laser-text),
+html.laser-on:not(.menu-open):not(.laser-text) * {
+  cursor: none !important;
+}
+
 /* Hidden in snapshot mode: controls that make no sense on paper. */
 html[data-snapshot] [data-snapshot-hide] {
   display: none !important;
@@ -287,12 +309,21 @@ html[data-snapshot] .world-canvas {
 .h2 {
   font-size: var(--fs-h2);
   color: var(--c-headline);
-  /* A lit neon sign: a faint window glow over the dark halo every headline carries. */
-  text-shadow: var(--ign-glow), var(--halo);
 }
 .t-project {
+  position: relative;
   font-size: var(--fs-project);
   color: var(--c-sub);
+}
+/* Organisation and project names often sit over the lit skyline, and some of their words are neon
+   (the darkest title color): a soft scrim of their own, under the block's. */
+.t-project::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-2) * -1) calc(var(--space-4) * -1);
+  z-index: -1;
+  background: var(--scrim-hug);
+  pointer-events: none;
 }
 .t-sub {
   font-size: var(--fs-sub);
@@ -304,6 +335,58 @@ html[data-snapshot] .world-canvas {
   letter-spacing: var(--track-label);
   color: var(--c-label);
 }
+/*
+  Title words, each in its own color (src/components/ui/title.ts, content.ts titleColors). The
+  color travels as custom properties, so the neon ignition can strike each letter in its word's
+  color: --tc the color, --tc-rgb its channels, --tc-hot the white-hot flash of a tube striking.
+*/
+.tw {
+  color: var(--tc);
+}
+.tw--window {
+  --tc: var(--window);
+  --tc-rgb: var(--window-rgb);
+  --tc-hot: #ffe0b8;
+}
+.tw--cool {
+  --tc: var(--cool);
+  --tc-rgb: var(--cool-rgb);
+  --tc-hot: #f2f8ff;
+}
+.tw--neon {
+  --tc: var(--neon);
+  --tc-rgb: var(--neon-rgb);
+  --tc-hot: #ffc8dc;
+}
+.tw--text {
+  --tc: var(--text);
+  --tc-rgb: var(--text-rgb);
+  --tc-hot: #ffffff;
+}
+/* A lit neon sign: section headlines glow faintly in each word's color, over the dark halo. */
+.h2 .tw {
+  text-shadow:
+    0 0 22px rgb(var(--tc-rgb) / 0.28),
+    var(--halo);
+}
+/* Neon is the darkest title color: over the lit city it keeps the tighter, darker halo. */
+.tw--neon {
+  text-shadow: var(--halo-strong);
+}
+.h2 .tw--neon {
+  text-shadow:
+    0 0 22px rgb(var(--tc-rgb) / 0.28),
+    var(--halo-strong);
+}
+/* The rest of a long organisation name ("Hong Kong", "Information Limited, Hong Kong"): a
+   smaller line of its own under the colored name, in the same heading. */
+.t-tail {
+  display: block;
+  margin-top: 0.3em;
+  font-size: var(--fs-summer);
+  color: var(--c-meta);
+}
+
 /* JetBrains Mono for everything else. */
 .t-lead {
   font-size: var(--fs-lead);
@@ -353,20 +436,19 @@ html[data-snapshot] .world-canvas {
   Neon ignition (NIGHT-SIGNAL.md 11b.2). Section headlines are split into letters by
   src/scripts/ignite.ts once Barlow has loaded (until then they read as plain lit text). Under
   html.js-ignite (motion on, not snapshot) the letters start as unlit tubes, and when the script
-  adds .is-igniting each one strikes: a hot flash, one or two flickers off and on, then it holds lit with a faint glow.
-  Letters start --stagger apart, left to right, all done within 700 ms. Only color and glow change:
-  nothing moves, nothing splits.
-  .is-lit is the resting state. Reduced motion, snapshot and no JavaScript: lit from the start.
+  adds .is-igniting each one strikes in its word's color: a hot flash, one or two flickers off and
+  on, then it holds lit with a faint glow. Letters start --stagger apart, left to right, all done
+  within 700 ms. Only color and glow change: nothing moves, nothing splits. .is-lit is the resting
+  state. Reduced motion, snapshot and no JavaScript: lit from the start.
 */
 :root {
-  --ign-off: rgb(var(--window-rgb) / 0.16);
-  --ign-half: rgb(var(--window-rgb) / 0.45);
+  /* The window color's white-hot flash (also the mission's inserted words lighting up). */
   --ign-hot: #ffe0b8;
-  --ign-glow: 0 0 22px rgb(var(--window-rgb) / 0.28);
-  --ign-flash: 0 0 4px rgb(255 224 184 / 0.9), 0 0 18px rgb(var(--window-rgb) / 0.8), 0 0 40px rgb(var(--window-rgb) / 0.4);
 }
+/* Unlit: the tube in its word's color at 16%. The keyframes read the word's --tc, --tc-rgb and
+   --tc-hot, so every letter strikes in its own word's color. */
 html.js-ignite .ign__l {
-  color: var(--ign-off);
+  color: rgb(var(--tc-rgb) / 0.16);
   text-shadow: var(--halo);
 }
 html.js-ignite .is-igniting .ign__l {
@@ -387,88 +469,118 @@ html.js-ignite .is-lit .ign__l {
 @keyframes ign-a {
   0%,
   14% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   15%,
   27% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   28%,
   45% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   46% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   100% {
-    color: var(--window);
-    text-shadow: var(--ign-glow), var(--halo);
+    color: var(--tc);
+    text-shadow:
+      0 0 22px rgb(var(--tc-rgb) / 0.28),
+      var(--halo);
   }
 }
 /* Two flickers: strike, out, a weak half-strike, out, then on for good. */
 @keyframes ign-b {
   0%,
   9% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   10%,
   19% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   20%,
   31% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   32%,
   38% {
-    color: var(--ign-half);
+    color: rgb(var(--tc-rgb) / 0.45);
     text-shadow: var(--halo);
   }
   39%,
   51% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   52% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   100% {
-    color: var(--window);
-    text-shadow: var(--ign-glow), var(--halo);
+    color: var(--tc);
+    text-shadow:
+      0 0 22px rgb(var(--tc-rgb) / 0.28),
+      var(--halo);
   }
 }
 /* One late flicker: a beat of nothing, strike, dip to half, then hold. */
 @keyframes ign-c {
   0%,
   29% {
-    color: var(--ign-off);
+    color: rgb(var(--tc-rgb) / 0.16);
     text-shadow: var(--halo);
   }
   30%,
   41% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   42%,
   55% {
-    color: var(--ign-half);
+    color: rgb(var(--tc-rgb) / 0.45);
     text-shadow: var(--halo);
   }
   56% {
-    color: var(--ign-hot);
-    text-shadow: var(--ign-flash), var(--halo);
+    color: var(--tc-hot);
+    text-shadow:
+      0 0 4px var(--tc-hot),
+      0 0 18px rgb(var(--tc-rgb) / 0.8),
+      0 0 40px rgb(var(--tc-rgb) / 0.4),
+      var(--halo);
   }
   100% {
-    color: var(--window);
-    text-shadow: var(--ign-glow), var(--halo);
+    color: var(--tc);
+    text-shadow:
+      0 0 22px rgb(var(--tc-rgb) / 0.28),
+      var(--halo);
   }
 }
 
@@ -669,6 +781,19 @@ main,
 }
 .action-link:hover {
   text-decoration-color: var(--window);
+}
+/* Like the small neon and dim lines, a link carries a small scrim of its own: the lit skyline or
+   the harbour's reflections can sit right behind it. */
+.action-link {
+  position: relative;
+}
+.action-link::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-1) * -1) calc(var(--space-3) * -1);
+  z-index: -1;
+  background: var(--scrim-hug);
+  pointer-events: none;
 }
 .action-link .arrow {
   width: 14px;

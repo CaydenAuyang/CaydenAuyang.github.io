@@ -18,6 +18,7 @@ export type SceneKey =
   | 'hero' // wide on the skyline from the Kowloon side, about 12 m above the water
   | 'question' // dollied forward and down toward the water
   | 'experience' // panned right toward the tallest (Central) cluster
+  | 'wisers' // holding near the experience view, drifting slightly, while the Wisers pictures draw
   | 'och' // work stop 1: OurCityHealth
   | 'ais' // work stop 2: AI Simply
   | 'club' // work stop 3: Civic AI Club (the compact low-rise block at the far left)
@@ -26,7 +27,7 @@ export type SceneKey =
   | 'people' // holding on the sky
   | 'contact'; // holding on the sky, pulled back slightly
 
-export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'experience', 'och', 'ais', 'club', 'more', 'since', 'people', 'contact'];
+export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'experience', 'wisers', 'och', 'ais', 'club', 'more', 'since', 'people', 'contact'];
 
 export interface CameraPose {
   position: THREE.Vector3;
@@ -89,6 +90,20 @@ export const PHONE_MAX_WIDTH = 767;
 export function usePhoneLayout(width: number, height: number): boolean {
   return width <= PHONE_MAX_WIDTH || (width < 1024 && height >= width);
 }
+
+/**
+ * The Wisers pictures (targets F1 feed, F2 shoe, G screen agent) at the wisers key: the box they
+ * fit in, as viewport fractions (center and size). Desktop draws them in the sky left of the text
+ * (where the archive columns stand); phones above the text. The page keeps its text clear of it.
+ */
+export const WISERS_ANCHOR = {
+  desktop: { x: 0.3, y: 0.4, width: 0.4, height: 0.56 },
+  phone: { x: 0.5, y: 0.3, width: 0.84, height: 0.36 },
+  /** Phones shorter than SHORT_PHONE_HEIGHT, where the held Wisers text needs more of the screen. */
+  phoneShort: { x: 0.5, y: 0.26, width: 0.84, height: 0.28 },
+};
+/** Below this window height (CSS px) phones use WISERS_ANCHOR.phoneShort. */
+export const SHORT_PHONE_HEIGHT = 800;
 
 /** The two lights (target E) at the contact key. Pomfret is west, so it sits on the left. */
 export const LIGHT_ANCHORS = {
@@ -185,9 +200,13 @@ export interface World {
   setSpill(color: Rgb | null, strength: number, center?: Ndc): void;
   /** 11b.8 Shooting star: true if a bright star sits near ndc (and fires one from it). Without ndc, fires one now. */
   shootingStar(ndc?: Ndc): boolean;
-  /** 11b.9 Light show: 12 s of rooftop searchlights and windows pulsing in rhythm. on=false stops it at once. */
+  /**
+   * 11b.9 (v3) Harbour light show: while on, searchlight beams sweep from rooftops and the windows
+   * pulse in rhythm, looping gently; off fades it out over 1 s. The timeline turns it on while
+   * Contact is the current scene. With motion off the beams hold still and nothing pulses.
+   */
   lightShow(on: boolean): void;
-  /** Whether a light show is running. */
+  /** Whether a light show is running (or still fading out). */
   readonly lightShowOn: boolean;
 
   /** Called every rendered frame before drawing. Returns an unsubscribe function. */
@@ -204,16 +223,19 @@ export interface World {
 // ---- The signal -----------------------------------------------------------------------------
 
 /**
- * A city (points sit on lit windows, invisible), B figure, C current over the water,
- * D archive (twelve columns of light above Central), E two lights (Pomfret left, Hong Kong right),
- * F field (a sparse drifting field among the stars, for Since May and People).
+ * A city (points sit on lit windows, invisible), B figure (built from Cayden's video, spec v3),
+ * C current over the water, D archive (twelve columns of light above Central), E two lights
+ * (Pomfret left, Hong Kong right), F1 and F2 the Wisers 2024 pictures (a social feed, then a
+ * running shoe), G the Wisers 2025 picture (a screen agent reading and clicking), and S the
+ * sparse drifting field among the stars for Since May and People (it was F before v3; the spec
+ * calls it "A lifts into a sparse drifting field").
  */
-export type Target = 'A' | 'B' | 'C' | 'D' | 'E' | 'F';
+export type Target = 'A' | 'B' | 'C' | 'D' | 'E' | 'F1' | 'F2' | 'G' | 'S';
 
 export interface SignalOptions {
   world: World;
   motion: boolean; // false: morphs cut at their midpoint instead of flowing
-  figureUrl: string; // the resampled figure point data in public/
+  figureUrl: string; // the folder holding the video-built figure (figure-{hi|lo|phone}.json and .bin); the signal picks the file by tier
 }
 
 export interface Signal {
