@@ -22,3 +22,13 @@ Dated notes on what changed on the site.
 - Preview clips: three desktop loops (1280x800, under 2 MB each), checked frame by frame for flagged claims, student names and emails.
 - A share image in the Datum style (name, hero line, both coordinates and the point figure on a vellum plate), rendered once from the site's own fonts and figure still. The share-image script comes later.
 - The point figure is cleaned up: hair falls as curtains from a thin center part, hidden surfaces are culled so no seams show at the jaw or collar, and the face interior is sparser. Outline match: front 0.978, turned right 0.936, turned left 0.880. The share image is re-rendered with it.
+
+## 2026-10-24
+
+- Night Signal replaces Datum (Cayden rejected Datum after seeing it live). Kept: the three preview videos, the More work row, the deploy pipeline, the accessibility check and the figure point data.
+- Milestone 1: every section from the new concise copy on a static night gradient, Unbounded and Geist, tokens with measured contrast, the full-screen menu, More toggles with the long copy, and the May / Edits / October question panel.
+- Milestone 2: the three.js harbour city (sky, Peak, procedural skyline with a shared window rule, harbour reflections) and the camera on scroll. Six draw calls.
+- Milestone 3: the signal, up to 60,000 points moving between six states (city, figure, current, archive columns, star field, two lights), with the hero intro.
+- Milestone 4: snapshot mode, measured text contrast over the scene, fallback stills, a night share image, focus rings, 44px targets, the 8px grid, no layout shift.
+- Two rounds of fixes from independent checklist reviews: one clock for the intro, a snap skip, longer scroll for short morphs, pins that rebuild when a More panel opens, a no-skyline Contact view, a distinct first work stop, reflections baked per camera stop and counting side faces, a tapered Peak, caption scrims, the Contact scrim kept inside the page, Geist with no late swap.
+- CI: the lockfile regained two Linux-only optional packages that a macOS install had dropped.
