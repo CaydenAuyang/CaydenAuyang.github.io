@@ -1,0 +1,54 @@
+---
+// Hero.astro: section 1. The point figure, the name, and one plain line about the work.
+//
+// The figure itself is drawn by the figure agent's code (src/components/Figure.astro and
+// src/figure/). This section only leaves the container for it: the div with data-figure. The
+// container carries the figure's alt text, so whatever draws inside it should be aria-hidden.
+import { hero, meta } from '../../data/content';
+import Say from '../ui/Say.astro';
+---
+
+<section id="top" class="hero" aria-labelledby="hero-title">
+  <div class="wrap hero__inner">
+    <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}></div>
+    <div class="hero__text">
+      <h1 id="hero-title" class="hero__name">{hero.name}</h1>
+      <p class="hero__line t-lead"><Say line={hero.line} /></p>
+      <p class="hero__school t-meta"><Say line={hero.school} /></p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero__inner {
+    display: grid;
+    gap: var(--space-6);
+    padding-block: var(--space-7) var(--space-section);
+  }
+  .hero__figure {
+    position: relative;
+    z-index: var(--z-figure);
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    max-height: 70svh;
+    background: var(--bg-2);
+    border-radius: var(--radius);
+  }
+  .hero__text {
+    display: grid;
+    gap: var(--space-4);
+    max-width: var(--max-text);
+  }
+  .hero__name {
+    font-size: var(--fs-h1);
+  }
+  @media (min-width: 900px) {
+    .hero__inner {
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+    }
+    .hero__figure {
+      order: 2;
+    }
+  }
+</style>

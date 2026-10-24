@@ -1,0 +1,51 @@
+---
+// Summer.astro: section 3. The Civic Exchange internship, June 9 to August 28, 2026.
+import { summer } from '../../data/content';
+import Say from '../ui/Say.astro';
+
+const paragraphs = [summer.problem, summer.listening];
+---
+
+<section id="summer" class="section" aria-labelledby="summer-title">
+  <div class="wrap">
+    <div class="section__head">
+      <h2 id="summer-title" class="section__title">{summer.heading}</h2>
+      <p class="t-meta"><Say line={summer.meta} /></p>
+    </div>
+    <div class="summer prose">
+      {
+        paragraphs.map((p) => (
+          <p>
+            <strong>{p.title}</strong> <Say line={p.body} />
+          </p>
+        ))
+      }
+      <h3 class="summer__subhead">{summer.built.title}</h3>
+      <ul class="summer__list">
+        {
+          summer.built.items.map((item) => (
+            <li>
+              <Say line={item} />
+            </li>
+          ))
+        }
+      </ul>
+      <p>
+        <strong>{summer.takeaway.title}</strong> <Say line={summer.takeaway.body} />
+      </p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .summer__subhead {
+    font-size: var(--fs-body);
+    margin-top: var(--space-6);
+  }
+  .summer__list {
+    padding-left: 1.25em;
+  }
+  .summer__list li + li {
+    margin-top: var(--space-2);
+  }
+</style>

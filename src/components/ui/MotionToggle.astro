@@ -1,0 +1,96 @@
+---
+// MotionToggle.astro: the "Motion: On / Off" switch in the footer.
+//
+// Some people find moving pages uncomfortable. If their device already asks websites for
+// reduced motion, the site stays still, and this switch says so instead of doing nothing.
+// Anyone else can switch motion off here. The choice is saved in the browser (localStorage)
+// and read by the first script in Base.astro on every visit. Storage can be blocked (private
+// windows, the Google Sites frame), so every read and write is wrapped in try/catch; then the
+// choice lasts until the page closes.
+// When the switch changes, it sends a "ca:motion" event that motion.ts, the preview videos and
+// the point figure listen for.
+import { site, ui } from '../../data/site';
+---
+
+<div class="motion-toggle" data-motion-key={site.motionKey}>
+  <button type="button" class="motion-toggle__button t-label" data-motion-toggle aria-pressed="true">
+    {ui.motion}: <span data-motion-state>{ui.motionOn}</span>
+  </button>
+  <p class="motion-toggle__note t-meta" data-motion-note aria-live="polite"></p>
+</div>
+
+<script>
+  import { site, ui } from '../../data/site';
+
+  const root = document.documentElement;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function save(value: 'on' | 'off') {
+    try {
+      localStorage.setItem(site.motionKey, value);
+    } catch {
+      // Storage blocked: the switch still works for this page.
+    }
+  }
+
+  function render() {
+    const userOff = root.getAttribute('data-motion') === 'off';
+    document.querySelectorAll<HTMLButtonElement>('[data-motion-toggle]').forEach((button) => {
+      const state = button.querySelector('[data-motion-state]');
+      const note = button.parentElement?.querySelector('[data-motion-note]');
+      if (reduce.matches) {
+        if (state) state.textContent = ui.motionDevice;
+        button.setAttribute('aria-pressed', 'false');
+        button.setAttribute('aria-disabled', 'true');
+        if (note) note.textContent = ui.motionDeviceNote;
+      } else {
+        if (state) state.textContent = userOff ? ui.motionOff : ui.motionOn;
+        button.setAttribute('aria-pressed', userOff ? 'false' : 'true');
+        button.removeAttribute('aria-disabled');
+        if (note) note.textContent = '';
+      }
+    });
+  }
+
+  function setMotion(enabled: boolean) {
+    if (enabled) root.removeAttribute('data-motion');
+    else root.setAttribute('data-motion', 'off');
+    save(enabled ? 'on' : 'off');
+    render();
+    document.dispatchEvent(new CustomEvent('ca:motion', { detail: { enabled } }));
+  }
+
+  document.querySelectorAll('[data-motion-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (reduce.matches) return;
+      setMotion(root.getAttribute('data-motion') === 'off');
+    });
+  });
+
+  reduce.addEventListener('change', render);
+  render();
+</script>
+
+<style>
+  .motion-toggle {
+    display: grid;
+    gap: var(--space-1);
+  }
+  .motion-toggle__button {
+    justify-self: start;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--text-2);
+    border-radius: var(--radius);
+  }
+  .motion-toggle__button[aria-disabled='true'] {
+    cursor: default;
+  }
+  .motion-toggle__note:empty {
+    display: none;
+  }
+  /* Without JavaScript the switch can't do anything, so it isn't shown. */
+  :global(html:not(.js)) .motion-toggle {
+    display: none;
+  }
+</style>

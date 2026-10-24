@@ -1,0 +1,204 @@
+---
+// LoopVideo.astro: a short, muted project preview that loops.
+//
+// How it behaves (the script below):
+//   - It plays only while at least 25% of it is on screen and motion is allowed, and pauses
+//     as soon as it scrolls away. There is no autoplay attribute: the script starts it.
+//   - A Pause / Play button is always shown, works with the keyboard, and is labelled with the
+//     project's name. Pausing is remembered until the visitor presses Play again.
+//   - With reduced motion (the device setting) or Motion: Off, it shows the poster frame and a
+//     Play button; it only plays if the visitor asks.
+//   - preload="none": nothing downloads until it first plays; until then the poster shows.
+//   - Without JavaScript it shows the poster frame only.
+// When there is no recording yet (src is missing), it shows a dashed "To come" frame instead.
+import { ui } from '../../data/site';
+
+export interface VideoSource {
+  mp4: string;
+  webm?: string;
+  poster: string;
+  width?: number;
+  height?: number;
+}
+
+interface Props {
+  // The project's name, used in the button's label ("Pause Civic AI Club preview").
+  name: string;
+  caption: string;
+  src?: VideoSource;
+}
+
+const { name, caption, src } = Astro.props;
+const label = ui.previewOf(name);
+const width = src?.width ?? 1600;
+const height = src?.height ?? 1000;
+---
+
+<figure class="loop-video" data-loop-video>
+  <div class="loop-video__frame" style={`aspect-ratio: ${width} / ${height}`}>
+    {
+      src ? (
+        <video
+          class="loop-video__media"
+          muted
+          playsinline
+          loop
+          preload="none"
+          poster={src.poster}
+          width={width}
+          height={height}
+          aria-label={label}
+          disablepictureinpicture
+        >
+          {src.webm && <source src={src.webm} type="video/webm" />}
+          <source src={src.mp4} type="video/mp4" />
+        </video>
+      ) : (
+        <span class="loop-video__empty pending">{ui.previewPending}</span>
+      )
+    }
+    {
+      src && (
+        <button
+          type="button"
+          class="loop-video__toggle t-label"
+          data-loop-toggle
+          aria-label={`${ui.pause} ${label}`}
+          data-label={label}
+        >
+          <span data-loop-state>{ui.pause}</span>
+        </button>
+      )
+    }
+  </div>
+  <figcaption class="loop-video__caption t-meta">{caption}</figcaption>
+</figure>
+
+<script>
+  import { ui } from '../../data/site';
+
+  const root = document.documentElement;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const motionAllowed = () => !reduce.matches && root.getAttribute('data-motion') !== 'off';
+
+  interface Player {
+    video: HTMLVideoElement;
+    button: HTMLButtonElement;
+    stateText: HTMLElement | null;
+    label: string;
+    inView: boolean;
+    // True when the visitor (or the motion setting) has paused it.
+    held: boolean;
+  }
+
+  const players: Player[] = [];
+
+  function render(p: Player) {
+    const word = p.held ? ui.play : ui.pause;
+    if (p.stateText) p.stateText.textContent = word;
+    p.button.setAttribute('aria-label', `${word} ${p.label}`);
+  }
+
+  function update(p: Player) {
+    const shouldPlay = p.inView && !p.held;
+    if (shouldPlay && p.video.paused) {
+      p.video.play().catch(() => {
+        // The browser refused to play (data saver, low power). Show Play so the visitor can try.
+        p.held = true;
+        render(p);
+      });
+    } else if (!shouldPlay && !p.video.paused) {
+      p.video.pause();
+    }
+    render(p);
+  }
+
+  const io =
+    'IntersectionObserver' in window
+      ? new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              const p = players.find((x) => x.video === entry.target);
+              if (!p) continue;
+              p.inView = entry.isIntersecting && entry.intersectionRatio >= 0.25;
+              update(p);
+            }
+          },
+          { threshold: [0, 0.25] },
+        )
+      : null;
+
+  document.querySelectorAll<HTMLElement>('[data-loop-video]').forEach((figure) => {
+    const video = figure.querySelector('video');
+    const button = figure.querySelector<HTMLButtonElement>('[data-loop-toggle]');
+    if (!video || !button) return;
+    const p: Player = {
+      video,
+      button,
+      stateText: button.querySelector('[data-loop-state]'),
+      label: button.dataset.label || '',
+      inView: !io,
+      held: !motionAllowed(),
+    };
+    players.push(p);
+    button.addEventListener('click', () => {
+      p.held = !p.held;
+      update(p);
+    });
+    if (io) io.observe(video);
+    update(p);
+  });
+
+  // Motion switched in the footer, or the device setting changed: follow it.
+  function followMotion() {
+    const allowed = motionAllowed();
+    players.forEach((p) => {
+      p.held = !allowed;
+      update(p);
+    });
+  }
+  document.addEventListener('ca:motion', followMotion);
+  reduce.addEventListener('change', followMotion);
+</script>
+
+<style>
+  .loop-video {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .loop-video__frame {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-2);
+    border-radius: var(--radius);
+  }
+  .loop-video__media {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .loop-video__empty {
+    position: absolute;
+    inset: var(--space-4);
+    justify-content: center;
+  }
+  .loop-video__toggle {
+    position: absolute;
+    right: var(--space-2);
+    bottom: var(--space-2);
+    min-width: 44px;
+    min-height: 44px;
+    padding: var(--space-2) var(--space-3);
+    background: var(--text);
+    color: var(--bg);
+    border-radius: var(--radius);
+  }
+  .loop-video__toggle:focus-visible {
+    outline-color: var(--focus);
+    outline-offset: 2px;
+  }
+  /* Without JavaScript the button can't do anything, so it isn't shown. */
+  :global(html:not(.js)) .loop-video__toggle {
+    display: none;
+  }
+</style>

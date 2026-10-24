@@ -1,0 +1,23 @@
+---
+// 404.astro: shown at any address that doesn't exist. GitHub Pages serves dist/404.html for
+// those. It has no canonical link (Base.astro leaves it out on this page).
+import Base from '../layouts/Base.astro';
+import { site, ui } from '../data/site';
+---
+
+<Base title={`${ui.notFoundTitle} · ${site.name}`} noindex>
+  <section class="section not-found" aria-labelledby="nf-title">
+    <div class="wrap prose">
+      <h1 id="nf-title" class="section__title">{ui.notFoundTitle}</h1>
+      <p class="t-lead">{ui.notFoundBody}</p>
+      <p><a href="/">{ui.notFoundLink}</a></p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .not-found {
+    border-top: 0;
+    min-height: 60svh;
+  }
+</style>

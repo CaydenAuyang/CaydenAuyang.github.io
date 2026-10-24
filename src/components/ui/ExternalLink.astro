@@ -1,0 +1,14 @@
+---
+// ExternalLink.astro: a link to another site. It always opens in a new tab, because this site is
+// shown inside the certificate program's Google Site, in a frame that can't navigate away.
+// rel="noopener" keeps the new tab from reaching back into this page.
+import { ui } from '../../data/site';
+
+interface Props {
+  href: string;
+  class?: string;
+}
+const { href, class: className } = Astro.props;
+---
+
+<a href={href} class={className} target="_blank" rel="noopener"><slot /><span class="sr-only"> {ui.newTab}</span></a>

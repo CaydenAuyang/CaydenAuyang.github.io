@@ -1,0 +1,77 @@
+---
+// Progress.astro: section 5. Build, Apply and Reflect: what the May proposal said, and where
+// each one stands now.
+import { progress } from '../../data/content';
+import Say from '../ui/Say.astro';
+---
+
+<section id="progress" class="section" aria-labelledby="progress-title">
+  <div class="wrap">
+    <div class="section__head">
+      <h2 id="progress-title" class="section__title">{progress.heading}</h2>
+      <p class="t-lead"><Say line={progress.intro} /></p>
+    </div>
+    <ol class="strands">
+      {
+        progress.strands.map((strand) => (
+          <li class="strand">
+            <h3 class="strand__name">{strand.name}</h3>
+            <dl class="strand__rows">
+              <div class="strand__row">
+                <dt class="t-label">{progress.proposedLabel}</dt>
+                <dd>
+                  <Say line={strand.proposed} />
+                </dd>
+              </div>
+              <div class="strand__row">
+                <dt class="t-label">{progress.nowLabel}</dt>
+                <dd>
+                  {strand.now.map((line, i) => (
+                    <>
+                      {i > 0 && ' '}
+                      <Say line={line} />
+                    </>
+                  ))}
+                </dd>
+              </div>
+            </dl>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .strands {
+    display: grid;
+    gap: var(--space-6);
+  }
+  .strand {
+    display: grid;
+    gap: var(--space-3);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--rule);
+  }
+  .strand__name {
+    font-size: var(--fs-h3);
+  }
+  .strand__rows {
+    display: grid;
+    gap: var(--space-3);
+    max-width: var(--max-text);
+  }
+  .strand__row {
+    display: grid;
+    gap: var(--space-1);
+  }
+  .strand__row dt {
+    color: var(--text-2);
+  }
+  @media (min-width: 900px) {
+    .strands {
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-6);
+    }
+  }
+</style>

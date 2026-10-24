@@ -1,0 +1,217 @@
+---
+// TrackedQuestion.astro: the May question, edited in place into the October question.
+//
+// It takes the May text and an ordered list of edits (see `Edit` in content.ts):
+//   del      strikes words in the May text,
+//   ins      inserts new words after an anchor in the May text (or at the end),
+//   replace  strikes words and inserts new ones in their place.
+// Struck words are a real <del>, new words a real <ins>, each with a hidden "deleted:" or
+// "inserted:" so screen readers say what changed. After each edit sits a small numbered link to
+// its note in the list below (no hover needed, so it works on phones), and the link is described
+// by the note's text, so a screen reader reads the note when the link is focused.
+//
+// Until Cayden sends his wording, `edits` is empty: then the May question shows as written, the
+// October question shows as a "To come" chip, and every candidate note is listed under the edit
+// it is about.
+import type { Edit, Line, Note } from '../../data/content';
+import { ui } from '../../data/site';
+import Say from './Say.astro';
+
+interface Props {
+  mayLabel: string;
+  may: Line;
+  octoberLabel: string;
+  october: Line;
+  edits: Edit[];
+  notes: Note[];
+}
+
+const { mayLabel, may, octoberLabel, october, edits, notes } = Astro.props;
+
+type Segment =
+  | { kind: 'keep'; text: string }
+  | { kind: 'del' | 'ins'; text: string; noteId: string; ref: boolean };
+
+// Turn the May text plus the edits into a row of kept, struck and inserted pieces.
+// Stops the build if an edit's words can't be found, so a typo never ships.
+function trackChanges(text: string, list: Edit[]): Segment[] {
+  const out: Segment[] = [];
+  let cursor = 0;
+  const find = (needle: string, edit: Edit) => {
+    const at = text.indexOf(needle, cursor);
+    if (at === -1) {
+      throw new Error(`TrackedQuestion: "${needle}" (edit for note "${edit.noteId}") is not in the May text after position ${cursor}.`);
+    }
+    return at;
+  };
+  for (const edit of list) {
+    if (!notes.some((n) => n.id === edit.noteId)) {
+      throw new Error(`TrackedQuestion: edit points at note "${edit.noteId}", which is not in question.notes.`);
+    }
+    if (edit.type === 'del' || edit.type === 'replace') {
+      const at = find(edit.text, edit);
+      if (at > cursor) out.push({ kind: 'keep', text: text.slice(cursor, at) });
+      out.push({ kind: 'del', text: edit.text, noteId: edit.noteId, ref: edit.type === 'del' });
+      cursor = at + edit.text.length;
+      if (edit.type === 'replace') {
+        if (!edit.insertText) throw new Error(`TrackedQuestion: replace edit for "${edit.noteId}" has no insertText.`);
+        out.push({ kind: 'ins', text: edit.insertText, noteId: edit.noteId, ref: true });
+      }
+    } else {
+      const end = edit.after ? find(edit.after, edit) + edit.after.length : text.length;
+      if (end > cursor) out.push({ kind: 'keep', text: text.slice(cursor, end) });
+      cursor = end;
+      out.push({ kind: 'ins', text: edit.text, noteId: edit.noteId, ref: true });
+    }
+  }
+  if (cursor < text.length) out.push({ kind: 'keep', text: text.slice(cursor) });
+  return out;
+}
+
+const hasEdits = edits.length > 0;
+const segments = hasEdits ? trackChanges(may.text, edits) : [];
+
+// Notes are numbered in the order their edits appear. With no edits yet, every note is listed.
+const usedIds = [...new Set(edits.map((e) => e.noteId))];
+const shownNotes = hasEdits ? usedIds.map((id) => notes.find((n) => n.id === id)!) : notes;
+const number = (id: string) => shownNotes.findIndex((n) => n.id === id) + 1;
+---
+
+<div class="tq">
+  {
+    hasEdits ? (
+      <div class="tq__block">
+        <p class="tq__label t-label">{octoberLabel}</p>
+        <p class="tq__text t-lead">
+          {segments.map((s) =>
+            s.kind === 'keep' ? (
+              s.text
+            ) : (
+              <>
+                {s.kind === 'del' ? (
+                  <del class="tq__del">
+                    <span class="sr-only">{ui.deleted} </span>
+                    {s.text}
+                  </del>
+                ) : (
+                  <ins class="tq__ins">
+                    <span class="sr-only">{ui.inserted} </span>
+                    {s.text}
+                  </ins>
+                )}
+                {s.ref && (
+                  <sup class="tq__ref">
+                    <a
+                      href={`#note-${s.noteId}`}
+                      id={`edit-${s.noteId}`}
+                      aria-label={ui.noteRef(number(s.noteId))}
+                      aria-describedby={`note-${s.noteId}-text`}
+                    >
+                      {number(s.noteId)}
+                    </a>
+                  </sup>
+                )}
+              </>
+            ),
+          )}
+        </p>
+      </div>
+    ) : (
+      <>
+        <div class="tq__block">
+          <p class="tq__label t-label">{mayLabel}</p>
+          <blockquote class="tq__text t-lead">
+            <p>{may.text}</p>
+          </blockquote>
+        </div>
+        <div class="tq__block">
+          <p class="tq__label t-label">{octoberLabel}</p>
+          <p class="tq__text">
+            <Say line={october} />
+          </p>
+        </div>
+      </>
+    )
+  }
+
+  <ol class="tq__notes">
+    {
+      shownNotes.map((note) => (
+        <li class="tq__note" id={`note-${note.id}`}>
+          <h3 class="tq__note-title">
+            {hasEdits && <span class="tq__note-num">{number(note.id)}. </span>}
+            {note.title}
+          </h3>
+          <p class="tq__note-text" id={`note-${note.id}-text`}>
+            {note.text}
+          </p>
+          {hasEdits && (
+            <a class="tq__back t-label" href={`#edit-${note.id}`}>
+              {ui.backToEdit}
+            </a>
+          )}
+        </li>
+      ))
+    }
+  </ol>
+</div>
+
+<style>
+  .tq {
+    display: grid;
+    gap: var(--space-6);
+    max-width: var(--max-text);
+  }
+  .tq__block {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .tq__label {
+    color: var(--text-2);
+  }
+  .tq__text {
+    margin: 0;
+  }
+  .tq__del {
+    color: var(--del);
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+  }
+  .tq__ins {
+    color: var(--ins);
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 0.2em;
+  }
+  .tq__ref {
+    font-size: 0.65em;
+    line-height: 0;
+  }
+  .tq__ref a {
+    display: inline-block;
+    min-width: 24px;
+    padding-inline: 2px;
+    text-align: center;
+  }
+  .tq__notes {
+    display: grid;
+    gap: var(--space-4);
+  }
+  .tq__note {
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    background: var(--bg-2);
+    border-radius: var(--radius);
+    scroll-margin-top: var(--space-6);
+  }
+  .tq__note-title {
+    font-size: var(--fs-body);
+  }
+  .tq__note-text {
+    font-size: var(--fs-small);
+  }
+  .tq__back {
+    justify-self: start;
+  }
+</style>

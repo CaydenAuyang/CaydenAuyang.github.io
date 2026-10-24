@@ -1,0 +1,24 @@
+---
+// Question.astro: section 2. The May question edited in place into the October question,
+// with a note beside each edit saying what caused it (see ui/TrackedQuestion.astro).
+import { question } from '../../data/content';
+import Say from '../ui/Say.astro';
+import TrackedQuestion from '../ui/TrackedQuestion.astro';
+---
+
+<section id="question" class="section" aria-labelledby="question-title">
+  <div class="wrap">
+    <div class="section__head">
+      <h2 id="question-title" class="section__title">{question.heading}</h2>
+      <p class="t-lead"><Say line={question.intro} /></p>
+    </div>
+    <TrackedQuestion
+      mayLabel={question.mayLabel}
+      may={question.may}
+      octoberLabel={question.octoberLabel}
+      october={question.october}
+      edits={question.edits}
+      notes={question.notes}
+    />
+  </div>
+</section>

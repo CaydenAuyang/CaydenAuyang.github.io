@@ -1,0 +1,243 @@
+/*
+  base.css: the ground rules every page shares.
+
+  In order:
+    1. a reset, so every browser starts equal,
+    2. page defaults (font, colors, sizes),
+    3. shared layout helpers and small text styles,
+    4. keyboard focus, the skip link, screen-reader-only text,
+    5. the "To come" placeholder chip,
+    6. motion: starting positions apply ONLY under html.js-motion, which the first script in
+       Base.astro adds when JavaScript runs and motion is allowed. If JavaScript is off or fails,
+       nothing is ever hidden.
+
+  Loaded once by src/layouts/Base.astro, after tokens.css.
+*/
+
+/* ---- 1. Reset ----------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote,
+dl,
+dd,
+ul,
+ol {
+  margin: 0;
+}
+ul[class],
+ol[class] {
+  padding: 0;
+  list-style: none;
+}
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+img,
+video {
+  height: auto;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+[hidden] {
+  display: none !important;
+}
+
+/* ---- 2. Page defaults --------------------------------------------------------------------- */
+html {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body {
+  min-height: 100svh;
+  background: var(--bg);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  overflow-x: clip;
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  text-wrap: balance;
+}
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ---- 3. Layout helpers and text styles ---------------------------------------------------- */
+.wrap {
+  width: 100%;
+  max-width: var(--max-page);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+.section {
+  padding-block: var(--space-section);
+  border-top: 1px solid var(--rule);
+}
+.section__head {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+  max-width: var(--max-text);
+}
+.section__title {
+  font-size: var(--fs-h2);
+}
+.prose {
+  max-width: var(--max-text);
+}
+.prose > * + * {
+  margin-top: var(--space-4);
+}
+.t-lead {
+  font-size: var(--fs-lead);
+  line-height: 1.4;
+}
+.t-label {
+  font-family: var(--font-label);
+  font-size: var(--fs-label);
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+.t-meta {
+  font-size: var(--fs-small);
+  color: var(--text-2);
+}
+
+/* ---- 4. Focus, skip link, screen-reader text ---------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+/* Focus moved by the skip link lands on <main>; it needs no ring of its own. */
+main:focus {
+  outline: none;
+}
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip);
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: var(--fw-bold);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---- 5. "To come" chip -------------------------------------------------------------------- */
+/* Anything only Cayden can supply shows as this dashed chip until he does, so nobody mistakes
+   it for finished copy. The words come from content.ts (items with pending: true). */
+.pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1.5px dashed var(--pending);
+  border-radius: var(--radius);
+  color: var(--pending);
+  font-family: var(--font-label);
+  font-size: var(--fs-label);
+  line-height: 1.4;
+  font-style: normal;
+  vertical-align: baseline;
+}
+
+/* ---- 6. Motion ---------------------------------------------------------------------------- */
+/* Elements marked data-reveal fade and rise into place once, when they scroll into view
+   (src/components/ui/motion.ts). Only under js-motion, so without JavaScript they just show. */
+html.js-motion [data-reveal] {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
+}
+html.js-motion [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Smooth jumps to sections, unless the visitor wants less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion='off']) {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Reduced motion (the device setting) or Motion: Off (the footer switch): stop every
+   transition and animation, whatever a component asked for. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+html[data-motion='off'] *,
+html[data-motion='off'] *::before,
+html[data-motion='off'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

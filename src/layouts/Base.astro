@@ -1,0 +1,116 @@
+---
+// Base.astro: the frame every page is built inside.
+//
+// It writes the parts visitors don't see directly (title, description, share image, tab icon)
+// and the parts every page shares: the skip link, the header, <main id="main"> (where each
+// page's content goes) and the footer.
+//
+// Two scripts run:
+//   1. A tiny one at the very top, before anything is drawn, that decides whether motion is
+//      allowed. Doing it first means nothing flickers.
+//   2. The site's small modules at the bottom (motion.ts; the Motion switch and the preview
+//      videos bring their own).
+//
+// This site is embedded in the certificate program's Google Site, inside a sandboxed frame.
+// Nothing here may stop that: no X-Frame-Options and no frame-ancestors rule, and every link to
+// another site opens in a new tab (ExternalLink.astro).
+//
+// Pages use it like:  <Base title="..." description="...">...page content...</Base>
+import '../styles/tokens.css';
+import '../styles/base.css';
+import { meta } from '../data/content';
+import { site, ui } from '../data/site';
+import SiteHeader from '../components/ui/SiteHeader.astro';
+import Contact from '../components/sections/Contact.astro';
+
+interface Props {
+  // The full page title for the browser tab. Defaults to the site's name.
+  title?: string;
+  description?: string;
+  // Keep this page out of search engines.
+  noindex?: boolean;
+  // Show the section links in the header (the home page only).
+  nav?: boolean;
+}
+
+const { title = meta.title, description = meta.description.text, noindex = false, nav = false } = Astro.props;
+
+const canonical = new URL(Astro.url.pathname, Astro.site);
+// The "page not found" page shows at whatever wrong address someone typed, so it has no
+// permanent address of its own: no canonical link and no og:url.
+const isNotFound = /^\/404(\.html|\/)?$/.test(Astro.url.pathname);
+const imageUrl = new URL(site.ogImage, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {!noindex && !isNotFound && <link rel="canonical" href={canonical} />}
+    {(noindex || isNotFound) && <meta name="robots" content="noindex" />}
+    <meta name="theme-color" content={site.themeColor} />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/favicon-180.png" />
+
+    <!-- What a link preview shows when someone shares this page. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={site.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    {!isNotFound && <meta property="og:url" content={canonical} />}
+    <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={site.ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={imageUrl} />
+
+    <!--
+      Runs before the page is drawn:
+      - Add "js", so the page knows JavaScript works (the Motion switch and video buttons need it).
+      - If the visitor switched Motion off before, remember it (data-motion="off"). Storage can be
+        blocked (private windows, the Google Sites frame), so the read is wrapped in try/catch.
+      - If motion is allowed (no reduced-motion setting, not switched off), add "js-motion", which
+        lets elements start hidden and animate in.
+      - Safety net: if the motion code hasn't started 3.5 seconds later (a script failed to load),
+        remove "js-motion" so nothing stays hidden.
+    -->
+    <script is:inline define:vars={{ key: site.motionKey }}>
+      (function () {
+        var html = document.documentElement;
+        html.classList.add('js');
+        var off = false;
+        try {
+          off = localStorage.getItem(key) === 'off';
+        } catch (e) {}
+        if (off) html.setAttribute('data-motion', 'off');
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!reduce && !off) {
+          html.classList.add('js-motion');
+          setTimeout(function () {
+            if (!html.classList.contains('motion-ready')) html.classList.remove('js-motion');
+          }, 3500);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{ui.skip}</a>
+    <SiteHeader nav={nav} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <Contact />
+
+    <script>
+      import '../components/ui/motion.ts';
+    </script>
+  </body>
+</html>

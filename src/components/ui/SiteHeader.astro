@@ -1,0 +1,65 @@
+---
+// SiteHeader.astro: the name (a link back to the top) and, on the home page, the section links.
+// Phone first: the links wrap onto a second line on narrow screens instead of hiding in a menu,
+// so there is nothing to open and nothing that needs JavaScript.
+import { hero, nav as links } from '../../data/content';
+import { ui } from '../../data/site';
+
+interface Props {
+  nav?: boolean;
+}
+const { nav = false } = Astro.props;
+---
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <a class="site-header__name" href={nav ? '#top' : '/'}>{hero.name}</a>
+    {
+      nav && (
+        <nav class="site-header__nav" aria-label={ui.navLabel}>
+          <ul class="site-header__links">
+            {links.map((link) => (
+              <li>
+                <a href={link.href}>{link.label}</a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )
+    }
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: relative;
+    z-index: var(--z-header);
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+  .site-header__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-5);
+    padding-block: var(--space-3);
+  }
+  .site-header__name {
+    color: var(--text);
+    font-weight: var(--fw-bold);
+    text-decoration: none;
+    padding-block: var(--space-2);
+  }
+  .site-header__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 var(--space-4);
+  }
+  .site-header__links a {
+    display: inline-block;
+    padding-block: var(--space-2);
+    font-size: var(--fs-small);
+    color: var(--text);
+  }
+</style>

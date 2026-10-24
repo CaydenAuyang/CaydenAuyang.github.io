@@ -1,23 +1,22 @@
 ---
-// Holding page for the first deploy. Replaced by the full site later tonight.
+// index.astro: the home page, and for now the whole site. One section per component, in the
+// order of the brief's site outline. Every word comes from src/data/content.ts.
+import Base from '../layouts/Base.astro';
+import Hero from '../components/sections/Hero.astro';
+import Question from '../components/sections/Question.astro';
+import Summer from '../components/sections/Summer.astro';
+import Work from '../components/sections/Work.astro';
+import Progress from '../components/sections/Progress.astro';
+import People from '../components/sections/People.astro';
+import Portfolio from '../components/sections/Portfolio.astro';
 ---
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Cayden Auyang</title>
-    <meta name="description" content="Certificate portfolio, Pomfret School." />
-    <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; font-family: system-ui, sans-serif; background: #ffffff; color: #1a1a1a; }
-      h1 { margin: 0 0 8px; font-size: 2rem; }
-      p { margin: 0; color: #4a4a4a; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Cayden Auyang</h1>
-      <p>Certificate portfolio, Pomfret School. Full site coming tonight.</p>
-    </main>
-  </body>
-</html>
+
+<Base nav>
+  <Hero />
+  <Question />
+  <Summer />
+  <Work />
+  <Progress />
+  <People />
+  <Portfolio />
+</Base>
