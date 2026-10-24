@@ -28,10 +28,11 @@ import { PALETTE } from './palette';
 import { cityFog } from './skyline';
 import { brightness, isWarm, type FrontWindow } from './windows';
 import { PULSE_GLSL, PULSES, type PulseUniforms } from './pulse';
+import { SPILL_GLSL, type SpillUniforms } from './spill';
 import waterVert from './shaders/water.vert.glsl?raw';
 import waterFrag from './shaders/water.frag.glsl?raw';
 
-export interface HarbourUniforms extends PulseUniforms {
+export interface HarbourUniforms extends PulseUniforms, SpillUniforms {
   uTime: IUniform<number>;
   uMotion: IUniform<number>;
   uSkyFade: IUniform<number>;
@@ -210,7 +211,7 @@ export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour
     plane,
     new ShaderMaterial({
       vertexShader: waterVert,
-      fragmentShader: waterFrag.replace('//#NS_PULSE', PULSE_GLSL),
+      fragmentShader: waterFrag.replace('//#NS_PULSE', PULSE_GLSL).replace('//#NS_SPILL', SPILL_GLSL),
       defines: { PROFILE_ROWS: rows.toFixed(1), PULSES },
       uniforms: {
         uTime: shared.uTime,
@@ -232,6 +233,8 @@ export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour
         uPulseB: shared.uPulseB,
         uPulseOn: shared.uPulseOn,
         uPulseRes: shared.uPulseRes,
+        uSpill: shared.uSpill,
+        uSpillAt: shared.uSpillAt,
         uWarm: { value: new Vector3(...PALETTE.window) },
       },
     }),

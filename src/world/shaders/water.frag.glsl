@@ -21,6 +21,8 @@ uniform vec4 uPulseB[PULSES]; // ring center on screen (device px); meters acros
 uniform vec2 uPulseRes; // drawing buffer size, device px
 uniform float uPulseOn;
 uniform vec3 uWarm;
+uniform vec4 uSpill; // video spill color, amount (0..0.2)
+uniform vec3 uSpillAt; // video center (device px), falloff radius (px)
 varying vec3 vWorld;
 
 float h12(vec2 p) {
@@ -35,6 +37,7 @@ float vnoise(vec2 p) {
   return mix(mix(h12(i), h12(i + vec2(1.0, 0.0)), u.x), mix(h12(i + vec2(0.0, 1.0)), h12(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 //#NS_PULSE
+//#NS_SPILL
 
 void main() {
   vec3 C = cameraPosition;
@@ -140,6 +143,9 @@ void main() {
       ringL = mix(uWarm, vec3(1.0), 0.35) * min(ring, 1.5) * brk * 0.7;
     }
   }
+
+  // Video spill: the reflections take on a little of the playing video's color, most under it.
+  if (uSpill.w > 0.0) refl = nsSpill(refl, 0.5 + 0.5 * nsSpillNear(vec2(gl_FragCoord.x, uSpillAt.y)));
 
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);

@@ -12,6 +12,7 @@ import { BAKE_SLOTS, buildHarbour, type WindowSet } from './harbour';
 import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { createInteractions, pulseUniforms } from './pulse';
+import { createSpill, spillUniforms } from './spill';
 import { buildSky, starsInView } from './sky';
 import { buildSkyline } from './skyline';
 import { detectTier, readGpu } from './tier';
@@ -50,6 +51,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     uLift: { value: new Vector2(0, 0) },
     uHi: { value: new Vector3(0, 0, 0.5) },
     ...pulseUniforms(),
+    ...spillUniforms(),
   };
 
   // ---- Build the city ----
@@ -211,6 +213,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     requestRender: () => requestRender(),
   });
 
+  // ---- Video light spill (11b.4) ----
+  const spill = createSpill(U, () => motion, () => requestRender());
+
   // ---- Highlights ----
   let hiKey: 'och' | 'ais' | 'club' | null = null;
   let hiStrength = 0;
@@ -251,6 +256,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     for (const cb of subs) cb(time, delta);
     placeCamera();
     interactions.update(now);
+    spill.update(delta, canvas.width, canvas.height);
     renderer.render(scene, camera);
     frames++;
   };
@@ -329,6 +335,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     },
     pulse(ndc) {
       return interactions.pulse(ndc);
+    },
+    setSpill(color, strength, center) {
+      spill.set(color, strength, center);
     },
     sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
       const hp = path.poses.hero.pos;

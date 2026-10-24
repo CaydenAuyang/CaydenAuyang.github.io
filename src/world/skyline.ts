@@ -15,10 +15,11 @@ import type { CityLayout } from './city';
 import { PALETTE } from './palette';
 import { WINDOW_GLSL } from './windows';
 import { PULSE_GLSL, PULSES, SPOTS, type PulseUniforms } from './pulse';
+import { SPILL_GLSL, type SpillUniforms } from './spill';
 import towerVert from './shaders/tower.vert.glsl?raw';
 import towerFrag from './shaders/tower.frag.glsl?raw';
 
-export interface SkylineUniforms extends PulseUniforms {
+export interface SkylineUniforms extends PulseUniforms, SpillUniforms {
   uTime: IUniform<number>;
   uMotion: IUniform<number>;
   uWake: IUniform<number>;
@@ -69,7 +70,7 @@ export function buildSkyline(city: CityLayout, shared: SkylineUniforms, taps: 2 
 
   const mat = new ShaderMaterial({
     vertexShader: towerVert,
-    fragmentShader: towerFrag.replace('//#NS_WINDOWS', WINDOW_GLSL).replace('//#NS_PULSE', PULSE_GLSL),
+    fragmentShader: towerFrag.replace('//#NS_WINDOWS', WINDOW_GLSL).replace('//#NS_PULSE', PULSE_GLSL).replace('//#NS_SPILL', SPILL_GLSL),
     defines: { TAPS: taps, SPOTS, PULSES },
     uniforms: {
       ...shared,

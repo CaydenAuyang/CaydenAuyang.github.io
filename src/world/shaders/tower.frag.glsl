@@ -18,6 +18,8 @@ uniform float uSpotOn;
 uniform vec4 uPulse[PULSES]; // pulse wave origin (world), age in s (< 0: none)
 uniform vec4 uPulseB[PULSES]; // ring center x, z; meters across the screen at the pulse
 uniform float uPulseOn;
+uniform vec4 uSpill; // video spill color, amount (0..0.2)
+uniform vec3 uSpillAt; // video center (device px), falloff radius (px)
 
 varying vec3 vWorld;
 varying vec2 vCell;
@@ -29,6 +31,7 @@ flat varying float vCols;
 
 //#NS_WINDOWS
 //#NS_PULSE
+//#NS_SPILL
 
 // The pulse wave at this fragment (0..1), set once in main before the window taps.
 float gWave = 0.0;
@@ -212,6 +215,8 @@ void main() {
     vec3 warmL = uWarm * (lum / dot(uWarm, vec3(0.299, 0.587, 0.114)));
     light = mix(light, warmL, 0.6 * spot) * (1.0 + 0.6 * spot);
   }
+  // Video spill: the windows nearest the playing video take on a little of its color.
+  if (uSpill.w > 0.0) light = nsSpill(light, nsSpillNear(gl_FragCoord.xy));
 
   float behind = max(0.0, -vWorld.z);
   float dist = length(vWorld - cameraPosition);
