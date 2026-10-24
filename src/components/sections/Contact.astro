@@ -1,6 +1,5 @@
 ---
 // Contact.astro: section 8, the contact block and site footer, shown on every page.
-// The email address stays off until Cayden confirms which one goes public (content.ts).
 import { footer } from '../../data/content';
 import ExternalLink from '../ui/ExternalLink.astro';
 import MotionToggle from '../ui/MotionToggle.astro';
@@ -11,15 +10,11 @@ import Say from '../ui/Say.astro';
   <div class="wrap site-footer__inner">
     <p class="site-footer__line"><Say line={footer.line} /></p>
     <ul class="site-footer__links">
-      {
-        footer.email && (
-          <li>
-            <a href={footer.email.href}>{footer.email.text}</a>
-          </li>
-        )
-      }
       <li>
-        <ExternalLink href={footer.github.href}>{footer.github.text}</ExternalLink>
+        {footer.emailLabel}: <a href={footer.email.href}>{footer.email.text}</a>
+      </li>
+      <li>
+        {footer.githubLabel}: <ExternalLink href={footer.github.href}>{footer.github.text}</ExternalLink>
       </li>
     </ul>
     <MotionToggle />
@@ -37,9 +32,8 @@ import Say from '../ui/Say.astro';
     padding-block: var(--space-7);
   }
   .site-footer__links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4);
+    display: grid;
+    gap: var(--space-1);
   }
   .site-footer__links a {
     display: inline-block;

@@ -1,8 +1,7 @@
 ---
-// Portfolio.astro: section 7. Links to the certificate's working files in the school Drive.
-// An item without its Drive link yet shows a "To come" chip in place of the link.
+// Portfolio.astro: section 7. Where the certificate's working files live. One paragraph for
+// now; links can be added once Cayden shares those files.
 import { portfolio } from '../../data/content';
-import ExternalLink from '../ui/ExternalLink.astro';
 import Say from '../ui/Say.astro';
 ---
 
@@ -10,42 +9,7 @@ import Say from '../ui/Say.astro';
   <div class="wrap">
     <div class="section__head">
       <h2 id="portfolio-title" class="section__title">{portfolio.heading}</h2>
-      <p class="t-lead"><Say line={portfolio.intro} /></p>
     </div>
-    <ul class="portfolio">
-      {
-        portfolio.items.map((item) => (
-          <li class="portfolio__item">
-            {item.href ? (
-              <ExternalLink href={item.href}>{item.text}</ExternalLink>
-            ) : (
-              <>
-                <span>{item.text}</span>
-                {item.link && <Say line={item.link} />}
-              </>
-            )}
-          </li>
-        ))
-      }
-    </ul>
+    <p class="prose t-lead"><Say line={portfolio.body} /></p>
   </div>
 </section>
-
-<style>
-  .portfolio {
-    display: grid;
-    max-width: var(--max-text);
-  }
-  .portfolio__item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-2) var(--space-4);
-    padding-block: var(--space-4);
-    border-top: 1px solid var(--rule);
-  }
-  .portfolio__item:last-child {
-    border-bottom: 1px solid var(--rule);
-  }
-</style>

@@ -64,24 +64,25 @@ export const hero = {
 
 // ---- 2. The question ---------------------------------------------------------------------------
 
-// One tracked change to the May question. Edits apply in order, left to right.
+// One tracked change to the May question. Edits apply in order, left to right, each one
+// searching the May text from where the previous edit ended.
 //   del:      strike `text` (words found in the May question).
-//   ins:      insert `text` right after the May words in `after` (no `after`: at the end).
+//   ins:      insert `text` right after the May words in `after`. `after: ''` means directly
+//             after the previous edit; no `after` at all means at the very end.
 //   replace:  strike `text` and insert `insertText` in its place.
-// noteId points at the margin note that says what caused the edit.
-// The build stops with an error if a `text` or `after` can't be found, so a typo can't ship.
+// noteId points at the margin note that says what caused the edit (some edits have none).
+// The build stops with an error if a `text` or `after` can't be found, or if the edits don't
+// turn the May text into the October text, so a typo can't ship.
 export interface Edit {
   type: 'del' | 'ins' | 'replace';
   text: string;
   insertText?: string;
   after?: string;
-  noteId: string;
+  noteId?: string;
 }
 
 export interface Note extends Line {
   id: string;
-  // The candidate edit the note is about, shown as the note's title.
-  title: string;
 }
 
 export const question = {
@@ -97,37 +98,38 @@ export const question = {
   } satisfies Line,
   octoberLabel: 'October 2026:',
   october: {
-    text: 'To come: the October question',
-    pending: true,
-    todo: "Cayden's rewritten question. Build the tracked-change display from his final wording.",
+    text: 'Most institutions struggle to hear the people they serve, or even their own records. What would it take for AI to help, and how would we know it heard them correctly, from a city to a nonprofit to a school?',
+    source: 'Cayden, final wording approved October 2026',
   } satisfies Line,
-  // Empty until Cayden sends his wording. Then: the ordered list of edits to the May text.
-  edits: [] as Edit[],
-  // The candidate edits from the brief. Keep the notes for the edits Cayden uses, drop the rest.
+  // The edits from May to October, in reading order.
+  edits: [
+    { type: 'del', text: 'actually' },
+    { type: 'ins', text: ', or even their own records', after: 'the people they serve', noteId: 'records' },
+    { type: 'replace', text: 'change that', insertText: 'help', noteId: 'help' },
+    { type: 'ins', text: ', and how would we know it heard them correctly', after: '', noteId: 'heard-correctly' },
+    { type: 'replace', text: 'down to a school', insertText: 'to a nonprofit to a school', noteId: 'nonprofit' },
+  ] satisfies Edit[] as Edit[],
+  // The margin notes, numbered on the page in the order their edits appear.
   notes: [
     {
-      id: 'staff-records',
-      title: 'Edit: "...or even their own staff and records."',
-      text: 'At Civic Exchange, 25 years of research sat in folders nobody could search, and staff told me they wanted "a library." The first listening problem was inside the institution.',
+      id: 'records',
+      text: 'At Civic Exchange, 25 years of research sat in folders nobody could search, and what staff wanted most was a way to search their own past work. The first listening problem was inside the institution.',
       source: 'CEX §3b, ER §1; CEX §3a, UR',
     },
     {
+      id: 'help',
+      text: 'This summer showed me what AI is good for: finding and drafting. Deciding what matters stays with people.',
+      source: 'CEX §3g, FD P43; CEX §3d, ER §5.3',
+    },
+    {
       id: 'heard-correctly',
-      title: 'Edit: "...and how would we know it heard them correctly?"',
       text: "An answer was only useful when its source checked out, so every answer had to cite one. My independent study builds the same check into its method: I hand-code samples and test the AI's labels against them.",
       source: 'CEX §6, ER §6.3; OCH §2, METH',
     },
     {
-      id: 'through-ngo',
-      title: 'Edit: "from a city, through an NGO, to a school."',
+      id: 'nonprofit',
       text: 'The summer added a middle case between OurCityHealth and the Civic AI Club: a nonprofit with a research team and an archive.',
       source: 'CEX §8, J15',
-    },
-    {
-      id: 'stay-out',
-      title: 'Edit: "...and when should it stay out of the way?"',
-      text: 'None of the tools the Civic AI Club has built so far calls an AI model. Counselors still write every recommendation letter, and no AI touches student data.',
-      source: 'CLUB §8, CTX; CLUB §4 E, F',
     },
   ] satisfies Note[],
 };
@@ -144,8 +146,7 @@ export const summer = {
     title: 'The problem.',
     body: {
       text: "Civic Exchange is a public policy think tank in Hong Kong. Its executive director, Lawrence Iu, didn't give me a technical assignment. He described a problem: staff used AI in different ways and got different results, 25 years of research sat in folders nobody could search, and reports didn't share a style.",
-      source: 'CEX §2, C1 p1; CEX §3',
-      confirm: "Lawrence's current title",
+      source: 'CEX §2, C1 p1; CEX §3; title confirmed by Cayden',
     } satisfies Line,
   },
   listening: {
@@ -228,6 +229,7 @@ export const work = {
           text: 'Two tools delivered and handed over in October: a weekly planner for the CLC Supported Study Hall, and a lesson and booking portal for the Music Department.',
           source: 'CLUB §4 A, B',
         },
+        { text: "None of the tools we've built so far calls an AI model.", source: 'CLUB §8, CTX' },
         { text: 'Three local organizations have student teams at the discovery stage.', source: 'CLUB §5' },
         { text: 'A school-wide AI Literacy Week in May 2026, with AI Youth Alliance.', source: 'CLUB §6' },
       ],
@@ -273,7 +275,7 @@ export const work = {
       },
       points: [
         {
-          text: 'For the Changing Young Lives Foundation, a Hong Kong charity, I automated the stakeholder update emails staff had been sending by hand (2024).',
+          text: 'For the Changing Young Lives Foundation, a Hong Kong charity, I automated the donor update emails staff had been sending by hand (2024).',
           source: 'OCH §5, TRK',
         },
         {
@@ -337,7 +339,6 @@ export const progress = {
       },
       now: [
         { text: 'The summer added a third case between them, a nonprofit.', source: 'CEX §8' },
-        { text: 'To come: when the writing starts', pending: true, todo: 'when the writing starts' },
       ],
     },
   ] satisfies Strand[],
@@ -357,61 +358,37 @@ export const people = {
     text: 'Professionals outside Pomfret who have shaped the work.',
     source: 'program/About, summer requirements',
   } satisfies Line,
-  // Confirmed connections only.
+  // Confirmed connections only. Next, after their conversations: Alvin Mok and Victor Kwong
+  // (Kay Huang as the fallback). Add them only once Cayden confirms.
   list: [
     {
       name: 'Lawrence Iu.',
-      title: { text: 'Executive Director, Civic Exchange.', confirm: 'title' },
+      title: { text: 'Executive Director, Civic Exchange.', source: 'title confirmed by Cayden' },
       body: {
         text: 'He supervised my summer project and pushed me to treat it as a model other nonprofits could follow, not just a set of tools, and to document the process as carefully as I built them.',
         source: 'CEX §2, J6tx, C1 p1; CEX §2, J15',
       },
     },
   ] satisfies Person[],
-  more: {
-    text: 'To come: more connections, once confirmed',
-    pending: true,
-    todo: 'Add the next professional connections after their conversations. Show only confirmed connections.',
-  } satisfies Line,
 };
 
 // ---- 7. Portfolio ------------------------------------------------------------------------------
 
-export interface PortfolioItem {
-  text: string;
-  // The Drive link once Cayden adds it. Until then `link` is a pending chip.
-  href?: string;
-  link?: Line;
-}
-
 export const portfolio = {
   heading: 'Portfolio',
-  intro: {
-    text: 'The certificate\'s working files live in my school Drive.',
-    source: 'program/Instructions for Portfolios',
+  // No links yet. They can be added once Cayden shares those files.
+  body: {
+    text: 'My certificate portfolio lives in my school Google Drive and on the program\'s Google Site: the May 2026 poster and literature review, reflections, and supervisor letters.',
+    source: 'program/Instructions for Portfolios; POSTER',
   } satisfies Line,
-  items: [
-    {
-      text: 'May 2026 poster and literature review',
-      link: { text: 'To come: Drive link', pending: true, todo: 'Drive link' },
-    },
-    {
-      text: 'Reflections',
-      link: { text: 'To come: Drive links', pending: true, todo: 'Drive links' },
-    },
-    {
-      text: 'Hours log and supervisor letters',
-      link: { text: 'To come: Drive links', pending: true, todo: 'Drive links, once ready' },
-    },
-  ] satisfies PortfolioItem[],
 };
 
 // ---- 8. Footer ---------------------------------------------------------------------------------
 
 export const footer = {
   line: { text: 'Cayden Auyang. Pomfret School, Class of 2027.' } satisfies Line,
-  // Left off the page until Cayden confirms which address goes public.
-  email: null as Link | null,
-  emailConfirm: 'which address goes public; the May poster used a personal address',
-  github: { text: 'GitHub', href: 'https://github.com/CaydenAuyang' } satisfies Link,
+  emailLabel: 'Email',
+  email: { text: 'caydenauyang@gmail.com', href: 'mailto:caydenauyang@gmail.com', source: 'POSTER' } satisfies Link,
+  githubLabel: 'GitHub',
+  github: { text: 'github.com/CaydenAuyang', href: 'https://github.com/CaydenAuyang' } satisfies Link,
 };

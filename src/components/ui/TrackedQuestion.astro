@@ -1,21 +1,25 @@
 ---
 // TrackedQuestion.astro: the May question, edited in place into the October question.
 //
-// It takes the May text and an ordered list of edits (see `Edit` in content.ts):
+// It takes the May text, the October text and an ordered list of edits (see `Edit` in
+// content.ts):
 //   del      strikes words in the May text,
-//   ins      inserts new words after an anchor in the May text (or at the end),
+//   ins      inserts new words after an anchor in the May text,
 //   replace  strikes words and inserts new ones in their place.
 // Struck words are a real <del>, new words a real <ins>, each with a hidden "deleted:" or
-// "inserted:" so screen readers say what changed. After each edit sits a small numbered link to
-// its note in the list below (no hover needed, so it works on phones), and the link is described
-// by the note's text, so a screen reader reads the note when the link is focused.
+// "inserted:" so screen readers say what changed. After each noted edit sits a small numbered
+// link to its note in the list below (no hover needed, so it works on phones). The link is
+// described by the note's text, so a screen reader reads the note when the link is focused.
 //
-// Until Cayden sends his wording, `edits` is empty: then the May question shows as written, the
-// October question shows as a "To come" chip, and every candidate note is listed under the edit
-// it is about.
+// A three-way switch (May / Marked / October) shows the clean May text, the marked-up version
+// or the clean October text. It is a real radio group, and it works with CSS alone (:has), so
+// it needs no JavaScript. Browsers without :has hide the switch and show the marked version,
+// which is also the default.
+//
+// At build time it checks that the edits really turn the May text into the October text, and
+// stops the build if they don't, so the two can never drift apart.
 import type { Edit, Line, Note } from '../../data/content';
 import { ui } from '../../data/site';
-import Say from './Say.astro';
 
 interface Props {
   mayLabel: string;
@@ -30,126 +34,118 @@ const { mayLabel, may, octoberLabel, october, edits, notes } = Astro.props;
 
 type Segment =
   | { kind: 'keep'; text: string }
-  | { kind: 'del' | 'ins'; text: string; noteId: string; ref: boolean };
+  | { kind: 'del' | 'ins'; text: string; noteId?: string; ref: boolean };
+
+const fail = (message: string): never => {
+  throw new Error(`TrackedQuestion: ${message}`);
+};
 
 // Turn the May text plus the edits into a row of kept, struck and inserted pieces.
-// Stops the build if an edit's words can't be found, so a typo never ships.
 function trackChanges(text: string, list: Edit[]): Segment[] {
   const out: Segment[] = [];
   let cursor = 0;
-  const find = (needle: string, edit: Edit) => {
+  const find = (needle: string) => {
     const at = text.indexOf(needle, cursor);
-    if (at === -1) {
-      throw new Error(`TrackedQuestion: "${needle}" (edit for note "${edit.noteId}") is not in the May text after position ${cursor}.`);
-    }
+    if (at === -1) fail(`"${needle}" is not in the May text after position ${cursor}.`);
     return at;
   };
   for (const edit of list) {
-    if (!notes.some((n) => n.id === edit.noteId)) {
-      throw new Error(`TrackedQuestion: edit points at note "${edit.noteId}", which is not in question.notes.`);
+    if (edit.noteId && !notes.some((n) => n.id === edit.noteId)) {
+      fail(`an edit points at note "${edit.noteId}", which is not in question.notes.`);
     }
     if (edit.type === 'del' || edit.type === 'replace') {
-      const at = find(edit.text, edit);
+      const at = find(edit.text);
       if (at > cursor) out.push({ kind: 'keep', text: text.slice(cursor, at) });
-      out.push({ kind: 'del', text: edit.text, noteId: edit.noteId, ref: edit.type === 'del' });
+      out.push({ kind: 'del', text: edit.text, noteId: edit.noteId, ref: edit.type === 'del' && !!edit.noteId });
       cursor = at + edit.text.length;
       if (edit.type === 'replace') {
-        if (!edit.insertText) throw new Error(`TrackedQuestion: replace edit for "${edit.noteId}" has no insertText.`);
-        out.push({ kind: 'ins', text: edit.insertText, noteId: edit.noteId, ref: true });
+        if (!edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
+        out.push({ kind: 'ins', text: edit.insertText!, noteId: edit.noteId, ref: !!edit.noteId });
       }
     } else {
-      const end = edit.after ? find(edit.after, edit) + edit.after.length : text.length;
+      const end = edit.after !== undefined ? find(edit.after) + edit.after.length : text.length;
       if (end > cursor) out.push({ kind: 'keep', text: text.slice(cursor, end) });
       cursor = end;
-      out.push({ kind: 'ins', text: edit.text, noteId: edit.noteId, ref: true });
+      out.push({ kind: 'ins', text: edit.text, noteId: edit.noteId, ref: !!edit.noteId });
     }
   }
   if (cursor < text.length) out.push({ kind: 'keep', text: text.slice(cursor) });
   return out;
 }
 
-const hasEdits = edits.length > 0;
-const segments = hasEdits ? trackChanges(may.text, edits) : [];
+const segments = trackChanges(may.text, edits);
 
-// Notes are numbered in the order their edits appear. With no edits yet, every note is listed.
-const usedIds = [...new Set(edits.map((e) => e.noteId))];
-const shownNotes = hasEdits ? usedIds.map((id) => notes.find((n) => n.id === id)!) : notes;
-const number = (id: string) => shownNotes.findIndex((n) => n.id === id) + 1;
+// The edits must produce the October text exactly (spaces aside).
+const squash = (t: string) => t.replace(/\s+/g, ' ').trim();
+const produced = segments.filter((s) => s.kind !== 'del').map((s) => s.text).join('');
+if (squash(produced) !== squash(october.text)) {
+  fail(`the edits produce "${squash(produced)}", which is not the October text "${squash(october.text)}".`);
+}
+
+// Notes are numbered in the order their edits appear.
+const noteIds = [...new Set(edits.map((e) => e.noteId).filter((id): id is string => !!id))];
+const shownNotes = noteIds.map((id) => notes.find((n) => n.id === id)!);
+const number = (id: string) => noteIds.indexOf(id) + 1;
+
+const views = [
+  { id: 'may', label: ui.viewMay },
+  { id: 'marked', label: ui.viewMarked },
+  { id: 'october', label: ui.viewOctober },
+];
 ---
 
 <div class="tq">
-  {
-    hasEdits ? (
-      <div class="tq__block">
-        <p class="tq__label t-label">{octoberLabel}</p>
-        <p class="tq__text t-lead">
-          {segments.map((s) =>
-            s.kind === 'keep' ? (
-              s.text
-            ) : (
-              <>
-                {s.kind === 'del' ? (
-                  <del class="tq__del">
-                    <span class="sr-only">{ui.deleted} </span>
-                    {s.text}
-                  </del>
-                ) : (
-                  <ins class="tq__ins">
-                    <span class="sr-only">{ui.inserted} </span>
-                    {s.text}
-                  </ins>
-                )}
-                {s.ref && (
-                  <sup class="tq__ref">
-                    <a
-                      href={`#note-${s.noteId}`}
-                      id={`edit-${s.noteId}`}
-                      aria-label={ui.noteRef(number(s.noteId))}
-                      aria-describedby={`note-${s.noteId}-text`}
-                    >
-                      {number(s.noteId)}
-                    </a>
-                  </sup>
-                )}
-              </>
-            ),
-          )}
-        </p>
-      </div>
-    ) : (
-      <>
-        <div class="tq__block">
-          <p class="tq__label t-label">{mayLabel}</p>
-          <blockquote class="tq__text t-lead">
-            <p>{may.text}</p>
-          </blockquote>
-        </div>
-        <div class="tq__block">
-          <p class="tq__label t-label">{octoberLabel}</p>
-          <p class="tq__text">
-            <Say line={october} />
-          </p>
-        </div>
-      </>
-    )
-  }
+  <fieldset class="tq__switch">
+    <legend class="sr-only">{ui.viewLegend}</legend>
+    {
+      views.map((view) => (
+        <>
+          <input
+            class="tq__radio"
+            type="radio"
+            name="tq-view"
+            id={`tq-view-${view.id}`}
+            value={view.id}
+            checked={view.id === 'marked'}
+          />
+          <label class="tq__option t-label" for={`tq-view-${view.id}`}>
+            {view.label}
+          </label>
+        </>
+      ))
+    }
+  </fieldset>
+
+  <div class="tq__view tq__view--may">
+    <p class="tq__label t-label">{mayLabel}</p>
+    <blockquote class="tq__text t-lead">
+      <p>{may.text}</p>
+    </blockquote>
+  </div>
+
+  <div class="tq__view tq__view--marked">
+    {/* Written on one line on purpose: line breaks here would put stray spaces around words. */}
+    <p class="tq__text t-lead">{segments.map((s) => s.kind === 'keep' ? s.text : <>{s.kind === 'del' ? <del class="tq__del"><span class="sr-only">{`${ui.deleted} `}</span>{s.text}</del> : <ins class="tq__ins"><span class="sr-only">{`${ui.inserted} `}</span>{s.text}</ins>}{s.ref && s.noteId && <sup class="tq__ref"><a href={`#note-${s.noteId}`} id={`edit-${s.noteId}`} aria-label={ui.noteRef(number(s.noteId))} aria-describedby={`note-${s.noteId}-text`}>{number(s.noteId)}</a></sup>}</>)}</p>
+  </div>
+
+  <div class="tq__view tq__view--october">
+    <p class="tq__label t-label">{octoberLabel}</p>
+    <blockquote class="tq__text t-lead">
+      <p>{october.text}</p>
+    </blockquote>
+  </div>
 
   <ol class="tq__notes">
     {
       shownNotes.map((note) => (
         <li class="tq__note" id={`note-${note.id}`}>
-          <h3 class="tq__note-title">
-            {hasEdits && <span class="tq__note-num">{number(note.id)}. </span>}
-            {note.title}
-          </h3>
+          <span class="tq__note-num t-label">{number(note.id)}.</span>
           <p class="tq__note-text" id={`note-${note.id}-text`}>
             {note.text}
           </p>
-          {hasEdits && (
-            <a class="tq__back t-label" href={`#edit-${note.id}`}>
-              {ui.backToEdit}
-            </a>
-          )}
+          <a class="tq__back t-label" href={`#edit-${note.id}`}>
+            {ui.backToEdit}
+          </a>
         </li>
       ))
     }
@@ -162,10 +158,66 @@ const number = (id: string) => shownNotes.findIndex((n) => n.id === id) + 1;
     gap: var(--space-6);
     max-width: var(--max-text);
   }
-  .tq__block {
+
+  /* The switch: three radios styled as one segmented control. The real inputs stay in the page
+     (keyboard and screen readers use them) but are drawn as their labels. */
+  .tq__switch {
+    display: none;
+    justify-self: start;
+    margin: 0;
+    padding: 2px;
+    border: 1px solid var(--text-2);
+    border-radius: var(--radius);
+    min-inline-size: 0;
+  }
+  @supports selector(:has(*)) {
+    .tq__switch {
+      display: inline-flex;
+    }
+  }
+  .tq__radio {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+  }
+  .tq__option {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: var(--space-1) var(--space-3);
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .tq__radio:checked + .tq__option {
+    background: var(--text);
+    color: var(--bg);
+  }
+  .tq__radio:focus-visible + .tq__option {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Views: Marked shows by default; the switch swaps in May or October. */
+  .tq__view {
     display: grid;
     gap: var(--space-2);
   }
+  .tq__view--may,
+  .tq__view--october {
+    display: none;
+  }
+  .tq:has(#tq-view-may:checked) .tq__view--may,
+  .tq:has(#tq-view-october:checked) .tq__view--october {
+    display: grid;
+  }
+  .tq:has(#tq-view-may:checked) .tq__view--marked,
+  .tq:has(#tq-view-october:checked) .tq__view--marked {
+    display: none;
+  }
+
   .tq__label {
     color: var(--text-2);
   }
@@ -176,6 +228,10 @@ const number = (id: string) => shownNotes.findIndex((n) => n.id === id) + 1;
     color: var(--del);
     text-decoration: line-through;
     text-decoration-thickness: 1.5px;
+  }
+  /* A replacement sits right after the words it replaces; a small gap keeps them apart. */
+  .tq__del + .tq__ins {
+    margin-left: 0.2em;
   }
   .tq__ins {
     color: var(--ins);
@@ -190,28 +246,34 @@ const number = (id: string) => shownNotes.findIndex((n) => n.id === id) + 1;
   .tq__ref a {
     display: inline-block;
     min-width: 24px;
+    min-height: 24px;
+    line-height: 24px;
     padding-inline: 2px;
     text-align: center;
   }
+
   .tq__notes {
     display: grid;
     gap: var(--space-4);
   }
   .tq__note {
     display: grid;
-    gap: var(--space-2);
+    grid-template-columns: auto 1fr;
+    gap: var(--space-2) var(--space-3);
     padding: var(--space-4);
     background: var(--bg-2);
     border-radius: var(--radius);
     scroll-margin-top: var(--space-6);
   }
-  .tq__note-title {
-    font-size: var(--fs-body);
+  .tq__note-num {
+    color: var(--text-2);
+    padding-top: 0.15em;
   }
   .tq__note-text {
     font-size: var(--fs-small);
   }
   .tq__back {
+    grid-column: 2;
     justify-self: start;
   }
 </style>

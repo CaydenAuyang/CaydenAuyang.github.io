@@ -1,6 +1,6 @@
 ---
 // People.astro: section 6. Professionals outside Pomfret who shaped the work.
-// Confirmed connections only. If the list is empty, only the "To come" chip shows.
+// Confirmed connections only. If the list is empty, the section shows just its intro.
 import { people } from '../../data/content';
 import Say from '../ui/Say.astro';
 ---
@@ -28,7 +28,6 @@ import Say from '../ui/Say.astro';
         </ul>
       )
     }
-    <p class="people__more"><Say line={people.more} /></p>
   </div>
 </section>
 
@@ -44,8 +43,5 @@ import Say from '../ui/Say.astro';
   }
   .person__name {
     font-size: var(--fs-h3);
-  }
-  .people__more {
-    margin-top: var(--space-6);
   }
 </style>
