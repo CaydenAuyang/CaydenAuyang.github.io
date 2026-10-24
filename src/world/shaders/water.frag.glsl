@@ -16,6 +16,11 @@ uniform float uWake;
 uniform vec4 uHiRange; // x0, x1, strength in that range, boost everywhere
 uniform vec2 uCityX;
 uniform vec3 uFog;
+uniform vec4 uPulse[PULSES]; // pulse wave origin (world), age in s (< 0: none)
+uniform vec4 uPulseB[PULSES]; // ring center on screen (device px); meters across the screen at the pulse; ring squash
+uniform vec2 uPulseRes; // drawing buffer size, device px
+uniform float uPulseOn;
+uniform vec3 uWarm;
 varying vec3 vWorld;
 
 float h12(vec2 p) {
@@ -29,6 +34,7 @@ float vnoise(vec2 p) {
   vec2 u = f * f * (3.0 - 2.0 * f);
   return mix(mix(h12(i), h12(i + vec2(1.0, 0.0)), u.x), mix(h12(i + vec2(0.0, 1.0)), h12(i + vec2(1.0, 1.0)), u.x), u.y);
 }
+//#NS_PULSE
 
 void main() {
   vec3 C = cameraPosition;
@@ -106,6 +112,35 @@ void main() {
   float inHi = smoothstep(uHiRange.x - 40.0, uHiRange.x, xs) * (1.0 - smoothstep(uHiRange.y, uHiRange.y + 40.0, xs));
   refl *= (1.0 + uHiRange.w) * (1.0 + uHiRange.z * 0.8 * inHi);
 
+  // Pulses: the reflections answer with the windows they mirror (the window at height ym above
+  // the reflected point), and a thin ring of light spreads across the water from the tap. Seen
+  // from just above the water a real circle would be a line, so the ring is drawn on screen.
+  vec3 ringL = vec3(0.0);
+  if (uPulseOn > 0.0) {
+    refl *= 1.0 + 0.8 * nsPulseWave(vec3(xs, ym, zp));
+    if (uMotion > 0.5) {
+      float ring = 0.0;
+      for (int i = 0; i < PULSES; i++) {
+        vec4 P = uPulse[i];
+        if (P.w < 0.0) continue;
+        vec4 Bq = uPulseB[i];
+        // An ellipse on screen around the ring's center (device px), squashed to lie on the
+        // water, with a little wobble so it isn't perfect, and thin (about 3 px) all the way round.
+        vec2 dq = gl_FragCoord.xy - Bq.xy;
+        // the near half (below the center) a little deeper than the far half, as in perspective
+        float d = length(vec2(dq.x, dq.y / (Bq.w * (dq.y < 0.0 ? 1.2 : 0.8))));
+        d += (vnoise(vec2(gl_FragCoord.x * 0.01, gl_FragCoord.y * 0.05 - t * 0.6)) - 0.5) * 0.006 * uPulseRes.x;
+        float r = uPulseRes.x * (0.01 + 0.42 * P.w);
+        float wR = max(fwidth(d), 1e-3) * 1.6;
+        float fade = exp(-P.w / 0.9) * (1.0 - smoothstep(2.4, 3.0, P.w));
+        ring += exp(-pow((d - r) / wR, 2.0)) * fade;
+      }
+      // broken a little by the ripples, so it reads as light on moving water
+      float brk = 0.6 + 0.4 * vnoise(vec2(vWorld.x * 0.04, vWorld.z * 0.1 - t * 0.3));
+      ringL = mix(uWarm, vec3(1.0), 0.35) * min(ring, 1.5) * brk * 0.7;
+    }
+  }
+
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);
   skyRefl += uSky * 0.08 * exp(-ym / 900.0);
@@ -116,7 +151,7 @@ void main() {
   float sheen = pow(vnoise(wq) * vnoise(wq * 2.3 + 1.7), 1.5) * sheenAA * exp(-dist / 500.0);
   skyRefl += uGlow * 0.12 * sheen;
 
-  vec3 col = uNight + skyRefl * uSkyFade + refl;
+  vec3 col = uNight + skyRefl * uSkyFade + refl + ringL;
   col = mix(col, uGlow * 0.8, fogF * 0.3);
   gl_FragColor = vec4(col, 1.0);
 }

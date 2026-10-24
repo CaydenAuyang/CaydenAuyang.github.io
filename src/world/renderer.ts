@@ -11,6 +11,7 @@ import { generateCity } from './city';
 import { BAKE_SLOTS, buildHarbour, type WindowSet } from './harbour';
 import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
+import { createInteractions, pulseUniforms } from './pulse';
 import { buildSky, starsInView } from './sky';
 import { buildSkyline } from './skyline';
 import { detectTier, readGpu } from './tier';
@@ -48,20 +49,22 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     uPixelRatio: { value: 1 },
     uLift: { value: new Vector2(0, 0) },
     uHi: { value: new Vector3(0, 0, 0.5) },
+    ...pulseUniforms(),
   };
 
   // ---- Build the city ----
   const city = generateCity(tier.towers, seed);
   const skyline = buildSkyline(city, U, tier.tier === 'phone' ? 2 : 4);
   // Phones see a narrow slice of sky, so their stars crowd where the phone camera looks (about
-  // 66 degrees left of south to 33 right) and flash a little more often, to keep one or two
-  // flashing in view.
+  // 66 degrees left of south to 33 right), and there are more of them than the spec's 4,000
+  // (tier.ts), so the phone hero's sky is as dense per screen area as the laptop's. They flash a
+  // little more often, to keep one or two flashing in view.
   const phoneTier = tier.tier === 'phone';
   const skyParts = buildSky(U, {
     stars: tier.stars,
     seed,
     clouds: true,
-    flashEvery: phoneTier ? [1.8, 3.5] : [5, 9],
+    flashEvery: phoneTier ? [2.4, 4.4] : [5, 9],
     core: phoneTier ? [-66 * DEG, 33 * DEG, 0.8] : undefined,
   });
   const sky = skyParts.group;
@@ -198,6 +201,16 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     requestRender();
   };
 
+  // ---- Spotlight and pulse (11b.1) ----
+  const interactions = createInteractions({
+    city,
+    camera,
+    uniforms: U,
+    buffer: () => ({ w: canvas.width, h: canvas.height }),
+    motion: () => motion,
+    requestRender: () => requestRender(),
+  });
+
   // ---- Highlights ----
   let hiKey: 'och' | 'ais' | 'club' | null = null;
   let hiStrength = 0;
@@ -237,17 +250,27 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     updateHighlight(time);
     for (const cb of subs) cb(time, delta);
     placeCamera();
+    interactions.update(now);
     renderer.render(scene, camera);
     frames++;
   };
+  // One loop, at most one pending frame. A requestRender() while a frame is drawing (from an
+  // onFrame callback, say) does nothing: the frame being drawn already carries the change, and the
+  // loop schedules the next one itself unless the world is frozen.
+  let drawing = false;
   const tick = (now: number) => {
     raf = 0;
     if (disposed) return;
-    draw(now);
-    if (!frozen && !hidden) raf = requestAnimationFrame(tick);
+    drawing = true;
+    try {
+      draw(now);
+    } finally {
+      drawing = false;
+    }
+    if (!frozen && !hidden) start();
   };
   const start = () => {
-    if (!raf && !disposed) raf = requestAnimationFrame(tick);
+    if (!raf && !drawing && !disposed) raf = requestAnimationFrame(tick);
   };
   function requestRender() {
     start();
@@ -300,6 +323,12 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       hiKey = key;
       hiStrength = key ? clamp01(strength) : 0;
       if (frozen) requestRender();
+    },
+    setPointer(ndc) {
+      interactions.setPointer(ndc);
+    },
+    pulse(ndc) {
+      return interactions.pulse(ndc);
     },
     sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
       const hp = path.poses.hero.pos;

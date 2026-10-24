@@ -12,6 +12,12 @@ uniform vec3 uGlow;
 uniform vec3 uWarm;
 uniform vec3 uCool;
 uniform vec3 uFacade;
+uniform vec3 uSpot[SPOTS]; // pointer spotlight trail: device px from the bottom left, strength
+uniform float uSpotR; // spotlight radius, device px
+uniform float uSpotOn;
+uniform vec4 uPulse[PULSES]; // pulse wave origin (world), age in s (< 0: none)
+uniform vec4 uPulseB[PULSES]; // ring center x, z; meters across the screen at the pulse
+uniform float uPulseOn;
 
 varying vec3 vWorld;
 varying vec2 vCell;
@@ -22,6 +28,10 @@ flat varying float vFace;
 flat varying float vCols;
 
 //#NS_WINDOWS
+//#NS_PULSE
+
+// The pulse wave at this fragment (0..1), set once in main before the window taps.
+float gWave = 0.0;
 
 const vec3 GLAZE[5] = vec3[5](
   vec3(0.19, 0.22, 0.78),
@@ -68,9 +78,9 @@ vec4 windowAt(vec2 c, vec2 fw, float across, uint seed, uint faceSeg, int L, int
   int T = nsFloorThreshold(seed, fl, L);
   float b = nsBright(wh);
 
-  // Project highlights widen the lit set for a while; the base rule stays the same.
-  int T2 = T;
-  b *= highlight(group, across, T2);
+  // Project highlights and pulses widen the lit set for a while; the base rule stays the same.
+  int T2 = T + int(130.0 * gWave);
+  b *= highlight(group, across, T2) * (1.0 + 0.6 * gWave);
   float state = nsLit(wh, T2) ? 1.0 : 0.0;
 
   if (uMotion > 0.5 && nsFlickers(wh)) {
@@ -108,6 +118,7 @@ void main() {
   vec3 wall = uFacade * tone * sideShade;
   vec3 light = vec3(0.0);
   float across = (vWorld.x - uCityX.x) / uCityX.y;
+  if (uPulseOn > 0.0) gWave = nsPulseWave(vWorld);
 
   if (face > 3.5) {
     wall = uFacade * 0.7;
@@ -130,7 +141,7 @@ void main() {
     float wash = 0.25 + 0.75 * hfrac * hfrac;
     float wakeT = across * 0.86 + 0.06;
     float on = smoothstep(wakeT - 0.02, wakeT + 0.02, uWake * 1.06 - 0.02);
-    light = cc * 0.5 * fin * wash * on;
+    light = cc * 0.5 * fin * wash * on * (1.0 + 0.6 * gWave);
   } else {
     vec3 g = GLAZE[int(vTower.z + 0.5)];
     uint seed = uint(vTower.x + 0.5);
@@ -166,14 +177,14 @@ void main() {
       vec3 floorMean = vec3(0.0);
       if (cy >= 0.0 && cy < vSeg.y) {
         uint fl = uint(vGrid.w + 0.5) + uint(cy);
-        int Tf = nsFloorThreshold(seed, fl, L);
-        float hb = highlight(group, across, Tf);
+        int Tf = nsFloorThreshold(seed, fl, L) + int(130.0 * gWave);
+        float hb = highlight(group, across, Tf) * (1.0 + 0.6 * gWave);
         vec3 fc = Tf >= 256 ? mix(uCool, uWarm, 0.35) : mix(uCool, uWarm, 0.8);
         float yin = cover1(fract(vCell.y), g.y, g.z, fw.y) / max(g.z - g.y, 1e-3);
         floorMean = fc * (0.92 * hb * clamp(float(Tf) / 256.0, 0.0, 1.0) * area * yin);
       }
-      int Ts = L;
-      float hs = highlight(group, across, Ts);
+      int Ts = L + int(130.0 * gWave);
+      float hs = highlight(group, across, Ts) * (1.0 + 0.6 * gWave);
       float segShare = clamp(float(Ts) / 256.0, 0.0, 1.0) * 0.76 + 0.06;
       vec3 segMean = (uWarm * 0.8 + uCool * 0.2) * (0.92 * hs * segShare * area);
       vec3 mean = mix(floorMean, segMean, miniY) * on;
@@ -186,6 +197,20 @@ void main() {
     wall = mix(wall, wall * 1.35 + uGlow * 0.05, acc.a);
     // street glow on the lowest floors of the front faces
     wall += uWarm * 0.025 * exp(-vWorld.y / 22.0) * step(face, 0.5);
+  }
+
+  // Spotlight: windows near the pointer's point on the skyline brighten (up to 60%) and warm,
+  // cool ones shifting toward window amber.
+  if (uSpotOn > 0.0) {
+    float spot = 0.0;
+    float k = 3.0 / (uSpotR * uSpotR);
+    for (int i = 0; i < SPOTS; i++) {
+      vec2 dd = gl_FragCoord.xy - uSpot[i].xy;
+      spot = max(spot, uSpot[i].z * exp(-k * dot(dd, dd)));
+    }
+    float lum = dot(light, vec3(0.299, 0.587, 0.114));
+    vec3 warmL = uWarm * (lum / dot(uWarm, vec3(0.299, 0.587, 0.114)));
+    light = mix(light, warmL, 0.6 * spot) * (1.0 + 0.6 * spot);
   }
 
   float behind = max(0.0, -vWorld.z);

@@ -14,10 +14,11 @@ import {
 import type { CityLayout } from './city';
 import { PALETTE } from './palette';
 import { WINDOW_GLSL } from './windows';
+import { PULSE_GLSL, PULSES, SPOTS, type PulseUniforms } from './pulse';
 import towerVert from './shaders/tower.vert.glsl?raw';
 import towerFrag from './shaders/tower.frag.glsl?raw';
 
-export interface SkylineUniforms {
+export interface SkylineUniforms extends PulseUniforms {
   uTime: IUniform<number>;
   uMotion: IUniform<number>;
   uWake: IUniform<number>;
@@ -68,8 +69,8 @@ export function buildSkyline(city: CityLayout, shared: SkylineUniforms, taps: 2 
 
   const mat = new ShaderMaterial({
     vertexShader: towerVert,
-    fragmentShader: towerFrag.replace('//#NS_WINDOWS', WINDOW_GLSL),
-    defines: { TAPS: taps },
+    fragmentShader: towerFrag.replace('//#NS_WINDOWS', WINDOW_GLSL).replace('//#NS_PULSE', PULSE_GLSL),
+    defines: { TAPS: taps, SPOTS, PULSES },
     uniforms: {
       ...shared,
       uCityX: { value: new Vector2(city.xMin, city.width) },

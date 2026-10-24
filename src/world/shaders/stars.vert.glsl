@@ -8,7 +8,11 @@ uniform float uPixelRatio;
 uniform float uSkyFade;
 uniform vec3 uAxis;
 uniform float uDrift;
+uniform vec4 uPulse[PULSES]; // .w: pulse age in s (< 0: none)
+uniform vec4 uPulseTap[PULSES]; // .xy: the tap in NDC
+uniform float uPulseOn;
 varying vec3 vColor;
+varying vec3 vSz; // point size (px), core sigma (px), halo weight
 
 vec3 rotateAxis(vec3 p, vec3 a, float ang) {
   float c = cos(ang);
@@ -46,14 +50,40 @@ void main() {
     tw = 0.7 + 0.15 * sin(ph);
   }
 
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+
+  // Pulse: stars near the tap glint, a ripple of sparkles running out from it (held lit, without
+  // the ripple, while motion is off).
+  if (uPulseOn > 0.0 && gl_Position.w > 0.0) {
+    vec2 ndc = gl_Position.xy / gl_Position.w;
+    float aspect = projectionMatrix[1][1] / projectionMatrix[0][0];
+    for (int i = 0; i < PULSES; i++) {
+      float age = uPulse[i].w;
+      if (age < 0.0) continue;
+      // distance in half viewport heights; the glint reaches about a fifth of the screen height
+      float dn = length((ndc - uPulseTap[i].xy) * vec2(aspect, 1.0)) / 0.4;
+      if (dn > 1.0) continue;
+      float g = 1.0;
+      if (uMotion > 0.5) {
+        float a = age - dn * 0.35;
+        g = a < 0.0 ? 0.0 : a < 0.06 ? a / 0.06 : exp(-(a - 0.06) / 0.25);
+      } else {
+        g = 0.6;
+      }
+      flash = max(flash, 0.75 * g * (1.0 - dn * dn));
+    }
+  }
+
   float b = aStar.y * tw + flash * (1.3 + 0.5 * aStar.y);
   float size = aStar.x * uPixelRatio * (0.75 + 0.25 * haze) * (1.0 + 1.4 * flash);
-  // Points under about 2.4 device pixels shimmer as they drift across the pixel grid; draw them
-  // at 2.4 and dim them to keep about the same light (a little more, so faint stars still read on
-  // phones, whose canvas runs at a lower pixel ratio).
-  float px = max(size, 2.4);
-  b *= size / px;
+  // A core narrower than a pixel changes shape as the star drifts across the pixel grid, so the
+  // core never gets narrower than 0.6 px (sigma), the point grows to hold it, and the light is
+  // spread rather than added (a little extra kept, so faint stars still read).
+  float sig0 = size / 7.48;
+  float sig = max(sig0, 0.6);
+  b *= sig0 / sig;
+  float px = max(size, sig * 6.0);
   vColor = aColor * b * haze * uSkyFade;
+  vSz = vec3(px, sig, (size * size) / (px * px));
   gl_PointSize = px;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }

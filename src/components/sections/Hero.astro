@@ -68,6 +68,12 @@ const vars = [
     <p class="hero__small" data-intro="small">{hero.small.text}</p>
   </div>
 
+  <!-- The one-time hint for the city's pulse (src/scripts/hero-hint.ts). Hidden until the world is
+       ready and its interactions are listening; never in snapshot or without WebGL. -->
+  <p class="hero__hint t-meta" data-hero-hint data-snapshot-hide aria-hidden="true" hidden>
+    <span class="hero__hint-ring"></span><span data-hint-text></span>
+  </p>
+
   <div class="hero__cue" data-scroll-cue data-snapshot-hide aria-hidden="true">
     <span class="hero__cue-word t-label">{hero.scrollCue}</span>
     <span class="hero__cue-line"></span>
@@ -157,6 +163,64 @@ const vars = [
     }
   }
 
+  /*
+    The hint: bottom left, level with the scroll cue, in dim with the meta lines' halo and scrim
+    (it sits over the harbour's reflections). A small ring stands for the pulse. It fades in once
+    the world is ready (after the intro with motion on) and out after the first pulse.
+  */
+  .hero__hint {
+    position: absolute;
+    left: var(--gutter);
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 32px;
+    opacity: 0;
+    transition: opacity var(--dur-fade) var(--ease-out);
+  }
+  .hero__hint[hidden] {
+    display: none;
+  }
+  .hero__hint:global(.is-in) {
+    opacity: 1;
+  }
+  .hero__hint:global(.is-gone) {
+    opacity: 0;
+    transition-duration: 400ms;
+  }
+  .hero__hint-ring {
+    position: relative;
+    width: 10px;
+    height: 10px;
+    flex: none;
+    border-radius: 50%;
+    border: 1px solid rgb(var(--window-rgb) / 0.7);
+  }
+  .hero__hint-ring::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 50%;
+    border: 1px solid rgb(var(--window-rgb) / 0.7);
+    animation: hint-ring 2.4s var(--ease-out) infinite;
+  }
+  @keyframes hint-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.8;
+    }
+    70%,
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+  :global(html[data-motion='off']) .hero__hint-ring::after {
+    animation: none;
+    opacity: 0;
+  }
+
   /* The scroll cue: bottom right, over the dark water. */
   .hero__cue {
     position: absolute;
@@ -238,6 +302,7 @@ const vars = [
 </style>
 
 <script>
+  import '../../scripts/hero-hint';
   // The timeline hides the cue on the first scroll; this covers a page where it didn't load.
   const cue = document.querySelector('[data-scroll-cue]');
   if (cue) window.addEventListener('scroll', () => cue.classList.add('is-gone'), { once: true, passive: true });

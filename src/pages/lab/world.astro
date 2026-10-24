@@ -11,6 +11,8 @@
 //   ?sky=1&wake=1    intro values; ?intro=1 plays the intro once
 //   ?lift=0.1&la=1   dim windows with lift rank under 0.1 by 1
 //   ?samples=4000    draw the sampled lit windows as green dots (checks the shared rule)
+//
+// Click the scene to send a pulse; with a mouse, the pointer is the spotlight (11b.1).
 ---
 
 <!doctype html>
@@ -193,6 +195,17 @@
         );
         extra = `samples: ${s.count}`;
       }
+
+      // Pulse on click, spotlight under the mouse (11b.1).
+      const ndcOf = (e: PointerEvent) => ({ x: (e.clientX / innerWidth) * 2 - 1, y: 1 - (e.clientY / innerHeight) * 2 });
+      canvas.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse') world.setPointer(ndcOf(e));
+      });
+      canvas.addEventListener('pointerleave', () => world.setPointer(null));
+      canvas.addEventListener('click', (e) => {
+        const ok = world.pulse(ndcOf(e as PointerEvent));
+        extra = `pulse: ${ok ? 'sent' : 'refused'}`;
+      });
 
       // frame timing
       let acc = 0;

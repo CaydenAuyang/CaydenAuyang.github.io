@@ -3,7 +3,8 @@
 //
 // The frame: 16:10, a 14px radius, a glass border (1px window at 18%) and a soft outer glow in
 // window at 8%. The 16:10 box is reserved before anything loads, so nothing shifts. The caption
-// sits below it.
+// sits below it. The frame carries `glass`, so the night scene's interactions (interact.ts) leave
+// presses on it alone.
 //
 // How it behaves (src/scripts/loop-video.ts):
 //   - muted, playsinline, loop, no autoplay attribute. preload="none" until the video is within
@@ -33,7 +34,7 @@ const height = src?.height ?? 800;
 ---
 
 <figure class:list={['vf', className]} data-vf={src ? '' : undefined} data-state="paused">
-  <div class="vf__frame">
+  <div class="vf__frame glass">
     <div class="vf__media">
       {
         src ? (

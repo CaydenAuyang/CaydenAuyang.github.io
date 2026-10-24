@@ -11,6 +11,8 @@
 //   - inserted words are a real <ins> in window, plus a hidden "inserted", followed by a small
 //     superscript note number.
 // The notes sit beside the panel on desktop and below it on phones.
+// The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
+// alone.
 //
 // At build time it checks that the edits turn the May text into the October text exactly; if
 // not, the build stops with an error, so a typo can't ship.
@@ -86,7 +88,7 @@ const marked = pieces
 ---
 
 <div class="qp">
-  <div class="qp__panel">
+  <div class="qp__panel glass">
     <fieldset class="qp__switch" data-snapshot-hide>
       <legend class="sr-only">{ui.viewLegend}</legend>
       <input class="sr-only" type="radio" name="qp-view" id="qp-may" value="may" />

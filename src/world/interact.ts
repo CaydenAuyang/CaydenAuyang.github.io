@@ -296,8 +296,10 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     }
     world.shootingStar?.(ndc);
     if (world.pulse?.(ndc)) {
-      window.dispatchEvent(new CustomEvent('world:pulse'));
       redraw();
+      // Tell the page (the hero hint) only after the frame with the first light has drawn, so
+      // its handlers can never delay that frame.
+      requestAnimationFrame(() => setTimeout(() => window.dispatchEvent(new CustomEvent('world:pulse'))));
     }
   }
 

@@ -31,6 +31,9 @@ export const ui = {
   notesLabel: 'Notes',
   moreAbout: (name: string) => `about ${name}`,
   emailLabel: 'Email',
+  // The one-time hint in the hero (NIGHT-SIGNAL.md 11b.1, content.md Interface labels).
+  hintMouse: 'Click anywhere in the city',
+  hintTouch: 'Tap the city',
   notFoundTitle: 'Page not found',
   notFoundBody: 'There is nothing at this address.',
   notFoundLink: 'Go to the home page',
