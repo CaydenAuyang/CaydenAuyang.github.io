@@ -1,0 +1,18 @@
+{
+  "name": "caydenauyang-figure-pipeline",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Builds the point figure in public/figure/ from three photos (or a placeholder). See README.md.",
+  "scripts": {
+    "placeholder": "node build.mjs --placeholder",
+    "build": "node build.mjs",
+    "overlay": "node overlay.mjs",
+    "fallback": "node render-fallback.mjs",
+    "shots": "node harness/shoot.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.1",
+    "playwright-core": "1.59.1"
+  }
+}
