@@ -14,10 +14,14 @@
 // figure in its arrival order (outline first, hair strands from the part to the tips, face last).
 //
 // The figure comes from public/world/figure-signal.bin ("CASG", tools/figure/lib/signal-format.mjs):
-// 8 bytes a point, and the first N points are an even sample, so each tier reads only a prefix.
+// 8 bytes a point with its surface normal, and the first N points are an even sample, so each tier
+// reads only a prefix. It is truly three-dimensional (fitted to a front and two turned photos), so
+// it can turn (NIGHT-SIGNAL.md 5.1): setFigureTurn sets a rotation the shader applies to target B
+// about the figure's own center, and the normals let points facing away fade and shrink and points
+// on the outline brighten at any angle.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
-import type { CameraPose, LitWindowSamples, Signal, SignalOptions, Target, World } from './contract';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
+import type { CameraPose, LitWindowSamples, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
 import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
@@ -37,12 +41,18 @@ const LIFT_LAG = 0.05;
 /** Morph timing in the shader: up to 30% delay, then 70% travel. */
 const DELAY = 0.3;
 
-/** Figure depth relative to its height (the bust is a relief; full depth reads as a turn off-axis). */
-const FIGURE_DEPTH = 0.45;
+/** The figure's turn limits (contract: 30 degrees of yaw, 5 of pitch), with room for the spring's overshoot. */
+const MAX_YAW = (34 * Math.PI) / 180;
+const MAX_PITCH = (6 * Math.PI) / 180;
+/** Figure points sampled for figureBox (an even sample, so the box follows the outline). */
+const BOX_SAMPLES = 1500;
 /** Figure brightness per group: body, skin, hair, contour. */
 const FIGURE_GAIN = [0.42, 0.95, 0.5, 0.55];
 /** Screen row (from the top) of the current's center in the question view: open water, below the reflections. */
 const CURRENT_ROW = 0.8;
+/** Field (F): the share of points that are clear lights, and of points lit at all (clear or faint). */
+const FIELD_CLEAR = 0.025;
+const FIELD_LIT = 0.12;
 /** Share of archive points that drift loose instead of joining a column. */
 const STRAYS = 0.04;
 /** The archive columns: one per notebook, each count / largest count of the full height. */
@@ -56,6 +66,7 @@ const COLORS = { warm: '#FFB65C', cool: '#CFE3FF' };
 
 const CASG_HEADER = 40;
 const CASG_STRIDE = 8;
+const CASG_Q = [2047, 2047, 1023];
 
 export interface SignalInfo {
   windows: number;
@@ -77,7 +88,8 @@ export interface SignalDebug extends Signal {
 
 interface FigureData {
   count: number;
-  pos: Float32Array; // figure heights, origin at the bounding box center
+  pos: Float32Array; // figure heights, origin at the bounding box center (x, y) and the neck axis (z)
+  nrm: Float32Array; // unit surface normals (0, 0, 1 for files without them)
   weight: Float32Array;
   group: Uint8Array;
   order: Float32Array;
@@ -116,22 +128,48 @@ async function loadFigure(url: string, count: number): Promise<FigureData> {
   const buf = await fetchPrefix(fileUrl, CASG_HEADER + count * CASG_STRIDE);
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'CASG') throw new Error('signal: figure file is not CASG');
+  const version = dv.getUint16(4, true);
   const header = dv.getUint16(6, true);
-  const n = Math.min(dv.getUint32(8, true), count, Math.floor((buf.byteLength - header) / CASG_STRIDE));
-  const center = [0, 1, 2].map((d) => (dv.getFloat32(12 + d * 4, true) + dv.getFloat32(24 + d * 4, true)) / 2);
-  const half = [0, 1, 2].map((d) => (dv.getFloat32(24 + d * 4, true) - dv.getFloat32(12 + d * 4, true)) / 2);
+  const stride = version >= 2 ? dv.getUint16(36, true) || CASG_STRIDE : CASG_STRIDE;
+  const n = Math.min(dv.getUint32(8, true), count, Math.floor((buf.byteLength - header) / stride));
+  const min = [0, 1, 2].map((d) => dv.getFloat32(12 + d * 4, true));
+  const max = [0, 1, 2].map((d) => dv.getFloat32(24 + d * 4, true));
   const pos = new Float32Array(n * 3);
+  const nrm = new Float32Array(n * 3);
   const weight = new Float32Array(n);
   const group = new Uint8Array(n);
   const order = new Float32Array(n);
   for (let k = 0; k < n; k++) {
-    const o = header + k * CASG_STRIDE;
-    for (let d = 0; d < 3; d++) pos[k * 3 + d] = center[d] + (dv.getInt16(o + d * 2, true) / 32767) * half[d];
-    weight[k] = buf[o + 6] / 255;
-    group[k] = buf[o + 7] & 3;
-    order[k] = (buf[o + 7] >> 2) / 63;
+    const o = header + k * stride;
+    if (version >= 2) {
+      // Packed position (11, 11 and 10 bits), weight, group and arrival, octahedral normal.
+      const q = dv.getUint32(o, true);
+      const qs = [q & 2047, (q >>> 11) & 2047, q >>> 22];
+      for (let d = 0; d < 3; d++) pos[k * 3 + d] = min[d] + (qs[d] / CASG_Q[d]) * (max[d] - min[d]);
+      weight[k] = buf[o + 4] / 255;
+      group[k] = buf[o + 5] & 3;
+      order[k] = (buf[o + 5] >> 2) / 63;
+      let u = (buf[o + 6] / 255) * 2 - 1;
+      let v = (buf[o + 7] / 255) * 2 - 1;
+      const z = 1 - Math.abs(u) - Math.abs(v);
+      if (z < 0) {
+        const ou = u;
+        u = (1 - Math.abs(v)) * (ou >= 0 ? 1 : -1);
+        v = (1 - Math.abs(ou)) * (v >= 0 ? 1 : -1);
+      }
+      const l = Math.hypot(u, v, z) || 1;
+      nrm[k * 3] = u / l;
+      nrm[k * 3 + 1] = v / l;
+      nrm[k * 3 + 2] = z / l;
+    } else {
+      for (let d = 0; d < 3; d++) pos[k * 3 + d] = (min[d] + max[d]) / 2 + (dv.getInt16(o + d * 2, true) / 32767) * ((max[d] - min[d]) / 2);
+      weight[k] = buf[o + 6] / 255;
+      group[k] = buf[o + 7] & 3;
+      order[k] = (buf[o + 7] >> 2) / 63;
+      nrm[k * 3 + 2] = 1;
+    }
   }
-  return { count: n, pos, weight, group, order };
+  return { count: n, pos, nrm, weight, group, order };
 }
 
 // ---- Small helpers -----------------------------------------------------------------------------
@@ -314,6 +352,14 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     }
   }
 
+  // Target B's frame in the world (rebuilt with the targets) and its normals in world space, as
+  // signed bytes. The turn rotates both about the frame's center in the shader.
+  const figFrame = { center: new Vector3(), x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), z: new Vector3(0, 0, 1), height: 1 };
+  const aNrm = new Int8Array(N * 4);
+  const turn = { yaw: 0, pitch: 0 };
+  // An even sample of the figure, in figure units, for figureBox.
+  const boxIdx = Array.from({ length: Math.min(BOX_SAMPLES, F) }, (_, j) => Math.floor((j * F) / Math.min(BOX_SAMPLES, F)));
+
   const uniforms = {
     uFrom: { value: 1 },
     uTo: { value: 1 },
@@ -340,11 +386,35 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uRise: { value: 1 / 28 },
     uStray: { value: STRAYS },
     uLightR: { value: 100 },
+    uFigCenter: { value: new Vector3() },
+    uFigRot: { value: new Matrix3() },
   };
+
+  // The turn as one matrix: R = Ry(yaw) Rx(pitch) in the figure's own frame (x right, y up, z
+  // toward the hero camera), taken to world space as B R B^T with B the frame's axes.
+  const _B = new Matrix3();
+  const _Bt = new Matrix3();
+  const _R = new Matrix3();
+  function setTurn(yaw: number, pitch: number) {
+    turn.yaw = yaw;
+    turn.pitch = pitch;
+    const { x, y, z } = figFrame;
+    _B.set(x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z);
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    // Ry * Rx, row major: the face (0, 0, 1) goes to (sin yaw cos pitch, sin pitch, cos yaw cos pitch)
+    // and the top of the head (0, 1, 0) tips back as the face tilts up.
+    _R.set(cy, -sy * sp, sy * cp, 0, cp, sp, -sy, -cy * sp, cy * cp);
+    _Bt.copy(_B).transpose();
+    uniforms.uFigRot.value.copy(_B).multiply(_R).multiply(_Bt);
+  }
 
   const info: SignalInfo = { windows: used, liftRank: rMax, pointsPerWindow: N / used, figurePoints: F, phone: false, scale: 1 };
 
   let infoAttr: BufferAttribute | null = null;
+  let nrmAttr: BufferAttribute | null = null;
 
   function build() {
     const W = world.renderer.domElement.clientWidth || window.innerWidth;
@@ -381,7 +451,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- B: the figure at FIGURE_ANCHOR through the hero pose, facing the camera.
+    // ---- B: the figure at FIGURE_ANCHOR through the hero pose, facing the camera, at its true
+    // depth. Its frame (center and axes) is kept for the turn, and its normals go to aNrm.
     {
       const anchor = phone ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
       const D = S;
@@ -390,19 +461,32 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       const z = new Vector3().subVectors(hero.pos, center).normalize();
       const x = new Vector3().crossVectors(hero.up, z).normalize();
       const y = new Vector3().crossVectors(z, x);
+      figFrame.center.copy(center);
+      figFrame.x.copy(x);
+      figFrame.y.copy(y);
+      figFrame.z.copy(z);
+      figFrame.height = height;
+      uniforms.uFigCenter.value.copy(center);
       const t = T[1];
       for (let i = 0; i < N; i++) {
         const k = figOf[i];
         const fx = fig.pos[k * 3] + figJitter[i * 3];
         const fy = fig.pos[k * 3 + 1] + figJitter[i * 3 + 1];
-        const fz = (fig.pos[k * 3 + 2] + figJitter[i * 3 + 2]) * FIGURE_DEPTH;
+        const fz = fig.pos[k * 3 + 2] + figJitter[i * 3 + 2];
         t[i * 4] = center.x + (x.x * fx + y.x * fy + z.x * fz) * height;
         t[i * 4 + 1] = center.y + (x.y * fx + y.y * fy + z.y * fz) * height;
         t[i * 4 + 2] = center.z + (x.z * fx + y.z * fy + z.z * fz) * height;
         const g = fig.group[k];
         const wgt = fig.weight[k];
         t[i * 4 + 3] = FIGURE_GAIN[g] * (g === 0 ? 0.55 + 0.3 * wgt : 0.3 + 0.7 * wgt);
+        const nx = fig.nrm[k * 3];
+        const ny = fig.nrm[k * 3 + 1];
+        const nz = fig.nrm[k * 3 + 2];
+        aNrm[i * 4] = Math.round(127 * (x.x * nx + y.x * ny + z.x * nz));
+        aNrm[i * 4 + 1] = Math.round(127 * (x.y * nx + y.y * ny + z.y * nz));
+        aNrm[i * 4 + 2] = Math.round(127 * (x.z * nx + y.z * ny + z.z * nz));
       }
+      setTurn(turn.yaw, turn.pitch);
     }
 
     // ---- C: a current low over the water across the lower part of the question view. Each point
@@ -490,9 +574,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const skyDepth = (f: Frame) => Math.max(depthOf(f, cluster), S * 0.6);
 
     // ---- E: two lights at LIGHT_ANCHORS through the contact pose. Pomfret takes the points whose
-    // field position is on the left, Hong Kong the right. Only the brighter part of the field (30%
-    // of the points) stays lit here; the rest fade out as they gather, because thousands of points
-    // stacked on one spot add nothing a saturated core doesn't show and cost a lot of blending.
+    // field position is on the left, Hong Kong the right. 30% of the points are lit here: every
+    // lit point of the field and some of its dark ones, which brighten as they gather; the rest
+    // fade out, because thousands of points stacked on one spot add nothing a saturated core
+    // doesn't show and cost a lot of blending.
     {
       const c = contact;
       const De = skyDepth(c);
@@ -523,8 +608,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- F: a sparse drifting field among the stars around the since and people poses. Most
-    // points are near invisible here; about one in ten is a clear light.
+    // ---- F: a sparse drifting field among the stars around the since and people poses: about
+    // 2.5% of the points are clear lights (as bright as the sky's bright stars, never the much
+    // brighter ones), 9.5% faint ones (like the faintest stars), and the rest are dark, so the
+    // field reads as a few more lights among the stars rather than a speckle over them.
     {
       const r = fixed[5];
       const t = T[5];
@@ -538,12 +625,13 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
         t[i * 4 + 1] = p.y;
         t[i * 4 + 2] = p.z;
         const k = r[i * 4 + 3];
-        t[i * 4 + 3] = k < 0.12 ? 1.0 + 12 * (0.12 - k) : k < 0.5 ? 0.22 + 1.2 * (k - 0.12) : 0;
+        t[i * 4 + 3] = k < FIELD_CLEAR ? 0.45 + 0.4 * (1 - k / FIELD_CLEAR) : k < FIELD_LIT ? 0.05 + 0.09 * ((FIELD_LIT - k) / (FIELD_LIT - FIELD_CLEAR)) : 0;
       }
     }
 
     for (const a of attrs) a.needsUpdate = true;
     if (infoAttr) infoAttr.needsUpdate = true;
+    if (nrmAttr) nrmAttr.needsUpdate = true;
   }
 
   build();
@@ -557,6 +645,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   geometry.setAttribute('aRand', new BufferAttribute(aRand, 4));
   infoAttr = new BufferAttribute(aInfo, 4);
   geometry.setAttribute('aInfo', infoAttr);
+  nrmAttr = new BufferAttribute(aNrm, 4, true);
+  geometry.setAttribute('aNrm', nrmAttr);
 
   const material = new RawShaderMaterial({
     glslVersion: GLSL3,
@@ -670,6 +760,20 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   };
   window.addEventListener('resize', onResize);
 
+  // ---- The figure on screen ----
+  // Whether target B is what the points show: held, mostly arrived, or barely left.
+  function figureShowing() {
+    if (!points.visible) return false;
+    const { from, to, t } = cur;
+    const cut = !motion;
+    if (from === 'B' && to === 'B') return true;
+    if (to === 'B') return cut ? t >= 0.5 : t >= 0.6;
+    if (from === 'B') return cut ? t < 0.5 : t <= 0.4;
+    return false;
+  }
+  const _p = new Vector3();
+  const _q = new Vector3();
+
   let disposed = false;
   return {
     count: N,
@@ -678,6 +782,49 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     rebuild() {
       build();
     },
+    setFigureTurn(yaw: number, pitch: number) {
+      if (disposed) return;
+      const y = clamp(Number.isFinite(yaw) ? yaw : 0, -MAX_YAW, MAX_YAW);
+      const p = clamp(Number.isFinite(pitch) ? pitch : 0, -MAX_PITCH, MAX_PITCH);
+      if (y === turn.yaw && p === turn.pitch) return;
+      // No requestRender here: interact.ts calls this from inside the world's frame callback, where
+      // a render request would start a second frame loop. With motion off it redraws itself.
+      setTurn(y, p);
+    },
+    figureBox(): ScreenBox | null {
+      if (disposed || !figureShowing()) return null;
+      const cam = world.camera;
+      const { center, x, y, z, height } = figFrame;
+      const R = uniforms.uFigRot.value;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const k of boxIdx) {
+        const fx = fig.pos[k * 3] * height;
+        const fy = fig.pos[k * 3 + 1] * height;
+        const fz = fig.pos[k * 3 + 2] * height;
+        _q.set(x.x * fx + y.x * fy + z.x * fz, x.y * fx + y.y * fy + z.y * fz, x.z * fx + y.z * fy + z.z * fz).applyMatrix3(R);
+        _p.copy(center).add(_q).project(cam);
+        if (_p.z > 1) continue;
+        x0 = Math.min(x0, (_p.x + 1) / 2);
+        x1 = Math.max(x1, (_p.x + 1) / 2);
+        y0 = Math.min(y0, (1 - _p.y) / 2);
+        y1 = Math.max(y1, (1 - _p.y) / 2);
+      }
+      if (!(x1 > 0 && x0 < 1 && y1 > 0 && y0 < 1)) return null;
+      return { x0, y0, x1, y1 };
+    },
+    // 11b.3 and 11b.7 (the archive's columns as data, the arc between the two lights) come next;
+    // until then these report nothing to interact with.
+    columnAt() {
+      return -1;
+    },
+    setColumnHighlight() {},
+    columnTop() {
+      return null;
+    },
+    sendArc() {},
     setMorph(from: Target, to: Target, t: number) {
       if (disposed) return;
       cur = { from, to, t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };

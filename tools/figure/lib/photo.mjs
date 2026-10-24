@@ -796,8 +796,9 @@ export async function photoModel(args, opts = {}) {
     rowsObj.hw[i] = Math.max(0.5, hwY[i]) * (capT < 1 ? cap : 1);
     rowsObj.zf[i] = zf;
     rowsObj.zb[i] = zb;
-    const torso = y < neckY - 0.25 * headH;
-    rowsObj.nf[i] = torso ? 2.0 : nfS[i];
+    // The torso's front is a plain ellipse; blend into it over a band so no row has a kink.
+    const torso = smoothstep(neckY - 0.15 * headH, neckY - 0.35 * headH, y);
+    rowsObj.nf[i] = lerp(nfS[i], 2.0, torso);
     rowsObj.nb[i] = nbAt(y);
     rowsObj.tf[i] = 0;
     const tw = smoothstep(neckBaseY + 0.06 * headH, neckBaseY - 0.12 * headH, y);
@@ -1038,6 +1039,8 @@ export async function photoModel(args, opts = {}) {
     faceFeature,
     part,
     hairOpts: { maxLen: headH * 0.7, partHalf: headH * 0.009 },
+    // How the part line was placed, so it can be placed again on a refitted shell (turnfit.mjs).
+    partSpec: { x: partX, midY, hairlineY: hlY, crownAngle: 0.95 },
     meta: {
       units: 'front-photo px',
       source: 'photos',
@@ -1067,5 +1070,7 @@ export async function photoModel(args, opts = {}) {
   };
   for (const view of turned) fit[view.name] = { yaw: view.yaw, k: view.k, b: view.b, c: view.cm, W: view.W, H: view.H, dir: view.dir };
   fs.writeFileSync(path.join(args.work, 'fit.json'), JSON.stringify({ fit, report }, null, 2));
-  return { model, fit, report, extra: {} };
+  // The outlines of every view, for fitting the bust to the turned photos too (turnfit.mjs).
+  const views = [{ name: 'front', front: true }, ...turned.map((v) => ({ name: v.name, yaw: v.yaw, k: v.k, b: v.b, c: v.cm, W: v.W, H: v.H, edges: v.edges }))];
+  return { model, fit, report, extra: {}, views };
 }

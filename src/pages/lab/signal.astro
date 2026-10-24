@@ -8,7 +8,8 @@
 //   from, to (A to F), t (0..1), cam (auto | hero | question | experience | since | people | contact |
 //   a number 0..1 on the camera path), motion (0 or 1), tier (high | low | phone; mock world only,
 //   the real world picks its own), world (real | mock), hud (0 hides the panel), still (1: the
-//   figure alone on black, for figure-still.webp).
+//   figure alone on black, for figure-still.webp), yaw and pitch (the figure's turn in degrees;
+//   the site's interact.ts drives it from the pointer instead).
 ---
 
 <!doctype html>
@@ -29,6 +30,8 @@
         <button type="button" data-swap aria-label="Swap from and to">Swap</button>
       </div>
       <label class="row">t <input type="range" min="0" max="1" step="0.001" value="1" data-t /> <output data-tout>1.000</output></label>
+      <label class="row">Yaw <input type="range" min="-30" max="30" step="0.5" value="0" data-yaw /> <output data-yawout>0</output></label>
+      <label class="row">Pitch <input type="range" min="-5" max="5" step="0.25" value="0" data-pitch /> <output data-pitchout>0</output></label>
       <div class="row">
         <button type="button" data-play>Play</button>
         <button type="button" data-loop aria-pressed="false">Loop</button>
@@ -412,6 +415,8 @@
         t: q.has('t') ? Number(q.get('t')) : 1,
         cam: q.get('cam') || 'auto',
         motion: q.get('motion') !== '0' && !still,
+        yaw: Number(q.get('yaw')) || 0,
+        pitch: Number(q.get('pitch')) || 0,
       };
       fromSel.value = state.from;
       toSel.value = state.to;
@@ -456,9 +461,16 @@
           return Number.isFinite(n) ? n : 0;
         }
 
+        const yawIn = $<HTMLInputElement>('[data-yaw]');
+        const pitchIn = $<HTMLInputElement>('[data-pitch]');
+        yawIn.value = String(state.yaw);
+        pitchIn.value = String(state.pitch);
         function apply() {
           world.setCameraProgress(camU());
           signal.setMorph(state.from, state.to, state.t);
+          signal.setFigureTurn((state.yaw * Math.PI) / 180, (state.pitch * Math.PI) / 180);
+          $('[data-yawout]').textContent = String(state.yaw);
+          $('[data-pitchout]').textContent = String(state.pitch);
         }
 
         // Frame times from the world's own frame loop.
@@ -533,6 +545,8 @@
             fromSel.value = state.from;
             toSel.value = state.to;
             tIn.value = String(state.t);
+            yawIn.value = String(state.yaw);
+            pitchIn.value = String(state.pitch);
             apply();
             world.requestRender();
           },
@@ -553,6 +567,8 @@
           lab.set({ t: Number(tIn.value) });
         });
         camSel.addEventListener('change', () => lab.set({ cam: camSel.value }));
+        yawIn.addEventListener('input', () => lab.set({ yaw: Number(yawIn.value) }));
+        pitchIn.addEventListener('input', () => lab.set({ pitch: Number(pitchIn.value) }));
         $('[data-swap]').addEventListener('click', () => lab.set({ from: state.to, to: state.from, t: 1 - state.t }));
         $('[data-play]').addEventListener('click', () => lab.play(Number($<HTMLInputElement>('[data-secs]').value) * 1000));
         $('[data-loop]').addEventListener('click', (e) => {

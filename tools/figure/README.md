@@ -1,7 +1,9 @@
 # The point figure
 
-This folder builds the hero figure: Cayden drawn in points, from three ordinary photos. The site
-loads the result from `public/figure/` and draws it with `src/figure/` (WebGL, no libraries).
+This folder builds the hero figure: Cayden drawn in points, from three ordinary photos. The live
+site (Night Signal) draws it as the signal's target B from `public/world/figure-signal.bin`; see
+"The night scene's figure" below. The sections before it describe the shared photo fit and the
+older paper build (`build.mjs`, `public/figure/`), which the Datum design used.
 
 ## Privacy rule
 
@@ -97,34 +99,76 @@ only ever turns the figure about 6 degrees, so the front match matters most.
 
 - `node tools/figure/preview.mjs hi --yaws -6,0,6` draws the published points at a few angles
   (ink on vellum) into the work folder. Add `--dir <folder>` to preview a staged build.
-- `node tools/figure/harness/shoot.mjs` screenshots the renderer at 390x844 and 1440x900 with
-  motion on, reduced, off, snapshot mode, slow data and no WebGL.
 - `node tools/figure/render-fallback.mjs` redraws only the still image.
 
 ## The night scene's figure (the signal)
 
 The Night Signal design draws the figure as target B of the particle system (`src/world/signal.ts`)
-instead of with `src/figure/`. It uses its own file, built from the same photo fit:
+instead of with `src/figure/`. The figure turns on the site, up to 30 degrees each way and 5 of
+pitch (NIGHT-SIGNAL.md 5.1), so it is truly three-dimensional and carries a normal per point:
 
-    node tools/figure/signal.mjs                    rebuild from the photos (about 3 s once cached)
-    node tools/figure/signal.mjs --from-published   resample public/figure/figure-hi.bin instead
+    node tools/figure/signal.mjs                rebuild from the photos, check, publish if it passes
+    node tools/figure/signal.mjs --no-publish   build and check only
+    node tools/figure/turncheck.mjs             check the published file again (--count 16000 for the phone prefix)
 
-It writes `public/world/figure-signal.bin` and `figure-signal.json`. The look (`SIGNAL_LOOK` in
-`signal.mjs`) puts 46% of the points on the outline, 27% on hair (mostly strands from the part),
-4% on a sparse face, quiets creases inside the outline (additive light turns them into bright
-lines) and dissolves the chest over the bottom third. One 60,000-point file serves every tier: the
-points are ordered so any first N keep each group's share and keep hair strands whole, so phones
-read only the first 16,000 (128 KB) and stop the download there. Format: the top of
-`lib/signal-format.mjs` ("CASG", 8 bytes a point).
+How it is built:
 
-Other signal tools (a dev server must be running, `npx astro dev --port 4329`):
+1. `lib/photo.mjs` fits the template as above (front outline, face depth, back of the head from the
+   turned photos' trailing edges, shoulders and chest from proportions).
+2. `lib/turnfit.mjs` deforms that template until its outline matches all three photos. In a view
+   turned by yaw t, each horizontal section's outline is its extent along (cos t, sin t), so every
+   row of every photo gives up to two measured extents. Each section is described by its extent
+   in 360 directions (its support); a smooth correction, solved by least squares, adds what the
+   photos ask for while moving a section is free and reshaping it costs (the change in its radius
+   of curvature), so nothing creases. The section is then the convex shape with that support, so
+   large corrections never fold, and the face's relief from the front photo's depth is carved back
+   in on front-facing surfaces only. Where the photos disagree the front wins: at the trapezius the
+   turned photos leave no room for the front's shoulder width (the shoulders sit differently in
+   them), so the turned edges there are relaxed outward. Rows a photo cannot measure (below its
+   bottom, where its frame clips the body) carry the shape on from the rows that it can.
+   The template already had the back of the head and neck too thin, the far shoulder too wide and
+   too little hair in front; the deformation fixes all three.
+3. `lib/points.mjs` and `lib/emit.mjs` sample the points for a figure that turns (`SIGNAL_LOOK.turn`
+   = 35 degrees): visibility, the outline band and the edge-on weights cover the whole yaw range,
+   hair strands go wherever some angle in it sees them, and surfaces no angle sees keep only a trace.
+   46% of the points are on the outline band, 27% hair, about 20% neck, shoulders and chest, the
+   rest a sparse face and the ears.
+4. The points are written as CASG version 2 (below) to `<work>/stage-signal/`, and `turncheck.mjs`
+   scores the staged file the way the site draws it: points decoded, true depth, turned about the
+   figure's center. It publishes to `public/world/` (one atomic rename per file) only if the
+   outline matches the front photo with IoU 0.95 or more and each turned photo 0.90 or more.
 
-- `node tools/figure/signal-shots.mjs --gpu` screenshots `/lab/signal` at 390x844 and 1440x900 for
-  every target and the midpoints of the morphs, with a contact sheet per size. `--film B,C` films
-  one morph at t = 0, 0.1, ... 1; `--bench` adds GPU frame times; `--world mock` uses the lab's mock
-  city. Output goes to `figure-work/signal-shots/`.
-- `node tools/figure/signal-still.mjs` renders `public/world/figure-still.webp`, the glowing
-  figure on transparent for the no-WebGL fallback, drawn from the points by the signal itself.
+What `turncheck.mjs` reports and saves to the work folder:
+
+- One line per photo: the IoU at the yaw the fit measured for it (and at the best yaw within 16
+  degrees), with head+neck as for the paper overlay. Pictures: `turn-overlay-front.png`,
+  `-right.png`, `-left.png` and `-all.png` (photo outline teal, figure outline orange).
+- The turn: the outline's area, width and head width every 5 degrees from -30 to +30, and the
+  largest change from one degree to the next (second differences) as a share of the mean, which
+  catches tears, flattening and pops.
+
+The signal draws the turn in its shader (`setFigureTurn(yaw, pitch)`, a rotation about the figure's
+own center), fades and shrinks points facing away from the camera, and brightens points seen edge
+on, so the outline reads at every angle. `/lab/signal` has yaw and pitch sliders (`?yaw=20&pitch=-3`).
+The turn film (the lab's figure every 5 degrees at 1440x900 and 390x844, and a sweep as MP4) is in
+`figure-work/turn-film/`.
+
+Other signal tools (a dev server must be running):
+
+- `node tools/figure/signal-shots.mjs --gpu --base http://localhost:4321` screenshots `/lab/signal`
+  at 390x844 and 1440x900 for every target and the midpoints of the morphs, with a contact sheet
+  per size. `--film B,C` films one morph at t = 0, 0.1, ... 1; `--bench` adds GPU frame times;
+  `--world mock` uses the lab's mock city. Output goes to `figure-work/signal-shots/`.
+- `node tools/figure/signal-still.mjs --base http://localhost:4321` renders
+  `public/world/figure-still.webp`, the glowing figure on transparent, drawn from the points by the
+  signal itself.
+
+Signal format (`lib/signal-format.mjs`): a 40-byte header ("CASG", version 2, count, bounds, 8 bytes
+a point), then per point a packed position (11, 11 and 10 bits, about 0.0005 figure heights a
+step), a weight byte, a group-and-arrival byte and a two-byte octahedral normal: 8 bytes a point,
+469 KB for 60,000 points. The points are ordered so any first N keep each group's share and keep
+hair strands whole, so phones read only the first 16,000 (125 KB) and stop the download there.
+Version 1 files (no normals) are still read.
 
 ## The data format
 

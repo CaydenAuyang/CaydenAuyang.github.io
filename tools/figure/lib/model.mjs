@@ -2,7 +2,9 @@
 //
 // A bust is a stack of horizontal cross sections ("rows"), from the top of the head down to the
 // chest cut. Each row is a superellipse with its own center, half width (from the front
-// silhouette) and front and back extent (from the side silhouettes). On top of that:
+// silhouette) and front and back extent (from the side silhouettes), or, once the bust has been
+// fitted to all three photos (turnfit.mjs), a polar section: a radius for every angle about the
+// row's center (rows.r, rows.A angles per row, centers rows.cx and rows.cz). On top of that:
 //   front(x, y)    an optional 2.5D override for the face side, from the front photo's depth
 //   ears[]         small curved plates that stick out of the head sides
 //   classify(p, n) says how much a surface point is hair or skin
@@ -43,7 +45,26 @@ export function rowAt(rows, y) {
   const f = t - i;
   const out = { y };
   for (const k of ROW_KEYS) out[k] = rows[k][i] * (1 - f) + rows[k][i + 1] * f;
+  if (rows.r) {
+    out.cz = rows.cz[i] * (1 - f) + rows.cz[i + 1] * f;
+    out.polar = { rows, i, f };
+  }
   return out;
+}
+
+// Radius of a polar section at angle a (radians, 0 = viewer's right, pi/2 = front), interpolated
+// between the two rows around it and the two angles around a.
+export function polarRadius(polar, a) {
+  const { rows, i, f } = polar;
+  const A = rows.A;
+  const t = ((((a / (2 * Math.PI)) % 1) + 1) % 1) * A;
+  const k0 = Math.floor(t) % A;
+  const k1 = (k0 + 1) % A;
+  const g = t - Math.floor(t);
+  const r = rows.r;
+  const a0 = r[i * A + k0] * (1 - g) + r[i * A + k1] * g;
+  const a1 = r[(i + 1) * A + k0] * (1 - g) + r[(i + 1) * A + k1] * g;
+  return a0 * (1 - f) + a1 * f;
 }
 
 const spow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
@@ -52,6 +73,10 @@ const spow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
 export function sectionPoint(r, th) {
   const c = Math.cos(th);
   const s = Math.sin(th);
+  if (r.polar) {
+    const rad = polarRadius(r.polar, th);
+    return { x: r.cx + rad * c, z: r.cz + rad * s, s };
+  }
   const n = s >= 0 ? r.nf : r.nb;
   const cz = r.zb + (r.zf - r.zb) * r.cf;
   const xr = spow(c, 2 / n) * (1 - r.tf * Math.max(0, s) ** 2);
@@ -64,7 +89,7 @@ export function sectionPoint(r, th) {
 }
 
 // Builds a triangle mesh: { pos, nrm, tag, idx } with tag 0 = body/head shell, 1 = ear.
-export function buildMesh(model, { cols = 200 } = {}) {
+export function buildMesh(model, { cols = 200, normalSmooth } = {}) {
   const { rows } = model;
   const R = rows.y.length;
   const parts = [];
@@ -96,8 +121,9 @@ export function buildMesh(model, { cols = 200 } = {}) {
         const b = i * cols + ((j + 1) % cols);
         const c = (i + 1) * cols + j;
         const d = (i + 1) * cols + ((j + 1) % cols);
-        // Rows go downward and angles go counterclockwise seen from above, so this winding faces out.
-        idx.push(a, c, b, b, c, d);
+        // Rows go downward and angles run from the viewer's right toward the front, so (a, b, c)
+        // has its normal (b - a) x (c - a) pointing out of the bust.
+        idx.push(a, b, c, b, d, c);
       }
     }
     parts.push({ pos, idx, tag: 0 });
@@ -145,7 +171,7 @@ export function buildMesh(model, { cols = 200 } = {}) {
         }
       }
     }
-    parts.push({ pos, idx, tag: 1 });
+    parts.push({ pos, idx, tag: 1, side: ear.side });
   }
 
   // Merge and compute normals.
@@ -195,6 +221,45 @@ export function buildMesh(model, { cols = 200 } = {}) {
       nrm[v * 3 + 2] /= l;
     } else nrm[v * 3 + 1] = 1;
   }
+  // A fitted (polar) shell: rows are 2 px apart, so a sub-pixel wobble from one row's fit to the
+  // next tips its normals by many degrees, and the sampler and the shader (both of which read the
+  // normals) would turn that into horizontal bands. Smooth the shell's normals down the rows.
+  if (model.rows.r && (normalSmooth ?? 4) > 0) {
+    const sigma = normalSmooth ?? 4;
+    const k = [];
+    for (let d = -Math.ceil(3 * sigma); d <= Math.ceil(3 * sigma); d++) k.push([d, Math.exp(-(d * d) / (2 * sigma * sigma))]);
+    const src = nrm.slice(0, R * cols * 3);
+    for (let i = 0; i < R; i++) {
+      for (let j = 0; j < cols; j++) {
+        let sx = 0;
+        let sy = 0;
+        let sz = 0;
+        for (const [d, w] of k) {
+          const ii = Math.min(R - 1, Math.max(0, i + d));
+          const v = (ii * cols + j) * 3;
+          sx += src[v] * w;
+          sy += src[v + 1] * w;
+          sz += src[v + 2] * w;
+        }
+        const l = Math.hypot(sx, sy, sz) || 1;
+        nrm.set([sx / l, sy / l, sz / l], (i * cols + j) * 3);
+      }
+    }
+  }
+  // An ear plate is two thin layers whose triangle normals are noise at this size; what matters is
+  // that an ear faces out to its side and a little forward (seen from the front it is part of the
+  // outline, turned toward the viewer it faces them, turned away it is behind the head).
+  {
+    let vo = 0;
+    for (const p of parts) {
+      const n = p.pos.length / 3;
+      if (p.tag === 1) {
+        const l = Math.hypot(1, 0.35);
+        for (let v = vo; v < vo + n; v++) nrm.set([p.side / l, 0, 0.35 / l], v * 3);
+      }
+      vo += n;
+    }
+  }
   return { pos, nrm, tag, idx };
 }
 
@@ -202,6 +267,15 @@ export function buildMesh(model, { cols = 200 } = {}) {
 // G < 0 inside, 0 on the surface, > 0 outside (roughly in units of the section radius).
 export function shellG(rows, x, y, z) {
   const r = rowAt(rows, y);
+  if (r.polar) {
+    const dx = x - r.cx;
+    const dz = z - r.cz;
+    const scale = 1e-4 * (rows.y[0] - rows.y[rows.y.length - 1]);
+    const rad = Math.max(polarRadius(r.polar, Math.atan2(dz, dx)), scale);
+    const g = Math.hypot(dx, dz) / rad - 1;
+    const above = y - rows.y[0];
+    return above > 0 ? g + above / Math.max(r.hw, scale) : g;
+  }
   const cz = r.zb + (r.zf - r.zb) * r.cf;
   const dx = x - r.cx;
   const dz = z - cz;

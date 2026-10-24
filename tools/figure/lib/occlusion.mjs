@@ -1,11 +1,41 @@
-// Which surface points can be seen from the site's view range (yaw -6, 0, +6 degrees)?
+// Which surface points can be seen from the site's view range? The paper figure is seen from yaw
+// -6, 0 and +6 degrees; the night scene's figure turns (yaws passes its whole range, for example
+// -35 to +35 degrees in steps).
 // The renderer has no depth test (points are see-through), so surfaces hidden behind the front of
 // the figure, like the underside of the jaw behind the neck, would show through the sparse face.
-// This z-buffers the mesh from those angles so the sampler can thin out hidden surfaces.
+// This z-buffers the mesh from those angles so the sampler can thin out hidden surfaces, and
+// measures how far each point is from each view's outline.
 
 const YAWS = [-6, 0, 6].map((d) => (d * Math.PI) / 180);
 
-export function buildVisibility(mesh, { res = 900, eps }) {
+function distanceToOutline(zb, W, H) {
+  const dist = new Float32Array(W * H);
+  const INF = 1e9;
+  for (let k = 0; k < W * H; k++) dist[k] = zb[k] === -Infinity ? 0 : INF;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const k = y * W + x;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (x > 0) d = Math.min(d, dist[k - 1] + 1);
+    if (y > 0) d = Math.min(d, dist[k - W] + 1);
+    if (x > 0 && y > 0) d = Math.min(d, dist[k - W - 1] + 1.414);
+    if (x < W - 1 && y > 0) d = Math.min(d, dist[k - W + 1] + 1.414);
+    dist[k] = d;
+  }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+    const k = y * W + x;
+    if (!dist[k]) continue;
+    let d = dist[k];
+    if (x < W - 1) d = Math.min(d, dist[k + 1] + 1);
+    if (y < H - 1) d = Math.min(d, dist[k + W] + 1);
+    if (x < W - 1 && y < H - 1) d = Math.min(d, dist[k + W + 1] + 1.414);
+    if (x > 0 && y < H - 1) d = Math.min(d, dist[k + W - 1] + 1.414);
+    dist[k] = d;
+  }
+  return dist;
+}
+
+export function buildVisibility(mesh, { res = 900, eps, yaws = YAWS }) {
   const { pos, idx } = mesh;
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (let i = 0; i < pos.length; i += 3) {
@@ -18,7 +48,7 @@ export function buildVisibility(mesh, { res = 900, eps }) {
   const cell = (maxY - minY) / res;
   const W = Math.ceil((maxX - minX) / cell) + 2;
   const H = res + 2;
-  const views = YAWS.map((yaw) => {
+  const views = yaws.map((yaw) => {
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     const zb = new Float32Array(W * H).fill(-Infinity);
@@ -47,31 +77,10 @@ export function buildVisibility(mesh, { res = 900, eps }) {
     }
     return { c, s, zb };
   });
-  // Distance (in model units) from each covered pixel of the front view to the figure's outline.
-  const zFront = views[1].zb;
-  const dist = new Float32Array(W * H);
-  const INF = 1e9;
-  for (let k = 0; k < W * H; k++) dist[k] = zFront[k] === -Infinity ? 0 : INF;
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const k = y * W + x;
-    if (!dist[k]) continue;
-    let d = dist[k];
-    if (x > 0) d = Math.min(d, dist[k - 1] + 1);
-    if (y > 0) d = Math.min(d, dist[k - W] + 1);
-    if (x > 0 && y > 0) d = Math.min(d, dist[k - W - 1] + 1.414);
-    if (x < W - 1 && y > 0) d = Math.min(d, dist[k - W + 1] + 1.414);
-    dist[k] = d;
-  }
-  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
-    const k = y * W + x;
-    if (!dist[k]) continue;
-    let d = dist[k];
-    if (x < W - 1) d = Math.min(d, dist[k + 1] + 1);
-    if (y < H - 1) d = Math.min(d, dist[k + W] + 1);
-    if (x < W - 1 && y < H - 1) d = Math.min(d, dist[k + W + 1] + 1.414);
-    if (x > 0 && y < H - 1) d = Math.min(d, dist[k + W - 1] + 1.414);
-    dist[k] = d;
-  }
+  // Distance (in model units) from each covered pixel of each view to that view's outline.
+  for (const v of views) v.dist = distanceToOutline(v.zb, W, H);
+  const front = views.reduce((b, v) => (Math.abs(v.s) < Math.abs(b.s) ? v : b), views[0]);
+  const dist = front.dist;
   const edgeDist = (p) => {
     const x = Math.floor((p[0] - minX) / cell);
     const y = Math.floor((maxY - p[1]) / cell);
@@ -99,5 +108,25 @@ export function buildVisibility(mesh, { res = 900, eps }) {
     }
     return seen / views.length;
   };
-  return { visible, edgeDist };
+  // How much point p (normal n) is part of an outline: over the views where it is visible and
+  // within band of that view's outline, the largest edge-on weight 1 - |n.v|. 0 if none.
+  const outlineAt = (p, n, band) => {
+    let best = 0;
+    for (const v of views) {
+      const x = Math.floor((p[0] * v.c + p[2] * v.s - minX) / cell);
+      const y = Math.floor((maxY - p[1]) / cell);
+      if (x < 0 || x >= W || y < 0 || y >= H) continue;
+      if (v.dist[y * W + x] * cell > band) continue;
+      let top = -Infinity;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx;
+        const yy = y + dy;
+        if (xx >= 0 && xx < W && yy >= 0 && yy < H) top = Math.max(top, v.zb[yy * W + xx]);
+      }
+      if (-p[0] * v.s + p[2] * v.c < top - eps) continue;
+      best = Math.max(best, 1 - Math.abs(n[0] * v.s + n[2] * v.c));
+    }
+    return best;
+  };
+  return { visible, edgeDist, outlineAt };
 }

@@ -24,7 +24,7 @@ export const MAGIC = 'CAFG';
 export const HEADER_BYTES = 48;
 export const BYTES_PER_POINT = 10;
 
-function octEncode(nx, ny, nz) {
+export function octEncode(nx, ny, nz) {
   const l = Math.abs(nx) + Math.abs(ny) + Math.abs(nz) || 1;
   let u = nx / l;
   let v = ny / l;

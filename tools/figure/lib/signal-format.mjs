@@ -1,31 +1,39 @@
-// The signal figure format ("CASG", version 1). Little endian throughout. Read by
-// src/world/signal.ts; written by tools/figure/signal.mjs.
+// The signal figure format ("CASG"). Little endian throughout. Read by src/world/signal.ts;
+// written by tools/figure/signal.mjs.
 //
 // Header, 40 bytes:
 //   0   4 bytes  magic "CASG"
-//   4   uint16   version (1)
+//   4   uint16   version (2; version 1 files are still read)
 //   6   uint16   header size in bytes (40)
 //   8   uint32   point count N
 //   12  float32  x3  bounds min (x, y, z)
 //   24  float32  x3  bounds max (x, y, z)
-//   36  uint32   reserved (0)
+//   36  uint16   bytes per point (8); version 1 left this 0
+//   38  uint16   reserved (0)
 // Body, one 8-byte record per point (array of structs, so any prefix of the file is complete):
-//   int16 x3  position. Value = center + q / 32767 * halfExtent per axis, where
-//             center = (min + max) / 2 and halfExtent = (max - min) / 2.
+//   uint32    position, packed: bits 0-10 x, bits 11-21 y (0..2047), bits 22-31 z (0..1023).
+//             Value = min + q / qmax * (max - min) per axis (about 0.0005 figure heights a step).
 //   uint8     weight 0..255: brightness and size (outline points are high, the face is low)
 //   uint8     bits 0-1 group (0 body, 1 skin, 2 hair, 3 contour), bits 2-7 arrival order 0..63
 //             (when the point lands as the figure gathers: outline early, strands from the part
 //             to the tips, face last)
-// Units: figure heights, origin at the center of the figure's bounding box, x to the viewer's
-// right, y up, z toward the viewer.
+//   uint8 x2  surface normal, octahedral (u, v), each byte / 255 * 2 - 1; see format.mjs
+// Version 1 (no normals): int16 x3 position (center + q / 32767 * halfExtent), weight, group.
+// Units: figure heights, origin at the center of the figure's bounding box in x and y and on the
+// neck axis in z, x to the viewer's right, y up, z toward the viewer. True depth (not squashed).
 // Order: the first N points are an even sample of the whole figure for every N; each group keeps
 // its share in every prefix.
 
+import { octDecode, octEncode } from './format.mjs';
 import { rng } from './math.mjs';
 
 export const SIGNAL_MAGIC = 'CASG';
+export const SIGNAL_VERSION = 2;
 export const SIGNAL_HEADER = 40;
 export const SIGNAL_STRIDE = 8;
+const QX = 2047;
+const QY = 2047;
+const QZ = 1023;
 
 // An order of point indices whose every prefix keeps each group's share: each group is shuffled,
 // then the groups are interleaved by quota (largest remainder first). runs (optional) gives points
@@ -73,7 +81,7 @@ export function orderForPrefixes(group, seed = 1, runs = null) {
   return out;
 }
 
-// pts: { x, y, z, weight (0..1), group (0..3), order (0..1) } arrays. order: index order to write.
+// pts: { x, y, z, nx, ny, nz, weight (0..1), group (0..3), order (0..1) } arrays. order: index order to write.
 export function encodeSignal(pts, order) {
   const N = order.length;
   const buf = Buffer.alloc(SIGNAL_HEADER + N * SIGNAL_STRIDE);
@@ -87,25 +95,26 @@ export function encodeSignal(pts, order) {
     }
   }
   buf.write(SIGNAL_MAGIC, 0, 'ascii');
-  buf.writeUInt16LE(1, 4);
+  buf.writeUInt16LE(SIGNAL_VERSION, 4);
   buf.writeUInt16LE(SIGNAL_HEADER, 6);
   buf.writeUInt32LE(N, 8);
   for (let d = 0; d < 3; d++) {
     buf.writeFloatLE(min[d], 12 + d * 4);
     buf.writeFloatLE(max[d], 24 + d * 4);
   }
-  const center = min.map((v, d) => (v + max[d]) / 2);
-  const half = min.map((v, d) => Math.max(1e-9, (max[d] - v) / 2));
+  buf.writeUInt16LE(SIGNAL_STRIDE, 36);
+  const q = (v, d, qmax) => Math.max(0, Math.min(qmax, Math.round(((v - min[d]) / Math.max(1e-9, max[d] - min[d])) * qmax)));
   for (let k = 0; k < N; k++) {
     const i = order[k];
     const o = SIGNAL_HEADER + k * SIGNAL_STRIDE;
-    for (let d = 0; d < 3; d++) {
-      const q = Math.round(((axes[d][i] - center[d]) / half[d]) * 32767);
-      buf.writeInt16LE(Math.max(-32767, Math.min(32767, q)), o + d * 2);
-    }
-    buf[o + 6] = Math.max(0, Math.min(255, Math.round(pts.weight[i] * 255)));
+    const packed = (q(pts.x[i], 0, QX) | (q(pts.y[i], 1, QY) << 11) | (q(pts.z[i], 2, QZ) << 22)) >>> 0;
+    buf.writeUInt32LE(packed, o);
+    buf[o + 4] = Math.max(0, Math.min(255, Math.round(pts.weight[i] * 255)));
     const ord = Math.max(0, Math.min(63, Math.round(pts.order[i] * 63)));
-    buf[o + 7] = (pts.group[i] & 3) | (ord << 2);
+    buf[o + 5] = (pts.group[i] & 3) | (ord << 2);
+    const [u, v] = octEncode(pts.nx[i], pts.ny[i], pts.nz[i]);
+    buf[o + 6] = u;
+    buf[o + 7] = v;
   }
   return buf;
 }
@@ -114,22 +123,36 @@ export function decodeSignal(buf, limit = Infinity) {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   const magic = String.fromCharCode(buf[0], buf[1], buf[2], buf[3]);
   if (magic !== SIGNAL_MAGIC) throw new Error('not a CASG file');
+  const version = dv.getUint16(4, true);
   const header = dv.getUint16(6, true);
-  const N = Math.min(dv.getUint32(8, true), limit, Math.floor((buf.byteLength - header) / SIGNAL_STRIDE));
+  const stride = version >= 2 ? dv.getUint16(36, true) || SIGNAL_STRIDE : 8;
+  const N = Math.min(dv.getUint32(8, true), limit, Math.floor((buf.byteLength - header) / stride));
   const min = [0, 1, 2].map((d) => dv.getFloat32(12 + d * 4, true));
   const max = [0, 1, 2].map((d) => dv.getFloat32(24 + d * 4, true));
-  const center = min.map((v, d) => (v + max[d]) / 2);
-  const half = min.map((v, d) => (max[d] - v) / 2);
   const pos = new Float32Array(N * 3);
+  const nrm = new Float32Array(N * 3);
   const weight = new Float32Array(N);
   const group = new Uint8Array(N);
   const order = new Float32Array(N);
   for (let k = 0; k < N; k++) {
-    const o = header + k * SIGNAL_STRIDE;
-    for (let d = 0; d < 3; d++) pos[k * 3 + d] = center[d] + (dv.getInt16(o + d * 2, true) / 32767) * half[d];
-    weight[k] = buf[o + 6] / 255;
-    group[k] = buf[o + 7] & 3;
-    order[k] = (buf[o + 7] >> 2) / 63;
+    const o = header + k * stride;
+    if (version >= 2) {
+      const p = dv.getUint32(o, true);
+      const qs = [p & QX, (p >>> 11) & QY, p >>> 22];
+      const qm = [QX, QY, QZ];
+      for (let d = 0; d < 3; d++) pos[k * 3 + d] = min[d] + (qs[d] / qm[d]) * (max[d] - min[d]);
+      weight[k] = buf[o + 4] / 255;
+      group[k] = buf[o + 5] & 3;
+      order[k] = (buf[o + 5] >> 2) / 63;
+      const n = octDecode(buf[o + 6], buf[o + 7]);
+      nrm.set(n, k * 3);
+    } else {
+      for (let d = 0; d < 3; d++) pos[k * 3 + d] = (min[d] + max[d]) / 2 + (dv.getInt16(o + d * 2, true) / 32767) * ((max[d] - min[d]) / 2);
+      weight[k] = buf[o + 6] / 255;
+      group[k] = buf[o + 7] & 3;
+      order[k] = (buf[o + 7] >> 2) / 63;
+      nrm[k * 3 + 2] = 1;
+    }
   }
-  return { count: N, min, max, pos, weight, group, order };
+  return { version, count: N, min, max, pos, nrm, weight, group, order };
 }

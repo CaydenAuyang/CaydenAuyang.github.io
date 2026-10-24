@@ -8,6 +8,7 @@
 const worldModules = import.meta.glob('./renderer.ts');
 const signalModules = import.meta.glob('./signal.ts');
 const timelineModules = import.meta.glob('./timeline.ts');
+const interactModules = import.meta.glob('./interact.ts');
 
 const html = document.documentElement;
 const snapshot = html.hasAttribute('data-snapshot');
@@ -48,6 +49,17 @@ async function boot() {
       : null;
     tl?.attach(world, signal);
     html.classList.add('is-ready');
+    // Pointer, tap, drag and key interactions (never in snapshot, which is a still poster).
+    const loadInteract = interactModules['./interact.ts'];
+    if (loadInteract && !snapshot) {
+      try {
+        const { createInteractions } = (await loadInteract()) as typeof import('./interact');
+        createInteractions({ world, signal, motion });
+      } catch (error) {
+        // The scene still works without its interactions.
+        console.error('Night scene interactions failed to start', error);
+      }
+    }
     // ?debug exposes the scene to the test scripts (scripts/perf.mjs).
     if (new URLSearchParams(location.search).has('debug')) (window as unknown as { __night: unknown }).__night = { world, signal };
   } catch (error) {

@@ -14,6 +14,7 @@ in vec4 position;
 in vec4 aTo;
 in vec4 aRand; // x delay key, y size, z path, w phase (and D strays: w < uStray)
 in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest)
+in vec4 aNrm; // target B's surface normal in world space (xyz)
 
 uniform int uFrom;
 uniform int uTo;
@@ -46,6 +47,9 @@ uniform float uRise; // rise per second, as a share of the tallest column
 uniform float uStray; // share of D points drifting loose
 // Two lights (E): their radius in world units.
 uniform float uLightR;
+// Figure (B): the turn, a rotation about the figure's own center (setFigureTurn).
+uniform vec3 uFigCenter;
+uniform mat3 uFigRot;
 
 out vec3 vColor;
 out float vAlpha;
@@ -121,18 +125,31 @@ const float TAU = 6.28318530718;
 
 // Live position of a point in target k from its base b. alpha is its brightness there; fade is
 // the part of that which hides a wrap (the current and the columns loop), so a point in flight
-// toward a wrapping target can hide its jump.
-vec3 live(int k, vec4 b, out float alpha, out float fade) {
+// toward a wrapping target can hide its jump; size scales the point there.
+vec3 live(int k, vec4 b, out float alpha, out float fade, out float size) {
   fade = 1.0;
+  size = 1.0;
   float t = uTime;
   if (k == 0) {
     alpha = 0.0;
     return b.xyz;
   }
   if (k == 1) {
-    // Figure: a slow shimmer, and a gentle breath of brightness.
-    vec3 p = b.xyz + curl(b.xyz * (9.0 / uScale) + vec3(0.0, 0.0, t * 0.05)) * uScale * 0.0016 * uMotion;
+    // Figure: turned about its center, then a slow shimmer and a gentle breath of brightness.
+    vec3 p = uFigCenter + uFigRot * (b.xyz - uFigCenter);
+    p += curl(b.xyz * (9.0 / uScale) + vec3(0.0, 0.0, t * 0.05)) * uScale * 0.0016 * uMotion;
     alpha = b.w * (0.9 + 0.1 * sin(t * 1.3 + aRand.w * TAU));
+    // Facing: the normal against the direction to the camera, in view space. Points facing away
+    // fade and shrink (the figure is see-through light, so its far side would cross the face);
+    // points seen edge on brighten, so the outline reads at every angle.
+    vec3 vn = mat3(modelViewMatrix) * (uFigRot * aNrm.xyz);
+    float nl = length(vn);
+    vec3 vp = (modelViewMatrix * vec4(p, 1.0)).xyz;
+    float facing = nl > 0.1 ? dot(vn / nl, -normalize(vp)) : 1.0;
+    float front = smoothstep(-0.42, 0.0, facing);
+    float rim = 1.0 - abs(facing);
+    alpha *= mix(0.03, 1.0, front) * (1.0 + 0.9 * rim * rim * rim);
+    size = mix(0.55, 1.0, front);
     return p;
   }
   if (k == 2) {
@@ -171,8 +188,9 @@ vec3 live(int k, vec4 b, out float alpha, out float fade) {
     alpha = b.w * (0.8 + 0.2 * sin(t * (1.1 + 1.7 * aRand.w) + aRand.z * TAU));
     return p;
   }
-  // Field: a slow drift and a twinkle.
-  vec3 p = b.xyz + curl(b.xyz * (2.0 / uScale) + vec3(t * 0.02)) * uScale * 0.04;
+  // Field: a slow drift, about as fast on screen as the stars' own (90% of points under 2.5 times
+  // it), and a twinkle.
+  vec3 p = b.xyz + curl(b.xyz * (2.0 / uScale) + vec3(t * 0.002)) * uScale * 0.02;
   alpha = b.w * (0.65 + 0.35 * sin(t * (0.6 + 1.2 * aRand.w) + aRand.z * TAU));
   return p;
 }
@@ -194,13 +212,16 @@ void main() {
 
   float aF;
   float fF;
+  float sF;
   float aT;
   float fT;
-  vec3 P0 = live(uFrom, position, aF, fF);
+  float sT;
+  vec3 P0 = live(uFrom, position, aF, fF, sF);
   vec3 P1 = P0;
   aT = aF;
   fT = fF;
-  if (uTo != uFrom) P1 = live(uTo, aTo, aT, fT);
+  sT = sF;
+  if (uTo != uFrom) P1 = live(uTo, aTo, aT, fT, sT);
 
   vec3 pos = P0;
   float flight = 0.0;
@@ -249,5 +270,5 @@ void main() {
   // 1.5 to 3.5 CSS px: bigger for brighter points and for nearer ones, a little bigger in flight.
   float px = mix(1.5, 3.1, clamp(0.35 * aRand.y + 0.65 * min(alpha / max(uGain, 1e-3), 1.0), 0.0, 1.0));
   px *= clamp(uScale / max(-mv.z, 1.0), 0.75, 1.4) * (1.0 + 0.15 * flight);
-  gl_PointSize = clamp(px, 1.5, 3.5) * uPixelRatio;
+  gl_PointSize = clamp(px, 1.5, 3.5) * mix(sF, sT, e) * uPixelRatio;
 }

@@ -47,10 +47,13 @@ function hairSeeds(mesh, model, count, rand) {
 
 export function buildPoints(model, total, seed = 1, look = LOOK) {
   const rand = rng(seed);
-  const mesh = buildMesh(model, { cols: 220 });
-  const vis = buildVisibility(mesh, { eps: 0.012 * model.meta.headH });
+  const mesh = buildMesh(model, { cols: look.turn ? 360 : 220 });
+  // A turning figure is seen from its whole yaw range; the paper figure from -6, 0 and +6 degrees.
+  const yaws = look.turn ? Array.from({ length: 7 }, (_, k) => ((-look.turn + (2 * look.turn * k) / 6) * Math.PI) / 180) : undefined;
+  const vis = buildVisibility(mesh, { eps: 0.012 * model.meta.headH, yaws });
   model.visible = vis.visible;
   model.edgeDist = vis.edgeDist;
+  model.outlineAt = vis.outlineAt;
   const surface = sampleSurface(mesh, model, total, rand, look);
   const strandBudget = Math.round(total * look.share.hair * (1 - look.hairFillShare));
   const seeds = hairSeeds(mesh, model, 4000, rand);
@@ -58,7 +61,7 @@ export function buildPoints(model, total, seed = 1, look = LOOK) {
   // light lines instead of solid ones at phone point sizes.
   const H = model.meta.headH;
   const k = Math.sqrt(60000 / total);
-  const strands = hairStrands(model, strandBudget, rand, seeds, { ...(model.hairOpts || {}), spacing: H * 0.0055 * k });
+  const strands = hairStrands(model, strandBudget, rand, seeds, { ...(model.hairOpts || {}), spacing: H * 0.0055 * k, look });
   const all = new PointSet();
   all.append(surface);
   all.append(strands);

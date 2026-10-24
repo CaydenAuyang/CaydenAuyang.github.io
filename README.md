@@ -35,6 +35,7 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 | `src/world/renderer.ts` and the files beside it | The world: tiers, camera path, sky, Peak, skyline (windows lit by a shared hash rule in `windows.ts`), harbour. |
 | `src/world/signal.ts` | The particle system and its six states. |
 | `src/world/timeline.ts`, `main.ts` | Scroll drives the scene; `main.ts` boots it after first paint. |
+| `src/world/interact.ts` | Every pointer, tap, drag and key the scene answers. It decides which presses belong to the world (never text or controls), and runs the figure's spring, drag and idle sway. |
 | `src/world/shaders/` | GLSL for every material. |
 | `public/world/` | The resampled figure (`figure-signal.bin`), its still, and the fallback stills of the hero scene. |
 | `public/media/previews/` | The three project preview loops, MP4 and WebM, with posters (`src/data/previews.json`). |
@@ -69,13 +70,16 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A rare window flickers; aviation lights blink; the water ripples; a ferry crosses | always | aviation 1 s; ferry about 90 s | `skyline.ts`, `peak.ts`, `harbour.ts` |
 | The current flows, the columns rise, the field drifts | while shown | slow | `signal.ts` |
 | The view tilts slightly toward the pointer | mouse or trackpad | ±1.5° yaw, ±0.8° pitch, about 600 ms lag | `renderer.ts` |
+| The figure turns toward the pointer: its x to ±30° of yaw, its y to ±5° of pitch; points facing away fade and the outline brightens | mouse or trackpad, in the hero | a spring that settles in about 600 ms with a slight overshoot | `interact.ts`, `signal.ts` |
+| Dragging on the figure turns it (on phones it springs back to center on release) | drag | follows the finger; one figure width covers the whole range | `interact.ts` |
+| The figure sways 8° each way | after 3 s without input | a 6 s cycle | `interact.ts` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
 | More panels open and close | click | 420 ms height | `More.astro`, `more.ts` |
 | The menu opens, its links step in | click | 240 ms; 420 ms | `Header.astro` |
 | Previews play | at least half visible | pause when not | `loop-video.ts` |
 | The Pomfret and Hong Kong labels fade in | at the bottom of the page | 400 ms | `Contact.astro` |
 
-With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request.
+With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left.
 
 ## Accessibility
 

@@ -1,6 +1,21 @@
 // Turns a bust model into points: surface points weighted toward the outline, plus hair strands.
 
 import { clamp, gauss, lerp, rimWeight, smoothstep } from './math.mjs';
+
+// Edge-on weight for a figure that turns through +/- turn degrees: the largest 1 - |n.v| over the
+// range (1 for surfaces that are on the outline at some angle in it, such as the sides of the head
+// from 60 to 120 degrees around from the front at a 30 degree turn). Without a turn, the paper
+// figure's average over its small view range.
+export function rimFor(look, n) {
+  if (!look.turn) return rimWeight(n[0], n[1], n[2]);
+  const t = (look.turn * Math.PI) / 180;
+  let best = 0;
+  for (let k = 0; k <= 8; k++) {
+    const a = -t + (2 * t * k) / 8;
+    best = Math.max(best, 1 - Math.abs(n[0] * Math.sin(a) + n[2] * Math.cos(a)));
+  }
+  return best;
+}
 import { shellNormal, shellProject } from './model.mjs';
 
 export const GROUP = { body: 0, skin: 1, hair: 2, contour: 3 };
@@ -58,8 +73,14 @@ function categorize(model, p, n, vtag, rim, look) {
   const face = !hair && cls.skin > 0.5 && p[1] > model.meta.chinY - 0.02 * model.meta.headH;
   // The outline band is the silhouette itself: edge-on surfaces near the front view's outline.
   // Edge-on surfaces inside it (under the jaw, the collar, the sides of the nose) are interior.
-  const nearEdge = !model.edgeDist || model.edgeDist(p) < (look.outlineBand ?? 0.03) * model.meta.headH;
-  if (rim >= look.outlineRim && n[2] > -0.5 && nearEdge) return { cat: 'outline', group: GROUP.contour, hair, face };
+  const band = (look.outlineBand ?? 0.03) * model.meta.headH;
+  if (look.turn && model.outlineAt) {
+    // A turning figure: on the outline of some view in its range (and visible there), not a crease.
+    if (model.outlineAt(p, n, band) >= look.outlineRim) return { cat: 'outline', group: GROUP.contour, hair, face };
+  } else {
+    const nearEdge = !model.edgeDist || model.edgeDist(p) < band;
+    if (rim >= look.outlineRim && n[2] > -0.5 && nearEdge) return { cat: 'outline', group: GROUP.contour, hair, face };
+  }
   const interior = rim >= look.outlineRim;
   if (hair) return { cat: 'hair', group: GROUP.hair, interior };
   if (face && n[2] > 0) return { cat: 'face', group: GROUP.skin, interior };
@@ -92,7 +113,7 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
     let n = [nrm[a] + nrm[b] + nrm[c], nrm[a + 1] + nrm[b + 1] + nrm[c + 1], nrm[a + 2] + nrm[b + 2] + nrm[c + 2]];
     const nl = Math.hypot(...n) || 1;
     n = [n[0] / nl, n[1] / nl, n[2] / nl];
-    const rim = rimWeight(n[0], n[1], n[2]);
+    const rim = rimFor(look, n);
     const k = categorize(model, p, n, tag[idx[t * 3]], rim, look);
     const ci = cats.indexOf(k.cat);
     let w;
@@ -102,7 +123,7 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
       // Creases inside the outline (the collar notch) get only a small lift, so they do not draw lines.
       const rimTerm = Math.pow(Math.min(1, rim / look.outlineRim), look.rimPower);
       w = look.rimFloor + (1 - look.rimFloor) * (k.interior ? Math.min(rimTerm, look.interiorCap ?? 0.3) : rimTerm);
-      if (n[2] < -0.25) w *= look.backFacing;
+      if (!look.turn && n[2] < -0.25) w *= look.backFacing;
     } else if (k.cat === 'face') {
       // Sparse interior with a faint gather where the face folds (brow, nose edge, lip line).
       const feat = model.faceFeature ? model.faceFeature(p) : 0;
@@ -110,7 +131,10 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
       w = 0.35 + 0.65 * (k.interior ? Math.min(rimTerm, 0.2) : rimTerm) + 0.7 * feat;
     } else if (k.cat === 'ears') w = 0.4 + rim;
     else w = 0.3 + rim;
-    w *= area * (k.cat === 'face' || k.cat === 'ears' ? 1 : fade);
+    // The chest dissolves toward the bottom. A turning figure keeps more of its outline there (the
+    // points still dim), so the shoulders' edges reach the cut and the outline holds at every angle.
+    const outlineFade = look.turn && k.cat === 'outline' ? Math.sqrt(fade) : fade;
+    w *= area * (k.cat === 'face' || k.cat === 'ears' ? 1 : outlineFade);
     // Surfaces hidden behind the front of the figure from every site angle get only a trace.
     if (model.visible && model.visible(p) === 0) w *= look.hidden ?? 0.1;
     tri.cat[t] = ci;
@@ -155,8 +179,9 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
       let n = [0, 1, 2].map((d) => nrm[ia * 3 + d] * r0 + nrm[ib * 3 + d] * r1 + nrm[ic * 3 + d] * r2);
       const nl = Math.hypot(...n) || 1;
       n = n.map((v) => v / nl);
-      const rim = rimWeight(n[0], n[1], n[2]);
-      const fade = Math.sqrt(fadeAt(p[1]));
+      const rim = rimFor(look, n);
+      // Points dim as the chest dissolves; a turning figure's extra outline points there dim fully.
+      const fade = look.turn && cat === 'outline' ? fadeAt(p[1]) : Math.sqrt(fadeAt(p[1]));
       let group;
       let weight;
       let order;
@@ -301,14 +326,15 @@ export function hairStrands(model, budget, rand, seeds, opts = {}) {
       // Strands sit just above the shell; tips lift a little more, like real hair volume.
       const off = strandLift * (0.5 + u) + Math.abs(gauss(rand)) * lift * 0.25;
       const p = [base[0] + n[0] * off, base[1] + n[1] * off, base[2] + n[2] * off];
-      const rim = rimWeight(n[0], n[1], n[2]);
+      const rim = rimFor(opts.look ?? LOOK, n);
       const tip = 1 - smoothstep(0.7, 1, u);
       const weight = (0.3 + 0.7 * Math.pow(rim, 1.1)) * bright * (0.55 + 0.45 * tip);
       // Strands grow from the part toward their tips during the assemble.
       const order = 0.2 + strandOrder * 0.6 + 0.45 * u;
-      // The back of the head is never faced on the site (yaw stays within about 15 degrees), and its
-      // strands would show through the sparse face, so keep only a few there.
-      if (n[2] < -0.2 && rand() > 0.15) continue;
+      // The paper figure never shows the back of the head (yaw stays within about 15 degrees), and
+      // its strands would show through the sparse face, so keep only a few there. A turning figure
+      // keeps every strand some view in its range can see (the visibility test below).
+      if (!opts.look?.turn && n[2] < -0.2 && rand() > 0.15) continue;
       // The top of the head is seen edge on from the front, where strands foreshorten into flat
       // streaks; the outline band draws the crown there instead.
       if (n[1] > 0.5 && rand() > 0.12) continue;
