@@ -39,6 +39,8 @@ export const ui = {
   notesLabel: 'Notes',
   moreAbout: (name: string) => `about ${name}`,
   emailLabel: 'Email',
+  // The lift indicator (NIGHT-SIGNAL.md 11b.6): the nav's label for screen readers.
+  liftLabel: 'Floors',
   // The one-time hint in the hero (NIGHT-SIGNAL.md 11b.1, content.md Interface labels).
   hintMouse: 'Click anywhere in the city',
   hintTouch: 'Tap the city',

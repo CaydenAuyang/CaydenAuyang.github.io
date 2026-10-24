@@ -183,50 +183,78 @@ const headline = ignite(experience.heading);
     }
   }
 
+
   /* Desktop: the right column (the same edge as the work text), clear of the archive rising
-     over Central, left of center. */
+     over Central, left of center. The block's scrim stops short of the columns: it is masked off
+     from 13% of the block's width left of the text (about 0.54 of the window at 1024 to 1440,
+     0.53 at 1920; the columns end near 0.51) and fades in to full by the text's edge, so it never
+     dims some columns and not others. */
   @media (min-width: 1024px) {
     .xp__block {
       grid-column: 8 / span 5;
     }
+    .xp__block.scrim::before {
+      /* The pseudo is 2.6 block widths wide; the block starts at 0.8 / 2.6 = 30.77% of it. */
+      -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+      mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+    }
   }
 
-  /* Snapshot: one screen. The headline across the top; the short copy on the left (columns 1 to
-     4) with the long copy beside it in three columns; the two Wisers summers side by side along
-     the bottom. */
+  /*
+    Snapshot (desktop): two screens. The first is the live layout: the chart clear on the left, the
+    headline, the Civic Exchange short copy and the two Wisers summers on the right, centered in
+    the screen. The second holds the open More text, in two columns in the same right column, so
+    the chart stays clear there too. The block's scrim becomes a band down the right side
+    (feathered over 120px at the top and bottom of the section, masked off on the left as live).
+  */
   @media (min-width: 1024px) {
     :global(html[data-snapshot]) .xp {
-      padding-block: var(--space-5);
+      min-height: 200vh;
+      padding-block: 0;
     }
     :global(html[data-snapshot]) .xp__block {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      column-gap: var(--space-5);
-      align-items: start;
+      display: flex;
+      flex-direction: column;
+      min-height: 200vh;
+    }
+    :global(html[data-snapshot]) .xp__block.scrim::before {
+      inset: 0 -80%;
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0) 0,
+        rgb(var(--night-rgb) / 0.6) 120px,
+        rgb(var(--night-rgb) / 0.6) calc(100% - 120px),
+        rgb(var(--night-rgb) / 0) 100%
+      );
     }
     :global(html[data-snapshot]) .xp__main {
-      display: contents;
-    }
-    :global(html[data-snapshot]) .xp__main > .h2 {
-      grid-column: 1 / -1;
-      grid-row: 1;
+      order: 1;
+      margin-top: auto;
     }
     :global(html[data-snapshot]) .xp__civic {
-      grid-column: 1 / span 4;
-      grid-row: 2;
-      margin-top: var(--space-3);
+      margin-top: var(--space-4);
+    }
+    :global(html[data-snapshot]) .xp__roles {
+      order: 2;
+      gap: var(--space-4);
+      margin-top: var(--space-4);
+      margin-bottom: auto;
+    }
+    :global(html[data-snapshot]) .xp__role {
+      padding-top: var(--space-3);
     }
     :global(html[data-snapshot]) .xp__block > :global(.xp__more) {
-      grid-column: 5 / span 8;
-      grid-row: 2;
-      margin-top: var(--space-3);
+      order: 3;
+      height: 100vh;
+      margin-top: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
     }
     :global(html[data-snapshot]) .xp :global(.more__inner) {
-      columns: 3;
-      column-gap: var(--space-4);
-      padding-top: 0;
-      padding-bottom: 0;
+      columns: 2;
+      column-gap: var(--space-5);
+      padding-block: 0;
     }
     :global(html[data-snapshot]) .xp :global(.more__inner p),
     :global(html[data-snapshot]) .xp :global(.more__inner li) {
@@ -238,16 +266,6 @@ const headline = ignite(experience.heading);
     }
     :global(html[data-snapshot]) .xp :global(.more__inner li) {
       break-inside: avoid;
-    }
-    :global(html[data-snapshot]) .xp__roles {
-      grid-column: 1 / -1;
-      grid-row: 3;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: var(--space-5);
-      margin-top: var(--space-3);
-    }
-    :global(html[data-snapshot]) .xp__role {
-      padding-top: var(--space-3);
     }
   }
 </style>

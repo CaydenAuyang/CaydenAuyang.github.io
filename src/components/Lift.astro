@@ -1,0 +1,133 @@
+---
+// Lift.astro: the lift indicator (NIGHT-SIGNAL.md 11b.6). Desktop only (1024px and up): a slim
+// rail on the right edge, styled like a Hong Kong lift's floor display in amber. G is the hero,
+// 1 to 5 the sections, R (the roof, where the camera ends in the sky) Contact. The floor whose
+// section holds the middle of the window is lit and carries aria-current; clicking a floor scrolls
+// there (plain anchor links; Lenis smooths them). Floors read bottom to top like a lift, which is
+// also the tab order. Hovering or focusing a floor shows its section's name beside the rail.
+//
+// It sits centered in the right gutter (always wider than the rail from 1024px), vertically
+// centered, so it never covers content. Hidden on smaller screens, in snapshot, without
+// JavaScript (it couldn't follow the scroll), and under the menu (src/scripts/lift.ts).
+import { floors } from '../data/content';
+import { ui } from '../data/site';
+---
+
+<nav class="lift" aria-label={ui.liftLabel} data-lift data-needs-js data-snapshot-hide>
+  <ol class="lift__floors">
+    {
+      floors.map((f) => (
+        <li>
+          <a class="lift__floor" href={f.href} data-floor={f.href.slice(1)}>
+            <span class="lift__n" aria-hidden="true">
+              {f.floor}
+            </span>
+            <span class="lift__name">
+              <span class="sr-only">{f.floor} </span>
+              {f.name}
+            </span>
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+</nav>
+
+<script>
+  import '../scripts/lift';
+</script>
+
+<style>
+  .lift {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .lift {
+      --rail: 36px;
+      display: block;
+      position: fixed;
+      top: 50%;
+      right: max(var(--space-1), calc((var(--gutter) - var(--rail)) / 2));
+      z-index: var(--z-header);
+      width: var(--rail);
+      transform: translateY(-50%);
+    }
+  }
+  :global(html.menu-open) .lift {
+    visibility: hidden;
+  }
+
+  /* The display: a dark panel (night at 85%, so dim digits keep 4.9:1 even over a lit window),
+     floors from G at the bottom to R at the top. */
+  .lift__floors {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+    padding: var(--space-1) 0;
+    border-radius: 8px;
+    border: 1px solid var(--rule);
+    background: rgb(var(--night-rgb) / 0.85);
+  }
+  .lift__floor {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 32px;
+    font-size: 14px;
+    font-weight: var(--fw-medium);
+    line-height: 1;
+    color: var(--dim);
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+    transition:
+      color var(--dur-quick) var(--ease-out),
+      text-shadow var(--dur-quick) var(--ease-out);
+  }
+  .lift__floor:hover {
+    color: var(--text);
+  }
+  /* The lit floor: amber digits with their glow, and a small lamp at the left edge. */
+  .lift__floor[aria-current] {
+    color: var(--window);
+    text-shadow:
+      0 0 6px rgb(var(--window-rgb) / 0.8),
+      0 0 14px rgb(var(--window-rgb) / 0.45);
+  }
+  .lift__floor[aria-current]::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 3px;
+    height: 12px;
+    margin-top: -6px;
+    border-radius: 2px;
+    background: var(--window);
+    box-shadow: 0 0 8px rgb(var(--window-rgb) / 0.8);
+  }
+  .lift__floor:focus-visible {
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 5px var(--focus-halo);
+  }
+
+  /* The section's name, beside the rail, while a floor is hovered or focused. */
+  .lift__name {
+    position: absolute;
+    right: calc(100% + var(--space-2));
+    top: 50%;
+    transform: translateY(-50%);
+    padding: var(--space-1) var(--space-2);
+    border-radius: 4px;
+    background: rgb(var(--night-rgb) / 0.85);
+    font-size: var(--fs-small);
+    color: var(--text);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--dur-quick) var(--ease-out);
+  }
+  .lift__floor:hover .lift__name,
+  .lift__floor:focus-visible .lift__name {
+    opacity: 1;
+  }
+</style>

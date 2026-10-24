@@ -44,6 +44,18 @@ export const nav: Link[] = [
   { label: 'Contact', href: '#contact' },
 ];
 
+// The lift indicator on desktop (content.md, Interface labels): G for the hero, a floor per
+// section, R (the roof) for Contact. `name` is the section it stands for; G's is the hero's name.
+export const floors: { floor: string; name: string; href: string }[] = [
+  { floor: 'G', name: 'Cayden Auyang', href: '#hero' },
+  { floor: '1', name: 'Question', href: '#question' },
+  { floor: '2', name: 'Experience', href: '#experience' },
+  { floor: '3', name: 'Work', href: '#work' },
+  { floor: '4', name: 'Since May', href: '#since' },
+  { floor: '5', name: 'People', href: '#people' },
+  { floor: 'R', name: 'Contact', href: '#contact' },
+];
+
 // ---- 1. Hero -----------------------------------------------------------------------------------
 
 export const hero = {

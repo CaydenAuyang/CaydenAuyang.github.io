@@ -25,6 +25,7 @@ import { meta } from '../data/content';
 import { site, ui } from '../data/site';
 import Header from '../components/Header.astro';
 import WorldBoot from '../components/WorldBoot.astro';
+import Lift from '../components/Lift.astro';
 
 interface Props {
   // The full page title for the browser tab. Defaults to the site's name.
@@ -32,7 +33,7 @@ interface Props {
   description?: string;
   // Keep this page out of search engines.
   noindex?: boolean;
-  // Show the Menu (the home page only).
+  // Show the Menu and the lift indicator (the home page only).
   menu?: boolean;
   // Start the night scene (the home page only).
   world?: boolean;
@@ -136,6 +137,7 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
     {world && <canvas class="world-canvas" data-world aria-hidden="true"></canvas>}
 
     <Header menu={menu} />
+    {menu && <Lift />}
     <main id="main" tabindex="-1">
       <slot />
     </main>

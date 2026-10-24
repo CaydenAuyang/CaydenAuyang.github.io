@@ -45,7 +45,7 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 ## Modes
 
 - **Reduced motion** (the device setting): no intro, no smooth scrolling, no pins; the camera and the signal cut to each section's view instead of moving; stars hold still; videos wait for Play.
-- **Snapshot** (`?snapshot`, for poster screenshots): motion off, the intro skipped, pins off, every More panel open, interface controls hidden, and the world frozen at each section's best frame. At 1440 x 900 each section is one screen: scroll its top to the top of the window (Contact: scroll to the bottom). The dark background is kept for print.
+- **Snapshot** (`?snapshot`, for poster screenshots): motion off, the intro skipped, pins off, every More panel open, interface controls hidden, and the world frozen at each section's best frame. At 1440 x 900 each section is one screen, except Experience, which is two (its chart and short copy, then the open More text): scroll a section's top to the top of the window (for Experience's second screen, 900 px further; Contact: scroll to the bottom). The dark background is kept for print.
 - **No WebGL**: a still of the hero scene sits behind the page; every word is still there.
 
 ## Motion
@@ -80,6 +80,7 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Hovering or tapping one of the twelve archive columns brightens it, dims the rest and shows its topic and document count above it | hover or tap, in Experience | 200 ms | `interact.ts`, `signal.ts`, `Experience.astro` |
 | A playing project video tints the windows nearest it and the harbour reflections with its average color, up to 20% | while a video plays | sampled about 4 times a second off the main thread, eased over about 250 ms | `loop-video.ts`, `spill-worker.ts`, `spill.ts` |
 | Under the question, a slider runs from May to October and applies the five edits one by one: each strike draws across, each insertion lights, its note number glows; May, Edits and October move the handle | drag, tap, arrow keys | short wipes as the handle passes each edit | `QuestionPanel.astro` |
+| A slim floor display on the right edge, like a Hong Kong lift's (G, 1 to 5, R), lights the current section; a floor is a link there | scroll, 1024px and wider | follows the section under the middle of the window | `Lift.astro`, `lift.ts` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
 | More panels open and close | click | 420 ms height | `More.astro`, `more.ts` |
 | The menu opens, its links step in | click | 240 ms; 420 ms | `Header.astro` |

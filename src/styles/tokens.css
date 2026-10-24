@@ -12,13 +12,14 @@
   luminance of each line's box; the number is the worst frame anywhere on the page.
 
     pairing                                size        worst   needs   where the worst frame is
-    window: headlines and the name         48-153px     5.70    3      a lit letter with its glow (390)
+    window: headlines and the name         48-153px     4.50    3      a letter of Experience (snapshot)
     window: links, inserted words          18-28px      5.70    4.5    GitHub, Contact (390)
     cool: project names, subheads          22-65px      8.99    3      Civic Exchange (snapshot)
     neon: small labels                     16px         5.42    4.5    Reflect. over the still
-    text: body, lead, facts, captions      12-20px      5.67    4.5    a Civic AI Club fact (390)
-    dim: meta lines                        12-13px      4.67    4.5    Wisers 2025 meta (390)
-    dim: struck words, switch labels       15-28px      5.22    3/4.5  "down to a school"
+    text: body, lead, facts, captions      12-20px      5.60    4.5    a Civic AI Club fact (snapshot)
+    dim: meta lines                        12-13px      5.44    4.5    the small print, Contact
+    dim: lift floors (desktop)             14px         5.30    4.5    G, over the skyline
+    dim: struck words, switch labels       15-28px      4.21    3/4.5  "down to a school" (28px)
     night on text: the chosen switch       15px        16.67    4.5    flat
 
   Flat, for reference (WCAG 2.x formula in node):

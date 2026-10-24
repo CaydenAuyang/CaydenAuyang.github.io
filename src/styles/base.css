@@ -543,6 +543,26 @@ main,
   background: var(--scrim-wide);
   pointer-events: none;
 }
+/*
+  Phones: text runs the full width, so the scrim is a band instead of an ellipse: night at 60%
+  under the whole block, feathering to 0 over 160px above and below it, and running past the
+  screen's sides (main clips it there, so it never shows an edge). Its top sits a fixed 160px above
+  the block, so a block that grows (a font arriving, a More panel opening) never moves it; an
+  ellipse sized in % of the block would, and a tall block's ellipse reached up into the screens
+  above it.
+*/
+@media (max-width: 767px) {
+  .scrim:not(.scrim--soft)::before {
+    inset: -160px -48px;
+    background: linear-gradient(
+      to bottom,
+      rgb(var(--night-rgb) / 0) 0,
+      rgb(var(--night-rgb) / 0.6) 160px,
+      rgb(var(--night-rgb) / 0.6) calc(100% - 160px),
+      rgb(var(--night-rgb) / 0) 100%
+    );
+  }
+}
 .scrim--soft::before {
   inset: -18% -14%;
   background: var(--scrim);
@@ -567,7 +587,7 @@ main,
   position: relative;
   padding-left: var(--space-5);
   font-size: var(--fs-body);
-  line-height: 1.5;
+  line-height: var(--lh-body);
 }
 .facts > li::before {
   content: '';

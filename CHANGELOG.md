@@ -39,3 +39,4 @@ Dated notes on what changed on the site.
 - Round 2, 11b.3 the archive as real data: hovering or tapping a column shows its notebook and document count ("Energy, 264 documents"); the same twelve counts are in a list for screen readers.
 - Round 2, 11b.4 video light spill: while a project video plays, its average color tints the nearest windows and the harbour reflections, up to 20%.
 - Round 2, 11b.5 question scrubber: a slider from May to October applies the edits one at a time (mouse, touch or arrow keys); May, Edits and October are presets.
+- Round 2, 11b.6 lift indicator: an amber floor display on the right edge on laptops (G, 1 Question to 5 People, R Contact) shows where you are and jumps to any floor. Snapshot Experience is two screens so the chart stays clear; facts at line height 1.65; a solid phone header.
