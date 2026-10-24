@@ -1,0 +1,19 @@
+# Installed packages and build output (made again by "npm install" and "npm run build").
+node_modules/
+dist/
+.astro/
+
+# Secrets. This site needs none.
+.env*
+
+# Original photos stay off the public repo. Only processed point data is committed.
+*.heic
+*.HEIC
+tools/figure/input/
+tools/figure/work/
+tools/previews/raw/
+
+# Computer and editor clutter.
+.DS_Store
+.claude/
+*.log

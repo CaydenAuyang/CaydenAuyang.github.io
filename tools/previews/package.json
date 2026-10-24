@@ -1,0 +1,12 @@
+{
+  "name": "project-previews",
+  "private": true,
+  "type": "module",
+  "description": "Records the muted project preview loops for the portfolio site.",
+  "scripts": {
+    "record": "node record.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.59.1"
+  }
+}

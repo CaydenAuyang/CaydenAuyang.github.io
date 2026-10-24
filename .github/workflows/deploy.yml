@@ -1,0 +1,46 @@
+# deploy.yml: publishes the site to https://caydenauyang.github.io whenever main changes.
+#
+# GitHub builds the site with Astro's official action (Node 24, installs from
+# package-lock.json), then hands the finished files to GitHub Pages.
+# Settings > Pages > Source is set to "GitHub Actions". There is no "base" path.
+
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Permission to publish to Pages, and nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deploy at a time; a newer one waits for the running one to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v7
+
+      - name: Build with Astro and upload for Pages
+        uses: withastro/action@v6
+        with:
+          node-version: 24
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
