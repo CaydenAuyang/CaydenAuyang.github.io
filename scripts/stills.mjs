@@ -18,7 +18,8 @@ import { chromium } from 'playwright-core';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { unlinkSync } from 'node:fs';
+import sharp from 'sharp';
 
 const BASE = process.env.BASE || 'http://localhost:4321';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,7 +31,8 @@ const shots = [
   { file: 'fallback-hero-phone.webp', viewport: { width: 390, height: 844 }, scale: 2, mobile: true },
 ];
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+// The GPU path renders the scene as visitors see it (on a Mac, Metal through ANGLE).
+const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 for (const shot of shots) {
   const context = await browser.newContext({
     viewport: shot.viewport,
@@ -51,9 +53,9 @@ for (const shot of shots) {
   await page.waitForTimeout(600);
   const png = resolve(outDir, shot.file.replace('.webp', '.png'));
   await page.screenshot({ path: png });
-  // Convert to WebP with ffmpeg (quality 80), then remove the PNG.
-  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', png, '-q:v', '80', resolve(outDir, shot.file)]);
-  execFileSync('rm', [png]);
+  // Convert to WebP (quality 80) with sharp, which Astro already installs, then remove the PNG.
+  await sharp(png).webp({ quality: 80 }).toFile(resolve(outDir, shot.file));
+  unlinkSync(png);
   console.log(`saved public/world/${shot.file}`);
   await context.close();
 }
