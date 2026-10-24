@@ -3,16 +3,16 @@
   "format": "CAFG v1, see tools/figure/lib/format.mjs",
   "source": "photos",
   "units": "front-photo px",
-  "builtAt": "2026-10-24T02:15:30.404Z",
+  "builtAt": "2026-10-24T02:30:19.680Z",
   "hi": {
     "file": "figure-hi.bin",
     "count": 60000,
     "bytes": 600048,
     "groups": {
-      "body": 13145,
-      "skin": 7854,
-      "hair": 15003,
-      "contour": 23998
+      "body": 13613,
+      "skin": 5883,
+      "hair": 15005,
+      "contour": 25499
     }
   },
   "lo": {
@@ -20,22 +20,22 @@
     "count": 18000,
     "bytes": 180048,
     "groups": {
-      "body": 3948,
-      "skin": 2350,
-      "hair": 4504,
-      "contour": 7198
+      "body": 4075,
+      "skin": 1772,
+      "hair": 4509,
+      "contour": 7644
     }
   },
   "bounds": {
     "min": [
-      -727.6021752983396,
-      -39.93517275605893,
-      -446.12423932552565
+      -727.6005757279623,
+      -41.57906778883498,
+      -423.40485753428095
     ],
     "max": [
-      727.6025954491597,
-      1448.1974545983871,
-      394.9588256397282
+      727.5926576414425,
+      1445.6017443501805,
+      412.2491903757605
     ]
   },
   "landmarks": {
@@ -54,6 +54,6 @@
     "shoulderWidthFitted": 1.828,
     "crownToEye": 0.546,
     "chinToNeck": 0,
-    "headDepthToWidth": 1.1
+    "headDepthToWidth": 1.099
   }
 }

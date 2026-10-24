@@ -40,7 +40,7 @@ export class PointSet {
 // Shares of the point budget follow the Datum spec: outline band 40%, hair 25%, neck/shoulders/bust
 // 25%, ears 3%, face interior 7%.
 export const LOOK = {
-  share: { outline: 0.4, hair: 0.25, body: 0.25, ears: 0.03, face: 0.07 },
+  share: { outline: 0.425, hair: 0.25, body: 0.25, ears: 0.03, face: 0.045 },
   hairFillShare: 0.12, // part of the hair share spent on a light surface fill under the strands
   outlineRim: 0.62, // static rim weight (1 - |n.v|) where the outline band starts
   outlinePower: 1.4,
@@ -56,10 +56,14 @@ function categorize(model, p, n, vtag, rim, look) {
   const cls = model.classify(p, n, vtag);
   const hair = cls.hair > 0.5;
   const face = !hair && cls.skin > 0.5 && p[1] > model.meta.chinY - 0.02 * model.meta.headH;
-  if (rim >= look.outlineRim && n[2] > -0.5) return { cat: 'outline', group: GROUP.contour, hair, face };
-  if (hair) return { cat: 'hair', group: GROUP.hair };
-  if (face && n[2] > 0) return { cat: 'face', group: GROUP.skin };
-  return { cat: 'body', group: cls.skin > 0.5 ? GROUP.skin : GROUP.body };
+  // The outline band is the silhouette itself: edge-on surfaces near the front view's outline.
+  // Edge-on surfaces inside it (under the jaw, the collar, the sides of the nose) are interior.
+  const nearEdge = !model.edgeDist || model.edgeDist(p) < (look.outlineBand ?? 0.03) * model.meta.headH;
+  if (rim >= look.outlineRim && n[2] > -0.5 && nearEdge) return { cat: 'outline', group: GROUP.contour, hair, face };
+  const interior = rim >= look.outlineRim;
+  if (hair) return { cat: 'hair', group: GROUP.hair, interior };
+  if (face && n[2] > 0) return { cat: 'face', group: GROUP.skin, interior };
+  return { cat: 'body', group: cls.skin > 0.5 ? GROUP.skin : GROUP.body, interior };
 }
 
 // Samples the surface into the outline, body, face, ears and hair fill budgets. Returns a PointSet.
@@ -95,15 +99,20 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
     const fade = fadeAt(p[1]);
     if (k.cat === 'outline') w = Math.pow((rim - look.outlineRim) / (1 - look.outlineRim), look.outlinePower) + 0.15;
     else if (k.cat === 'body') {
-      w = look.rimFloor + (1 - look.rimFloor) * Math.pow(rim / look.outlineRim, look.rimPower);
+      // Creases inside the outline (the collar notch) get only a small lift, so they do not draw lines.
+      const rimTerm = Math.pow(Math.min(1, rim / look.outlineRim), look.rimPower);
+      w = look.rimFloor + (1 - look.rimFloor) * (k.interior ? Math.min(rimTerm, 0.3) : rimTerm);
       if (n[2] < -0.25) w *= look.backFacing;
     } else if (k.cat === 'face') {
       // Sparse interior with a faint gather where the face folds (brow, nose edge, lip line).
       const feat = model.faceFeature ? model.faceFeature(p) : 0;
-      w = 0.25 + 0.75 * Math.pow(rim / look.outlineRim, 1.2) + 2.2 * feat;
+      const rimTerm = Math.pow(Math.min(1, rim / look.outlineRim), 1.2);
+      w = 0.35 + 0.65 * (k.interior ? Math.min(rimTerm, 0.2) : rimTerm) + 0.7 * feat;
     } else if (k.cat === 'ears') w = 0.4 + rim;
     else w = 0.3 + rim;
     w *= area * (k.cat === 'face' || k.cat === 'ears' ? 1 : fade);
+    // Surfaces hidden behind the front of the figure from every site angle get only a trace.
+    if (model.visible && model.visible(p) === 0) w *= look.hidden ?? 0.1;
     tri.cat[t] = ci;
     tri.w[t] = w;
     sums[k.cat] += w;
@@ -158,7 +167,7 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
         order = 0.3 * rand();
       } else if (cat === 'face') {
         group = GROUP.skin;
-        weight = 0.25 + 0.35 * rim;
+        weight = 0.15 + 0.25 * rim;
         order = 0.72 + 0.28 * rand();
       } else if (cat === 'ears') {
         group = GROUP.skin;
@@ -220,7 +229,8 @@ function flowDir(model, p, n) {
   };
   const a = proj(away) || proj([side, 0, 0]);
   const g = proj([0, -1, 0]) || a;
-  const k = 0.85 * smoothstep(0.12 * H, 0.55 * H, near.d);
+  // Some fall right from the part, so curtains leave it angled down rather than flat.
+  const k = 0.3 + 0.55 * smoothstep(0.08 * H, 0.5 * H, near.d);
   const d = [a[0] * (1 - k) + g[0] * k, a[1] * (1 - k) + g[1] * k, a[2] * (1 - k) + g[2] * k];
   const l = Math.hypot(...d) || 1;
   return { d: d.map((c) => c / l), partDist: near.d };
@@ -244,12 +254,16 @@ export function hairStrands(model, budget, rand, seeds, opts = {}) {
   const trace = (start, dirSign, len) => {
     const pts = [];
     let p = start;
+    let over = dirSign > 0 ? rand() * rand() * H * 0.07 : 0;
     for (let s = 0; s < len; s += step) {
       const n = shellNormal(rows, p, h);
       const f = flowDir(model, p, n);
       if (dirSign < 0 && f.partDist < partHalf) break;
       const q = shellProject(rows, [p[0] + f.d[0] * step * dirSign, p[1] + f.d[1] * step * dirSign, p[2] + f.d[2] * step * dirSign], h);
-      if (!isHair(q).ok) break;
+      if (!isHair(q).ok) {
+        over -= step;
+        if (over < 0) break;
+      }
       if (Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) < step * 0.2) break;
       pts.push(q);
       p = q;
@@ -288,13 +302,17 @@ export function hairStrands(model, budget, rand, seeds, opts = {}) {
       const off = strandLift * (0.5 + u) + Math.abs(gauss(rand)) * lift * 0.25;
       const p = [base[0] + n[0] * off, base[1] + n[1] * off, base[2] + n[2] * off];
       const rim = rimWeight(n[0], n[1], n[2]);
-      const tip = 1 - smoothstep(0.82, 1, u);
+      const tip = 1 - smoothstep(0.7, 1, u);
       const weight = (0.3 + 0.7 * Math.pow(rim, 1.1)) * bright * (0.55 + 0.45 * tip);
       // Strands grow from the part toward their tips during the assemble.
       const order = 0.2 + strandOrder * 0.6 + 0.45 * u;
       // The back of the head is never faced on the site (yaw stays within about 15 degrees), and its
       // strands would show through the sparse face, so keep only a few there.
       if (n[2] < -0.2 && rand() > 0.15) continue;
+      // The top of the head is seen edge on from the front, where strands foreshorten into flat
+      // streaks; the outline band draws the crown there instead.
+      if (n[1] > 0.5 && rand() > 0.12) continue;
+      if (model.visible && model.visible(p) === 0 && rand() > 0.1) continue;
       out.push(p, n, GROUP.hair, weight, order);
     }
   }

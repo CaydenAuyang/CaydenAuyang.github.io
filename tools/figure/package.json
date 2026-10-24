@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Builds the point figure in public/figure/ from three photos (or a placeholder). See README.md.",
   "scripts": {
-    "placeholder": "node build.mjs --placeholder",
+    "placeholder": "node build.mjs --placeholder --no-publish",
     "build": "node build.mjs",
     "overlay": "node overlay.mjs",
     "fallback": "node render-fallback.mjs",

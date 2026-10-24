@@ -5,6 +5,7 @@ import path from 'node:path';
 import { encode, boundsOf } from './format.mjs';
 import { rng } from './math.mjs';
 import { buildMesh } from './model.mjs';
+import { buildVisibility } from './occlusion.mjs';
 import { GROUP, LOOK, PointSet, hairStrands, sampleSurface } from './points.mjs';
 
 function hairSeeds(mesh, model, count, rand) {
@@ -47,10 +48,17 @@ function hairSeeds(mesh, model, count, rand) {
 export function buildPoints(model, total, seed = 1, look = LOOK) {
   const rand = rng(seed);
   const mesh = buildMesh(model, { cols: 220 });
+  const vis = buildVisibility(mesh, { eps: 0.012 * model.meta.headH });
+  model.visible = vis.visible;
+  model.edgeDist = vis.edgeDist;
   const surface = sampleSurface(mesh, model, total, rand, look);
   const strandBudget = Math.round(total * look.share.hair * (1 - look.hairFillShare));
   const seeds = hairSeeds(mesh, model, 4000, rand);
-  const strands = hairStrands(model, strandBudget, rand, seeds, model.hairOpts || {});
+  // Smaller files keep the same number of strands with sparser dots along each one, so strands stay
+  // light lines instead of solid ones at phone point sizes.
+  const H = model.meta.headH;
+  const k = Math.sqrt(60000 / total);
+  const strands = hairStrands(model, strandBudget, rand, seeds, { ...(model.hairOpts || {}), spacing: H * 0.0055 * k });
   const all = new PointSet();
   all.append(surface);
   all.append(strands);
@@ -72,6 +80,29 @@ export function groupCounts(ps) {
   return c;
 }
 
+// Writes a file so readers never see it half written: temp file in the same folder, then rename.
+export function writeAtomic(file, data) {
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, file);
+}
+
+export const PUBLISHED = ['figure-hi.bin', 'figure-lo.bin', 'figure.json', 'figure-fallback.webp', 'figure-fallback.png'];
+
+// Copies a staged build into public/figure, one atomic rename per file (data first, json last).
+export function publish(stageDir, outDir) {
+  fs.mkdirSync(outDir, { recursive: true });
+  const order = ['figure-hi.bin', 'figure-lo.bin', 'figure-fallback.png', 'figure-fallback.webp', 'figure.json'];
+  const done = [];
+  for (const f of order) {
+    const src = path.join(stageDir, f);
+    if (!fs.existsSync(src)) continue;
+    writeAtomic(path.join(outDir, f), fs.readFileSync(src));
+    done.push(f);
+  }
+  return done;
+}
+
 export function writeOutputs(model, { hiCount = 60000, loCount = 18000, outDir, seed = 1, extra = {} }) {
   fs.mkdirSync(outDir, { recursive: true });
   const hi = buildPoints(model, hiCount, seed);
@@ -86,8 +117,8 @@ export function writeOutputs(model, { hiCount = 60000, loCount = 18000, outDir, 
   const fromPhotos = model.meta.source !== 'placeholder';
   const hiBuf = encode(hi.points, { fromPhotos, bounds });
   const loBuf = encode(lo.points, { fromPhotos, bounds });
-  fs.writeFileSync(path.join(outDir, 'figure-hi.bin'), hiBuf);
-  fs.writeFileSync(path.join(outDir, 'figure-lo.bin'), loBuf);
+  writeAtomic(path.join(outDir, 'figure-hi.bin'), hiBuf);
+  writeAtomic(path.join(outDir, 'figure-lo.bin'), loBuf);
   const m = model.meta;
   const json = {
     version: 1,
@@ -112,6 +143,6 @@ export function writeOutputs(model, { hiCount = 60000, loCount = 18000, outDir, 
     proportions: m.proportions || null,
     ...extra,
   };
-  fs.writeFileSync(path.join(outDir, 'figure.json'), JSON.stringify(json, null, 2) + '\n');
+  writeAtomic(path.join(outDir, 'figure.json'), JSON.stringify(json, null, 2) + '\n');
   return { hi, lo, json };
 }

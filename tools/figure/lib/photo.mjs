@@ -78,6 +78,31 @@ function loadView(dir) {
   return { dir, meta, W, H, matteRaw, mask, edges, lum, depth, rgba };
 }
 
+function blur2D(src, W, H, sigma) {
+  const r = Math.ceil(sigma * 3);
+  const k = [];
+  let ks = 0;
+  for (let i = -r; i <= r; i++) {
+    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+    k.push(v);
+    ks += v;
+  }
+  for (let i = 0; i < k.length; i++) k[i] /= ks;
+  const tmp = new Float32Array(W * H);
+  const out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let s = 0;
+    for (let j = -r; j <= r; j++) s += src[y * W + Math.min(W - 1, Math.max(0, x + j))] * k[j + r];
+    tmp[y * W + x] = s;
+  }
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let s = 0;
+    for (let j = -r; j <= r; j++) s += tmp[Math.min(H - 1, Math.max(0, y + j)) * W + x] * k[j + r];
+    out[y * W + x] = s;
+  }
+  return out;
+}
+
 export function cleanMask(raw, W, H) {
   let m = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i++) m[i] = raw[i] >= 128 ? 1 : 0;
@@ -211,8 +236,9 @@ function hairMask(view, chinRow) {
     if (!p) continue;
     const xs = p.map((q) => q[0]);
     const ys = p.map((q) => q[1]);
-    const padX = (Math.max(...xs) - Math.min(...xs)) * 0.25 + 6;
-    const padY = (Math.max(...ys) - Math.min(...ys)) * 0.6 + 8;
+    const isBrow = k.endsWith('Eyebrow');
+    const padX = (Math.max(...xs) - Math.min(...xs)) * (isBrow ? 0.04 : 0.15) + 4;
+    const padY = (Math.max(...ys) - Math.min(...ys)) * (isBrow ? 0.35 : 0.5) + 5;
     boxes.push([Math.min(...xs) - padX, Math.min(...ys) - padY, Math.max(...xs) + padX, Math.max(...ys) + padY]);
   }
   let hm = new Uint8Array(W * H);
@@ -359,29 +385,39 @@ export async function photoModel(args, opts = {}) {
   const earWin = Math.round((0.09 * headH) / 2);
   for (const [side, key] of [[-1, 'L'], [1, 'R']]) {
     const raw = sideOff[key];
+    const orig = Float64Array.from(raw);
     const base = smooth1D(open1D(raw, earWin), 3);
     let best = 0;
     let rows = [];
     for (let i = 0; i < N; i++) {
       if (ys[i] > earHi || ys[i] < earLo) continue;
       const bump = raw[i] - base[i];
-      if (bump > 0.012 * headHW * 2) rows.push(i);
+      if (bump > 0.006 * headHW * 2) rows.push(i);
       best = Math.max(best, bump);
+    }
+    // Keep the head section smooth through the whole ear zone on both sides, ear or not, so no
+    // ledge runs across the face at the top or bottom of the ears.
+    {
+      const zone = [];
+      for (let i = 0; i < N; i++) if (ys[i] <= earHi && ys[i] >= earLo) zone.push(i);
+      if (zone.length) {
+        const z0i = zone[0];
+        const z1i = zone[zone.length - 1];
+        const ext = 12;
+        for (let i = Math.max(0, z0i - ext); i <= Math.min(N - 1, z1i + ext); i++) {
+          const w = i < z0i ? 1 - (z0i - i) / ext : i > z1i ? 1 - (i - z1i) / ext : 1;
+          raw[i] = raw[i] * (1 - w) + Math.min(raw[i], base[i]) * w;
+        }
+      }
     }
     if (rows.length > 6) {
       const i0 = Math.min(...rows);
       const i1 = Math.max(...rows);
       const yA = ys[i1];
       const yB = ys[i0];
-      const outF = pchip(Array.from({ length: i1 - i0 + 1 }, (_, k) => [ys[i0 + k], raw[i0 + k]]));
+      const outF = pchip(Array.from({ length: i1 - i0 + 1 }, (_, k) => [ys[i0 + k], orig[i0 + k]]));
       const baseF = pchip(Array.from({ length: i1 - i0 + 1 }, (_, k) => [ys[i0 + k], base[i0 + k]]));
       ears.push({ side, y0: yA, y1: yB, outRaw: outF, baseRaw: baseF });
-      // Remove the ear from the head outline so the head section stays smooth (tapered ends).
-      const ext = 10;
-      for (let i = Math.max(0, i0 - ext); i <= Math.min(N - 1, i1 + ext); i++) {
-        const w = i < i0 ? 1 - (i0 - i) / ext : i > i1 ? 1 - (i - i1) / ext : 1;
-        raw[i] = raw[i] * (1 - w) + Math.min(raw[i], base[i]) * w;
-      }
       log(`ear ${key}: ${rows.length} rows, sticks out up to ${best.toFixed(1)} px`);
     } else log(`ear ${key}: not found in the outline (max bump ${best.toFixed(1)} px)`);
   }
@@ -405,7 +441,16 @@ export async function photoModel(args, opts = {}) {
 
   // ---- front surface from depth ----
   const D = F.depth;
-  const dAt = (x, y) => bilinear(D, F.W, HF, x + u0, rowOf(y));
+  // The surface itself uses blurred depth: lightly on the face, heavily on the shirt so collar
+  // edges and folds do not turn into lines of points.
+  const Dface = blur2D(D, F.W, HF, 2.5);
+  const Dbody = blur2D(D, F.W, HF, 12);
+  const dAt = (x, y) => {
+    const t = smoothstep(chinY, chinY - 0.25 * headH, y);
+    const u = x + u0;
+    const v = rowOf(y);
+    return bilinear(Dface, F.W, HF, u, v) * (1 - t) + bilinear(Dbody, F.W, HF, u, v) * t;
+  };
   const inMask = (x, y) => {
     const u = Math.round(x + u0);
     const v = Math.round(rowOf(y));
@@ -588,11 +633,18 @@ export async function photoModel(args, opts = {}) {
     const bFc = clamp(bF, lim[0] * hwY[i], lim[1] * hwY[i]);
     zc += bF - bFc;
     zcY[i] = zc;
-    zfY[i] = Math.max(zc + bFc, Math.max(...pts.map((p) => p[1])) - 0.02 * hwY[i]);
+    // The section's front is the fitted arc; narrow features (nose, lips) come from the depth
+    // surface itself, so they do not push the whole row forward.
+    zfY[i] = zc + bFc;
     okY[i] = 1;
   }
-  const zcS = smooth1D(Array.from(zcY, (z, i) => (okY[i] ? z : NaN)), 4);
-  for (let i = 0; i < N; i++) if (okY[i]) zcY[i] = zcS[i];
+  // Smooth the section center and front over many rows; the per-row fit is noisy.
+  const zcS = smooth1D(Array.from(zcY, (z, i) => (okY[i] ? z : NaN)), 12);
+  const bS = smooth1D(Array.from(zfY, (z, i) => (okY[i] ? z - zcY[i] : NaN)), 12);
+  for (let i = 0; i < N; i++) if (okY[i]) {
+    zcY[i] = zcS[i];
+    zfY[i] = zcS[i] + bS[i];
+  }
 
   // Back extent from the trailing edges of the turned views.
   const bBY = new Float64Array(N).fill(NaN);
@@ -727,7 +779,7 @@ export async function photoModel(args, opts = {}) {
   // The turned views' offsets were measured with the uncentered z; correct them for the shift.
   for (const view of turned) view.cm = view.c + z0 * Math.sin(view.yaw);
 
-  const nfS = smooth1D(nfFit, 5);
+  const nfS = smooth1D(nfFit, 14);
   // Cap the crown smoothly: the top rows shrink to a point.
   const rowsObj = { y: Float64Array.from(ys) };
   for (const k of ['cx', 'hw', 'zf', 'zb', 'nf', 'nb', 'tf', 'cf']) rowsObj[k] = new Float64Array(N);
@@ -750,6 +802,11 @@ export async function photoModel(args, opts = {}) {
     rowsObj.tf[i] = 0;
     const tw = smoothstep(neckBaseY + 0.06 * headH, neckBaseY - 0.12 * headH, y);
     rowsObj.cf[i] = lerp(clamp((zc - zb) / Math.max(1e-6, zf - zb), 0.3, 0.7), 0.5, tw);
+  }
+  {
+    // A last pass so the widest point of each section drifts slowly from row to row.
+    const cfS = smooth1D(rowsObj.cf, 14);
+    for (let i = 0; i < N; i++) rowsObj.cf[i] = cfS[i];
   }
   // The crown cap: rows near the top are too thin for depth, so carry the section center (and the
   // front/back split) up from a reliable row a little below the crown.
@@ -866,7 +923,8 @@ export async function photoModel(args, opts = {}) {
     if (bestV === 'front') {
       const u = x + u0;
       const v = rowOf(y);
-      hair = sample(hairF.mask, F.W, HF, u, v);
+      // No hair faces the camera below the eyes (shadows under the jaw read dark in the photo).
+      hair = y < eyeY - 0.05 * headH ? 0 : sample(hairF.mask, F.W, HF, u, v);
     } else if (bestV) {
       const [u, v] = viewProj(bestV, p);
       hair = sample(hairV[bestV.name].mask, bestV.W, bestV.H, u, v);
@@ -979,7 +1037,7 @@ export async function photoModel(args, opts = {}) {
     classify,
     faceFeature,
     part,
-    hairOpts: { maxLen: headH * 0.7, partHalf: headH * 0.014 },
+    hairOpts: { maxLen: headH * 0.7, partHalf: headH * 0.009 },
     meta: {
       units: 'front-photo px',
       source: 'photos',
