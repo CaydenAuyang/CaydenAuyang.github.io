@@ -44,7 +44,8 @@ async function boot() {
       ? await ((await loadSignal()) as typeof import('./signal')).createSignal({
           world,
           motion,
-          figureUrl: '/world/figure-signal.bin',
+          // The video-built figure: figure-{hi|lo|phone}.json and .bin in this folder (spec v3).
+          figureUrl: '/figure',
         })
       : null;
     tl?.attach(world, signal);

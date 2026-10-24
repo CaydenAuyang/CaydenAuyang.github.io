@@ -221,7 +221,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   sky.add(shooting.mesh);
 
   // ---- Harbour light show (11b.9): searchlights from the tallest roofs, drawn only while it runs ----
-  const show = buildLightShow(city, U, PALETTE.cool);
+  const show = buildLightShow(city, U, PALETTE.cool, camera);
   scene.add(show.mesh);
 
   // ---- Video light spill (11b.4) ----

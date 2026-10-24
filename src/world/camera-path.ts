@@ -3,8 +3,9 @@
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
 // spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
 // never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
-// the camera settles into every key. No roll, ever: the camera always looks at a point with world
-// up.
+// the camera settles into every key, except the move into Since May, which the timeline eases on
+// its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
+// world up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
 // that put the tallest tower tops and the waterline exactly at HERO_FRAMING. Every other key is
@@ -209,11 +210,13 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const mPos = new Vector3(lb.x + 0.18 * Dh, 48, lDist + 0.35 * Dh);
   const more: KeyPose = { pos: mPos, yaw: 10 * DEG, pitch: pitchForWaterline(mPos, phone ? 0.9 : 0.88) + 1 * DEG };
 
-  // since: tilt up from the city into the stars.
+  // since: tilt up from the city into the stars (no tower or ridge in the frame, so Since May's
+  // and People's text both sit over sky).
   const sincePos = mPos.clone().add(new Vector3(0, 30, 0));
   const since: KeyPose = { pos: sincePos, yaw: 16 * DEG, pitch: 36 * DEG };
-  // people: hold on the sky, drifting a touch further.
-  const people: KeyPose = { pos: sincePos.clone().add(new Vector3(40, 10, 0)), yaw: 20 * DEG, pitch: 42 * DEG };
+  // people: holds Since May's view exactly (spec: "Holds on the sky"); People is too short for a
+  // move of its own. The segment between the two keys is a hold (see pose()).
+  const people: KeyPose = { pos: sincePos.clone(), yaw: since.yaw, pitch: since.pitch };
   // contact: hold on the sky and pull back, pitched high enough that no tower or ridge shows
   // anywhere in the frame (the Contact text sits low; the two lights sit at y 0.30).
   const cPos = sincePos.clone().add(new Vector3(140, 60, 1400));
@@ -231,6 +234,17 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const n = order.length;
 
   const ease = (s: number) => (s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2);
+  // Segments between two identical poses hold still (the spline would loop through them).
+  const hold = order.map((k, i) => {
+    if (i >= n - 1) return false;
+    const a = poses[k];
+    const b = poses[order[i + 1]];
+    return a.pos.distanceTo(b.pos) < 1e-6 && a.yaw === b.yaw && a.pitch === b.pitch;
+  });
+  // The move into Since May is not eased or curved here: the timeline eases it already, and easing
+  // it twice packed the whole tilt into the middle of the scroll (about 3.4 degrees per 20 px).
+  const linear = order.map((_, i) => i < n - 1 && order[i + 1] === 'since');
+  const shape = (i: number, raw: number) => (linear[i] ? raw : ease(raw));
 
   return {
     keys: { ...KEY_U },
@@ -240,18 +254,31 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
       const uu = Math.min(1, Math.max(0, u));
       let i = 0;
       while (i < n - 2 && uu > us[i + 1]) i++;
-      return { i, s: ease(Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i])))) };
+      return { i, s: shape(i, Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i])))) };
     },
     pose(u: number, out?: KeyPose): KeyPose {
       const uu = Math.min(1, Math.max(0, u));
       let i = 0;
       while (i < n - 2 && uu > us[i + 1]) i++;
-      const s = ease(Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i]))));
+      const s = shape(i, Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i]))));
       const t = (i + s) / (n - 1);
       const o = out ?? { pos: new Vector3(), yaw: 0, pitch: 0 };
+      if (hold[i]) {
+        const k = poses[order[i]];
+        o.pos.copy(k.pos);
+        o.yaw = k.yaw;
+        o.pitch = k.pitch;
+        return o;
+      }
       posCurve.getPoint(t, o.pos);
-      o.yaw = hermite(yawK, yawM, i, s);
-      o.pitch = hermite(pitchK, pitchM, i, s);
+      if (linear[i]) {
+        // straight from key to key: the timeline's easing alone sets the pace
+        o.yaw = yawK[i] + (yawK[i + 1] - yawK[i]) * s;
+        o.pitch = pitchK[i] + (pitchK[i + 1] - pitchK[i]) * s;
+      } else {
+        o.yaw = hermite(yawK, yawM, i, s);
+        o.pitch = hermite(pitchK, pitchM, i, s);
+      }
       return o;
     },
   };

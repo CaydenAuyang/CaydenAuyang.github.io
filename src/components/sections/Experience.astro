@@ -21,7 +21,7 @@ const headline = ignite(experience.heading);
   <div class="wrap grid">
     <div class="xp__block scrim">
       <div class="xp__main">
-        <h2 id="experience-title" class="h2" {...headline.attrs} set:html={headline.html} />
+        <h2 id="experience-title" class="h2" {...headline.attrs}>{experience.heading}</h2>
         <div class="xp__civic stack">
           <div class="xp__where">
             <h3 class="t-sub">{civic.name}</h3>
@@ -184,6 +184,14 @@ const headline = ignite(experience.heading);
   }
 
 
+  /* Tablets (768 to 1023px, portrait or landscape): the page grid has 12 narrow columns there, so
+     the block spans all of them, as on phones. */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .xp__block {
+      grid-column: 1 / -1;
+    }
+  }
+
   /* Desktop: the right column (the same edge as the work text), clear of the archive rising
      over Central, left of center. The block's scrim stops short of the columns: it is masked off
      from 13% of the block's width left of the text (about 0.54 of the window at 1024 to 1440,
@@ -245,7 +253,7 @@ const headline = ignite(experience.heading);
     }
     :global(html[data-snapshot]) .xp__block > :global(.xp__more) {
       order: 3;
-      height: 100vh;
+      min-height: 100vh;
       margin-top: 0;
       display: flex;
       flex-direction: column;
@@ -255,6 +263,12 @@ const headline = ignite(experience.heading);
       columns: 2;
       column-gap: var(--space-5);
       padding-block: 0;
+    }
+    /* Under 1280px the right column is too narrow for two columns of text. */
+    @media (max-width: 1279px) {
+      :global(html[data-snapshot]) .xp :global(.more__inner) {
+        columns: 1;
+      }
     }
     :global(html[data-snapshot]) .xp :global(.more__inner p),
     :global(html[data-snapshot]) .xp :global(.more__inner li) {

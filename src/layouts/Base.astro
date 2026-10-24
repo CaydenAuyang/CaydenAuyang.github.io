@@ -90,8 +90,15 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={imageUrl} />
 
-    <!-- Fonts: the faces the first screen needs are preloaded (the name, and the mono text). -->
-    <Font cssVariable="--font-barlow" preload={[{ weight: 800, style: 'normal' }]} />
+    <!-- Fonts: the faces the first screen needs are preloaded (the name, the headlines, the mono
+         text), so they are almost always there for the first paint, deep links included. -->
+    <Font
+      cssVariable="--font-barlow"
+      preload={[
+        { weight: 800, style: 'normal' },
+        { weight: 700, style: 'normal' },
+      ]}
+    />
     <Font
       cssVariable="--font-mono"
       preload={[
@@ -107,9 +114,9 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
         data-snapshot       the address has ?snapshot (any value): poster screenshots.
         js-intro            motion on and not snapshot: the hero text starts masked and the
                             timeline wipes it in. A CSS safety net reveals it after 2.5 s anyway.
-        js-ignite           the same condition: section headlines start as unlit neon tubes and
-                            strike the first time they enter view (src/scripts/ignite.ts). A CSS
-                            safety net lights them after 4 s if that script never runs.
+        js-ignite           the same condition: section headlines strike like neon tubes the first
+                            time they enter view (src/scripts/ignite.ts). Until that script splits
+                            their letters (or if it never runs) they are plain lit text.
     -->
     <script is:inline>
       (function () {

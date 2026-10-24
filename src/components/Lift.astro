@@ -6,8 +6,8 @@
 // there (plain anchor links; Lenis smooths them). Floors read bottom to top like a lift, which is
 // also the tab order. Hovering or focusing a floor shows its section's name beside the rail.
 //
-// It sits centered in the right gutter (always wider than the rail from 1024px), vertically
-// centered, so it never covers content. Hidden on smaller screens, in snapshot, without
+// It sits at the screen's right edge, inside the gutter (always wider than the rail from 1024px),
+// vertically centered, so it never covers content. Hidden on smaller screens, in snapshot, without
 // JavaScript (it couldn't follow the scroll), and under the menu (src/scripts/lift.ts).
 import { floors } from '../data/content';
 import { ui } from '../data/site';
@@ -41,16 +41,23 @@ import { ui } from '../data/site';
   .lift {
     display: none;
   }
+  /* 26px wide, 6px from the screen's edge (10px from 1280px): 36px clear of the text column at
+     1440, 28px at 1280, 16px at 1024 (the narrowest gutter, 48px). */
   @media (min-width: 1024px) {
     .lift {
-      --rail: 36px;
+      --rail: 26px;
       display: block;
       position: fixed;
       top: 50%;
-      right: max(var(--space-1), calc((var(--gutter) - var(--rail)) / 2));
+      right: 6px;
       z-index: var(--z-header);
       width: var(--rail);
       transform: translateY(-50%);
+    }
+  }
+  @media (min-width: 1280px) {
+    .lift {
+      right: 10px;
     }
   }
   :global(html.menu-open) .lift {
@@ -96,7 +103,7 @@ import { ui } from '../data/site';
   .lift__floor[aria-current]::before {
     content: '';
     position: absolute;
-    left: 3px;
+    left: 2px;
     top: 50%;
     width: 3px;
     height: 12px;

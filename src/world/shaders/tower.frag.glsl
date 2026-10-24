@@ -19,7 +19,7 @@ uniform vec4 uPulse[PULSES]; // pulse wave origin (world), age in s (< 0: none)
 uniform vec4 uPulseB[PULSES]; // ring center x, z; meters across the screen at the pulse
 uniform float uPulseOn;
 uniform vec4 uSpill; // video spill color, amount (0..0.2)
-uniform vec3 uSpillAt; // video center (device px), falloff radius (px)
+uniform vec4 uSpillAt; // video center (device px), falloff radius (px), brightness drive
 uniform vec4 uShow; // light show: strength, seconds in, seconds per beat
 
 varying vec3 vWorld;

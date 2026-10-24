@@ -1,14 +1,19 @@
 // lightshow.ts: the harbour light show (NIGHT-SIGNAL.md 11b.9), a nod to the harbour's nightly
 // show. For 12 s a few slim searchlight beams sweep the sky from the roofs of the tallest towers
 // (additive, soft, one draw call), while the windows pulse in rhythm, the pulses running across
-// the skyline. lightShow(false) stops it at once. It only ever runs with motion on.
+// the skyline, and a soft glow along the bottom of the frame pulses with them (sky.frag), so the
+// show reads even from Contact, whose camera sees only sky: the city lighting up below. The beams
+// sweep through whatever sky is in view: each one aims at a point that moves through the frame.
+// lightShow(false) stops it at once. It only ever runs with motion on.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Mesh, ShaderMaterial, Vector3, Vector4, type IUniform } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Mesh, ShaderMaterial, Vector3, Vector4, type IUniform, type PerspectiveCamera } from 'three';
 import type { CityLayout } from './city';
 
 const DURATION = 12;
 const BEAMS = 6;
-const LENGTH = 3200; // meters
+/** How far ahead of the camera the beams' aim points sit (m), and how far past them a beam runs. */
+const AIM_DIST = 4200;
+const OVERSHOOT = 1.35;
 /** One beat of the window pulses, in seconds (100 bpm). */
 const BEAT = 0.6;
 
@@ -39,8 +44,7 @@ attribute float aBeam;
 attribute float aAlong; // 0 at the roof, 1 at the far end
 attribute float aSide; // -1 or 1 across the beam
 uniform vec3 uBase[${BEAMS}];
-uniform vec3 uDir[${BEAMS}];
-uniform float uLength;
+uniform vec3 uDir[${BEAMS}]; // direction times length
 varying float vAlong;
 varying float vSide;
 varying float vBeam;
@@ -48,11 +52,13 @@ void main() {
   int i = int(aBeam + 0.5);
   vec3 base = uBase[i];
   vec3 dir = uDir[i];
-  vec3 p = base + dir * (aAlong * uLength);
+  float len = length(dir);
+  vec3 p = base + dir * aAlong;
+  dir /= len;
   // face the camera: widen across the view direction
   vec3 toCam = normalize(cameraPosition - p);
   vec3 side = normalize(cross(dir, toCam));
-  float w = 4.0 + aAlong * uLength * 0.045;
+  float w = 4.0 + aAlong * len * 0.03;
   p += side * aSide * w;
   vAlong = aAlong;
   vSide = aSide;
@@ -69,11 +75,12 @@ varying float vSide;
 varying float vBeam;
 void main() {
   float across = exp(-vSide * vSide * 4.0);
-  float along = pow(1.0 - vAlong, 1.6) * smoothstep(0.0, 0.015, vAlong);
+  // bright all the way up, fading only over the last third (past the aim point)
+  float along = (1.0 - 0.45 * vAlong) * (1.0 - smoothstep(0.7, 1.0, vAlong)) * smoothstep(0.0, 0.015, vAlong);
   // a brighter knot where the beam leaves the roof
   float knot = exp(-vAlong * 60.0) * 1.5;
   vec3 c = mix(uCool, vec3(1.0), 0.5 + 0.5 * fract(vBeam * 0.37));
-  gl_FragColor = vec4(c * (along * 0.22 + knot * 0.4) * across * uAlpha, 1.0);
+  gl_FragColor = vec4(c * (along * 0.28 + knot * 0.4) * across * uAlpha, 1.0);
 }
 `;
 
@@ -84,7 +91,7 @@ export interface LightShow {
   update(now: number, motion: boolean): void;
 }
 
-export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number, number, number]): LightShow {
+export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number, number, number], camera: PerspectiveCamera): LightShow {
   // Sources: the roofs of the tallest towers, at least 4% of the city apart, so the beams spread.
   const tall = [...city.towers].sort((a, b) => b.roof - a.roof);
   const picked: typeof tall = [];
@@ -92,6 +99,8 @@ export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number,
     if (picked.length >= BEAMS) break;
     if (picked.every((p) => Math.abs(p.x - t.x) > city.width * 0.04)) picked.push(t);
   }
+  // left to right, so each beam's lane in the frame is on its own side
+  picked.sort((a, b) => a.x - b.x);
   const bases = picked.map((t) => new Vector3(t.x, t.roof + 2, t.z));
   while (bases.length < BEAMS) bases.push(bases[bases.length - 1].clone());
 
@@ -127,7 +136,6 @@ export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number,
     uniforms: {
       uBase: { value: bases },
       uDir: { value: dirs },
-      uLength: { value: LENGTH },
       uAlpha: { value: 0 },
       uCool: { value: new Vector3(...cool) },
     },
@@ -143,15 +151,19 @@ export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number,
   let start = -1;
   let on = false;
 
-  /** Where beam b points at time t (s): a slow sweep, the beams in pairs that cross and part. */
+  /**
+   * Where beam b points at time t (s): at a point in the sky in view that sweeps through the frame,
+   * each beam in its own lane, the lanes swinging wide enough that neighbours cross.
+   */
+  const target = new Vector3();
   const aim = (b: number, t: number, out: Vector3) => {
-    const side = b % 2 === 0 ? 1 : -1;
-    const ph = b * 0.9;
-    const az = side * (0.35 + 0.45 * Math.sin(t * 0.55 + ph)) + 0.12 * Math.sin(t * 1.3 + ph * 2.0);
-    const el = 1.05 + 0.25 * Math.sin(t * 0.8 + ph * 1.7);
-    const ce = Math.cos(el);
-    // az 0 points straight up-and-toward the harbour slightly, so beams lean over the water
-    return out.set(Math.sin(az) * ce, Math.sin(el), Math.cos(az) * ce * 0.35).normalize();
+    const lane = ((b + 0.5) / BEAMS) * 2 - 1;
+    const x = lane * 0.75 + 0.38 * Math.sin(t * 0.85 + b * 1.3);
+    const y = 0.42 + 0.32 * Math.sin(t * 0.55 + b * 0.9);
+    target.set(x, y, 0.5).unproject(camera).sub(camera.position).normalize().multiplyScalar(AIM_DIST).add(camera.position);
+    // never aim below the roof: the beams always rise
+    if (target.y < bases[b].y + 200) target.y = bases[b].y + 200;
+    return out.subVectors(target, bases[b]).multiplyScalar(OVERSHOOT);
   };
 
   return {
@@ -191,6 +203,7 @@ export function buildLightShow(city: CityLayout, U: ShowUniforms, cool: [number,
       const env = Math.min(1, t / 0.8) * Math.min(1, (DURATION - t) / 1.2);
       U.uShow.value.set(env, t, BEAT, 0);
       (mat.uniforms.uAlpha as IUniform<number>).value = env;
+      camera.updateMatrixWorld();
       for (let b = 0; b < BEAMS; b++) aim(b, t, dirs[b]);
       mesh.visible = true;
     },

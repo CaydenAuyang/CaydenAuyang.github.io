@@ -1,0 +1,76 @@
+{
+ "file": "figure-lo.bin",
+ "count": 30000,
+ "bytes": 480000,
+ "ringStepSourcePx": 2.625,
+ "layout": [
+  {
+   "name": "position",
+   "type": "Int16",
+   "itemSize": 3,
+   "byteOffset": 0,
+   "note": "multiply by posScale"
+  },
+  {
+   "name": "normalXZ",
+   "type": "Int8",
+   "itemSize": 2,
+   "byteOffset": 180000,
+   "note": "divide by 127; horizontal surface normal (nx, nz)"
+  },
+  {
+   "name": "viewA",
+   "type": "Uint8",
+   "itemSize": 4,
+   "byteOffset": 240000,
+   "normalized": true,
+   "note": "video brightness at head yaw -30,-20,-10,0"
+  },
+  {
+   "name": "viewB",
+   "type": "Uint8",
+   "itemSize": 3,
+   "byteOffset": 360000,
+   "normalized": true,
+   "note": "video brightness at head yaw +10,+20,+30"
+  },
+  {
+   "name": "ringU",
+   "type": "Uint8",
+   "itemSize": 1,
+   "byteOffset": 450000,
+   "normalized": true,
+   "note": "position around its ring, 0 = back centre"
+  }
+ ],
+ "posScale": 3.3333333333333335e-05,
+ "units": "figure height = 1.0. y = 0 at the crop line (mid-chest), y = 1 at the top of the hair. x to the viewer's right, z toward the viewer. The yaw axis is x = 0, z = 0.",
+ "bbox": {
+  "x": [
+   -0.3932,
+   0.3939
+  ],
+  "y": [
+   0,
+   1
+  ],
+  "z": [
+   -0.0899,
+   0.2956
+  ]
+ },
+ "viewsDeg": [
+  -30,
+  -20,
+  -10,
+  0,
+  10,
+  20,
+  30
+ ],
+ "yChin": 0.6099,
+ "yNeckBase": 0.4969,
+ "torsoYawRatio": 0.85,
+ "maxYawDeg": 30,
+ "yHeadTorsoSplit": 0.5257
+}

@@ -8,9 +8,11 @@
 // CSS. Both are free under the SIL Open Font License. A browser only downloads the faces a page
 // actually uses. Latin subset only.
 //   - Barlow Condensed 600, 700 and 800, always uppercase: the name (800), section headlines,
-//     project names and subheads (700), and small labels (600). font-display: swap, with 800
-//     preloaded for the name (Base.astro). Every Barlow line on the first screen is one word in
-//     a box whose size is set in CSS, so the swap changes the letters but moves nothing.
+//     project names and subheads (700), and small labels (600). font-display: swap, with 800 and
+//     700 preloaded (Base.astro). Its stand-in is "Barlow Fallback" (base.css): Arial Bold sized
+//     for uppercase (Astro's automatic stand-in is sized from lowercase letters, which made it
+//     about 9% wider than Barlow in capitals, so headings wrapped onto extra lines until the font
+//     arrived and moved everything under them).
 //   - JetBrains Mono 400 and 500: all paragraph text, facts, captions, buttons and menu items.
 //     font-display: swap, with both weights preloaded. Its stand-in is Courier New with Astro's
 //     metric overrides; both are monospaced at 0.6em per character, so lines break in exactly
@@ -32,7 +34,8 @@ export default defineConfig({
       styles: ['normal'],
       display: 'swap',
       subsets: ['latin'],
-      fallbacks: ['sans-serif'],
+      fallbacks: ['Barlow Fallback', 'sans-serif'],
+      optimizedFallbacks: false,
     },
     {
       provider: fontProviders.fontsource(),

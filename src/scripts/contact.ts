@@ -114,7 +114,7 @@ if (lightsWrap && lightsButton && !html.hasAttribute('data-snapshot')) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   const showIfAble = () => {
     const able = html.classList.contains('has-interactions') && !html.classList.contains('no-webgl') && !reduce.matches;
-    lightsWrap.hidden = !able;
+    lightsWrap.classList.toggle('is-on', able);
   };
   new MutationObserver(showIfAble).observe(html, { attributes: true, attributeFilter: ['class'] });
   reduce.addEventListener?.('change', showIfAble);

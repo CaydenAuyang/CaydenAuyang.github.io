@@ -185,7 +185,8 @@ const vars = [
   .hero__hint:global(.is-in) {
     opacity: 1;
   }
-  .hero__hint:global(.is-gone) {
+  .hero__hint:global(.is-gone),
+  .hero__hint:global(.is-in.is-scrolled) {
     opacity: 0;
     transition-duration: 400ms;
   }

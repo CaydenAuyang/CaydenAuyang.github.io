@@ -18,12 +18,13 @@ import {
 import { PALETTE } from './palette';
 import { mulberry32 } from './random';
 import { PULSES, type PulseUniforms } from './pulse';
+import type { ShowUniforms } from './lightshow';
 import skyVert from './shaders/sky.vert.glsl?raw';
 import skyFrag from './shaders/sky.frag.glsl?raw';
 import starsVert from './shaders/stars.vert.glsl?raw';
 import starsFrag from './shaders/stars.frag.glsl?raw';
 
-export interface SkyUniforms extends PulseUniforms {
+export interface SkyUniforms extends PulseUniforms, ShowUniforms {
   uTime: IUniform<number>;
   uMotion: IUniform<number>;
   uSkyFade: IUniform<number>;
@@ -75,6 +76,9 @@ export function buildSky(shared: SkyUniforms, opts: SkyOptions): Sky {
         uTime: shared.uTime,
         uMotion: shared.uMotion,
         uSkyFade: shared.uSkyFade,
+        uShow: shared.uShow,
+        uPulseRes: shared.uPulseRes,
+        uWarm: { value: new Vector3(...PALETTE.window) },
         uNight: { value: new Vector3(...PALETTE.night) },
         uSky: { value: new Vector3(...PALETTE.sky) },
         uGlow: { value: new Vector3(...PALETTE.glow) },

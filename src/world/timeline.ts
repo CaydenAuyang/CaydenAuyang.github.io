@@ -41,9 +41,10 @@ const BEATS: Record<SceneKey, Beat> = {
   ais: { key: 'ais', arrive: 0.45, morph: { hold: 'A' }, highlight: 'ais' },
   club: { key: 'club', arrive: 0.45, morph: { hold: 'A' }, highlight: 'club' },
   more: { key: 'more', arrive: 0.6, morph: { hold: 'A' } },
-  // Since May tilts all the way up to People's view, and People holds it (spec: "Holds on the
-  // sky"). People is a short section, so a camera move of its own would whip past in a wheel notch.
-  since: { key: 'people', arrive: 0.8, morph: { from: 'A', to: 'F', over: [0.05, 0.7] } },
+  // People holds Since May's view (spec: "Holds on the sky"): the people key's pose is the since
+  // pose, and People is too short for a camera move of its own. Since May must arrive at its own
+  // key in one segment; lerping through two keys stalls at the middle one (each segment eases).
+  since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'F', over: [0.05, 0.7] } },
   people: { key: 'people', arrive: 0, morph: { hold: 'F' } },
   // The lights gather once People's text has scrolled away (Contact starts as it enters the window).
   contact: { key: 'contact', arrive: 0.5, morph: { from: 'F', to: 'E', over: [0.35, 0.9] } },

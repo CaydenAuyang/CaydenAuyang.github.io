@@ -477,10 +477,22 @@ const LAST_STOP = editPieces.length + 1;
     line-height: var(--lh-body);
   }
   .qp__note-n {
+    position: relative;
+    justify-self: start;
     font-size: 18px;
     font-weight: var(--fw-medium);
     color: var(--window);
     text-shadow: var(--halo-strong);
     font-variant-numeric: tabular-nums;
+  }
+  /* A small scrim of its own: without WebGL the still's bright figure outline can pass right
+     behind a number. */
+  .qp__note-n::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--space-2) * -1) calc(var(--space-3) * -1);
+    z-index: -1;
+    background: var(--scrim-hug);
+    pointer-events: none;
   }
 </style>

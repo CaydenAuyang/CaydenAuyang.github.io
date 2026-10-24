@@ -11,7 +11,7 @@ const headline = ignite(question.heading);
 <section id="question" class="scene question" data-scene="question" aria-labelledby="question-title">
   <div class="wrap">
     <div class="question__head stack scrim">
-      <h2 id="question-title" class="h2" {...headline.attrs} set:html={headline.html} />
+      <h2 id="question-title" class="h2" {...headline.attrs}>{question.heading}</h2>
       <p class="t-lead">{question.lead.text}</p>
     </div>
     <QuestionPanel

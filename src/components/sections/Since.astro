@@ -12,7 +12,7 @@ const headline = ignite(since.heading);
   <div class="wrap">
     <div class="since__block scrim">
       <div class="since__head stack">
-        <h2 id="since-title" class="h2" {...headline.attrs} set:html={headline.html} />
+        <h2 id="since-title" class="h2" {...headline.attrs}>{since.heading}</h2>
         <p class="t-lead">{since.lead.text}</p>
       </div>
       <ol class="strands">

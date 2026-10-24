@@ -86,7 +86,9 @@ const { menu = false } = Astro.props;
   .site-header > * {
     pointer-events: auto;
   }
-  /* A soft scrim so text scrolling under the header stays legible. A fade, never a bar. */
+  /* Text scrolls right under the name and Menu, so the header's own 64px are solid night
+     (nothing runs into its words or ghosts through beside them), then the backing fades out over
+     the next 48px. The sky's top is night too, so the band doesn't show as a bar. */
   .site-header::before {
     content: '';
     position: absolute;
@@ -94,24 +96,12 @@ const { menu = false } = Astro.props;
     z-index: -1;
     background: linear-gradient(
       to bottom,
-      rgb(var(--night-rgb) / 0.82) 0%,
-      rgb(var(--night-rgb) / 0.55) 50%,
+      rgb(var(--night-rgb) / 1) 0%,
+      rgb(var(--night-rgb) / 1) 57%,
+      rgb(var(--night-rgb) / 0.5) 78%,
       rgb(var(--night-rgb) / 0) 100%
     );
     pointer-events: none;
-  }
-  /* Phones: text scrolls right under the name and Menu, so the header's own 64px are solid night
-     (nothing ghosts through beside its words), then the backing fades out over the next 48px. */
-  @media (max-width: 767px) {
-    .site-header::before {
-      background: linear-gradient(
-        to bottom,
-        rgb(var(--night-rgb) / 1) 0%,
-        rgb(var(--night-rgb) / 1) 57%,
-        rgb(var(--night-rgb) / 0.5) 78%,
-        rgb(var(--night-rgb) / 0) 100%
-      );
-    }
   }
 
   .site-header__name,

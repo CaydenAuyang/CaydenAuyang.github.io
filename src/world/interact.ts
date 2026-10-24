@@ -160,18 +160,67 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     placeLabel();
     redraw();
   };
+  // The label sits just above its column's top, kept inside the side gutters, unless that spot
+  // would touch text or the header; then it goes just under the chart's baseline (the lowest
+  // column top, the 13-document stub, is level with it). Placed by its top-left corner.
+  let labelFor = -1;
+  let labelSize = { w: 0, h: 0 };
+  const textRects = () =>
+    Array.from(document.querySelectorAll<HTMLElement>('#experience :is(h2, h3, p, li, a, button), .site-header'))
+      .filter((el) => el !== label)
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < window.innerHeight);
   const placeLabel = () => {
     if (!label) return;
     const top = column >= 0 ? signal?.columnTop?.(column) : null;
     if (column < 0 || !top) {
       label.hidden = true;
+      labelFor = -1;
       return;
     }
-    const col = ARCHIVE[column];
-    label.textContent = archive.label(col.topic, col.count);
-    label.hidden = false;
-    label.style.left = `${Math.round(top.x * window.innerWidth)}px`;
-    label.style.top = `${Math.round(top.y * window.innerHeight)}px`;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    let base = 0;
+    for (let i = 0; i < ARCHIVE.length; i++) {
+      const t = signal!.columnTop!(i);
+      if (t) base = Math.max(base, t.y * H);
+    }
+    const rects = textRects();
+    if (labelFor !== column) {
+      const col = ARCHIVE[column];
+      label.textContent = archive.label(col.topic, col.count);
+      label.hidden = false;
+      label.style.transform = 'none';
+      labelSize = { w: label.offsetWidth, h: label.offsetHeight };
+      labelFor = column;
+    }
+    const { w, h } = labelSize;
+    const gutter = 16;
+    const gap = 8;
+    const fit = (v: number) => clamp(v, gutter, Math.max(gutter, W - gutter - w));
+    const x = fit(top.x * W - w / 2);
+    type Spot = { l: number; r: number; t: number; b: number };
+    const cost = (c: Spot) =>
+      rects.reduce((s, r) => s + Math.max(0, Math.min(c.r, r.right) - Math.max(c.l, r.left)) * Math.max(0, Math.min(c.b, r.bottom) - Math.max(c.t, r.top)), 0) +
+      (c.t < 0 || c.b > H ? 1e9 : 0);
+    // Above the top, or under the baseline; each centered on the column, or slid sideways just
+    // far enough to clear the text it would touch (a long label beside the text column).
+    let best: Spot | null = null;
+    let bestCost = Infinity;
+    for (const t of [top.y * H - gap - h, base + 2 * gap]) {
+      const xs = [x];
+      for (const r of rects) if (r.bottom > t && r.top < t + h) xs.push(fit(r.left - gap - w), fit(r.right + gap));
+      for (const l of xs) {
+        const spot = { l, r: l + w, t, b: t + h };
+        const c = cost(spot) + Math.abs(l - x) * 0.5;
+        if (c < bestCost) {
+          bestCost = c;
+          best = spot;
+        }
+      }
+    }
+    label.style.left = `${Math.round(best!.l)}px`;
+    label.style.top = `${Math.round(best!.t)}px`;
   };
   if (hasColumns) {
     // The columns move with the camera as the page scrolls, so the label follows them, and goes

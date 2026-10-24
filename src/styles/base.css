@@ -12,6 +12,31 @@
     .is-ready           set by the world once its first frame is drawn: the canvas fades in.
 */
 
+/*
+  Barlow Condensed's stand-in while it loads: Arial Bold, sized so its capitals run as wide as
+  Barlow's (every Barlow line is uppercase). Measured over every Barlow string on the page: Barlow
+  700 is 0.664 to 0.711 of Arial Bold's width (median 0.682), 800 is 0.694. The ascent and descent
+  are Barlow's (1.0 and 0.2 of the size), so lines sit where Barlow's will.
+*/
+@font-face {
+  font-family: 'Barlow Fallback';
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 600 700;
+  size-adjust: 68.2%;
+  ascent-override: 146.63%;
+  descent-override: 29.33%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: 'Barlow Fallback';
+  src: local('Arial Bold'), local('Arial-BoldMT');
+  font-weight: 800;
+  size-adjust: 69.4%;
+  ascent-override: 144.09%;
+  descent-override: 28.82%;
+  line-gap-override: 0%;
+}
+
 /* ---- Reset ---------------------------------------------------------------------------------- */
 
 *,
@@ -325,11 +350,12 @@ html[data-snapshot] .world-canvas {
 }
 
 /*
-  Neon ignition (NIGHT-SIGNAL.md 11b.2). Section headlines are split into letters at build time
-  (src/components/ui/ignite.ts). Under html.js-ignite (motion on, not snapshot) each letter starts
-  as an unlit tube, and when src/scripts/ignite.ts adds .is-igniting it strikes: a hot flash, one
-  or two flickers off and on, then it holds lit with a faint glow. Letters start --stagger apart,
-  left to right, all done within 700 ms. Only color and glow change: nothing moves, nothing splits.
+  Neon ignition (NIGHT-SIGNAL.md 11b.2). Section headlines are split into letters by
+  src/scripts/ignite.ts once Barlow has loaded (until then they read as plain lit text). Under
+  html.js-ignite (motion on, not snapshot) the letters start as unlit tubes, and when the script
+  adds .is-igniting each one strikes: a hot flash, one or two flickers off and on, then it holds lit with a faint glow.
+  Letters start --stagger apart, left to right, all done within 700 ms. Only color and glow change:
+  nothing moves, nothing splits.
   .is-lit is the resting state. Reduced motion, snapshot and no JavaScript: lit from the start.
 */
 :root {
@@ -356,16 +382,6 @@ html.js-ignite .is-lit .ign__l {
   color: inherit;
   text-shadow: inherit;
   animation: none;
-}
-/* Safety net: if ignite.ts never runs (it adds .ignite-ready at once), light everything at 4 s. */
-html.js-ignite:not(.ignite-ready) .ign__l {
-  animation: ign-safety 1ms linear 4s both;
-}
-@keyframes ign-safety {
-  to {
-    color: var(--window);
-    text-shadow: var(--ign-glow), var(--halo);
-  }
 }
 /* One flicker: strike, drop out, strike again and hold. */
 @keyframes ign-a {

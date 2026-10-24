@@ -1,8 +1,8 @@
 // signal.ts: the particle system that moves between the city and the pictures (NIGHT-SIGNAL.md
 // section 5). Owned by the Signal agent.
 //
-// One THREE.Points, one draw call. Every point has a base position in each of the six targets
-// (A city, B figure, C current, D archive, E two lights, F field), built once on the CPU here and
+// One THREE.Points, one draw call. Every point has a base position in each of the six built targets
+// (A city, B figure, C current, D archive, E two lights, S star field), built once on the CPU here and
 // again only when the viewport changes shape. The vertex shader does everything per frame: each
 // target's live motion (the current flows, the columns rise, the field drifts), and the morph
 // between two targets with a per-point delay of up to 30%, a curved path and curl noise that
@@ -10,15 +10,16 @@
 //
 // Window dimming: the points sit on lit windows in A, taken from the lowest lift ranks first, so
 // when they leave, setLift(maxRank, amount) dims exactly the windows they came from, in the same
-// order they leave, and relights them as they land. Points leave A in rank order and land in the
-// figure in its arrival order (outline first, hair strands from the part to the tips, face last).
+// order they leave, and relights them as they land. Into the figure they leave in its scan order
+// (the crown first), which the windows' ranks follow.
 //
-// The figure comes from public/world/figure-signal.bin ("CASG", tools/figure/lib/signal-format.mjs):
-// 8 bytes a point with its surface normal, and the first N points are an even sample, so each tier
-// reads only a prefix. It is truly three-dimensional (fitted to a front and two turned photos), so
-// it can turn (NIGHT-SIGNAL.md 5.1): setFigureTurn sets a rotation the shader applies to target B
-// about the figure's own center, and the normals let points facing away fade and shrink and points
-// on the outline brighten at any angle.
+// The figure (target B, NIGHT-SIGNAL.md 5 B and 5.1) is built from Cayden's video:
+// public/figure/figure-{hi|lo|phone}.bin (format in its .json; see site-handoff/figure-video).
+// Each file has exactly as many points as its tier, so figure point i is particle i: no
+// resampling, jitter or re-weighting, because the even lattice of horizontal rings is the look.
+// The shader places, turns (setFigureTurn: the head fully, the shoulders at 0.85, the neck
+// blended) and shades it (facing, and the video's brightness at 7 head angles), and assembles it
+// as a scan from the crown down.
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
@@ -27,8 +28,20 @@ import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
 import { createArc } from './arc';
 
-const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F'];
-const ID: Record<Target, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5 };
+/** The targets with their own positions on the geometry (S is the star field, 5 in the shader). */
+type Built = 'A' | 'B' | 'C' | 'D' | 'E' | 'S';
+const BUILT: Built[] = ['A', 'B', 'C', 'D', 'E', 'S'];
+const ID: Record<Built, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, S: 5 };
+/**
+ * Any target name to one that is built: 'F' is the star field's old name (the timeline still uses
+ * it until the v3 timeline lands), and the Wisers pictures (F1, F2, G) stay in the city (A) until
+ * they are built.
+ */
+function built(t: Target | 'F'): Built {
+  if (t === 'F' || t === 'S') return 'S';
+  if (t === 'F1' || t === 'F2' || t === 'G') return 'A';
+  return t;
+}
 
 /** Share of the lit windows the signal lifts: the lowest ranks. Raised only if the city is thin. */
 const LIFT_RANK = 0.1;
@@ -42,13 +55,21 @@ const LIFT_LAG = 0.05;
 /** Morph timing in the shader: up to 30% delay, then 70% travel. */
 const DELAY = 0.3;
 
-/** The figure's turn limits (contract: 30 degrees of yaw, 5 of pitch), with room for the spring's overshoot. */
-const MAX_YAW = (34 * Math.PI) / 180;
-const MAX_PITCH = (6 * Math.PI) / 180;
+/** The figure's turn limits (contract and figure-video/README.md: 30 degrees of yaw, 5 of pitch). */
+const MAX_YAW = (30 * Math.PI) / 180;
+const MAX_PITCH = (5 * Math.PI) / 180;
 /** Figure points sampled for figureBox (an even sample, so the box follows the outline). */
 const BOX_SAMPLES = 1500;
-/** Figure brightness per group: body, skin, hair, contour. */
-const FIGURE_GAIN = [0.42, 0.95, 0.5, 0.55];
+/** The figure is never shorter than this on desktop (CSS px), or its rings moire. */
+const FIGURE_MIN_PX = 350;
+/** Point size in the figure, as a share of the spacing between its rings on screen (about 1.6 px on a 450 px tall hi figure). */
+const FIGURE_DOT = 0.95;
+/** The figure's brightness and white core against the preview renders (figure-video/preview), tuned by measurement. */
+const FIGURE_GAIN = 1.25;
+const FIGURE_CORE = 0.3;
+/** Scan assembly: how much of a morph into or out of the figure its rings take to lock in, and the whisper of randomness. */
+const SCAN = 0.35;
+const SCAN_JITTER = 0.04;
 /** Screen row (from the top) of the current's center in the question view: open water, below the reflections. */
 const CURRENT_ROW = 0.8;
 /** Archive highlight (11b.3): how long a column takes to light or dim (the shader doubles a lit column and dims the rest to 38%). */
@@ -59,7 +80,20 @@ const COL_HIT_PAD = { top: 18, foot: 10 };
 /** The arc between the two lights (11b.7): how far its middle rises (share of the view height), and its half width (CSS px). */
 const ARC_RISE = 0.17;
 const ARC_HALF_WIDTH = 6;
-/** Field (F): the share of points that are clear lights, and of points lit at all (clear or faint). */
+/**
+ * The light a lifted window gives to the points that leave it, shared among them, so the light
+ * that rises matches what the city loses (measured at Since May: carried / lost 0.8 to 1.6 while
+ * the city is in view). Phone windows are smaller on screen next to the points, so less.
+ */
+const CARRY_WINDOW = { desktop: 1.6, phone: 0.5 };
+/**
+ * How the carried light is shared out (uCarryMix): the share of points that carry most of it, their
+ * multiple, everyone else's, and how much larger carriers draw in flight. Phones have fewer, smaller
+ * points and a smaller city on screen, so more of their points carry, brighter and larger, or the
+ * spray would read as a few extra stars.
+ */
+const CARRY_MIX = { desktop: [0.25, 3.2, 0.27, 1], phone: [0.5, 8, 0.3, 1.45] };
+/** Star field (S): the share of points that are clear lights, and of points lit at all (clear or faint). */
 const FIELD_CLEAR = 0.025;
 const FIELD_LIT = 0.12;
 /** Share of archive points that drift loose instead of joining a column. */
@@ -73,9 +107,6 @@ const COL_TOP_ROW = 0.1;
 
 const COLORS = { warm: '#FFB65C', cool: '#CFE3FF' };
 
-const CASG_HEADER = 40;
-const CASG_STRIDE = 8;
-const CASG_Q = [2047, 2047, 1023];
 
 export interface SignalInfo {
   windows: number;
@@ -95,90 +126,56 @@ export interface SignalDebug extends Signal {
 
 // ---- Figure data -------------------------------------------------------------------------------
 
-interface FigureData {
+interface FigureMeta {
+  file: string;
   count: number;
-  pos: Float32Array; // figure heights, origin at the bounding box center (x, y) and the neck axis (z)
-  nrm: Float32Array; // unit surface normals (0, 0, 1 for files without them)
-  weight: Float32Array;
-  group: Uint8Array;
-  order: Float32Array;
+  posScale: number;
+  yChin: number;
+  yNeckBase: number;
+  torsoYawRatio: number;
 }
 
-/** Reads the first `bytes` of a file and stops downloading there (phones need only a prefix). */
-async function fetchPrefix(url: string, bytes: number): Promise<Uint8Array> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`signal: ${url} answered ${res.status}`);
-  if (!res.body) return new Uint8Array(await res.arrayBuffer());
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (total < bytes) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  if (total >= bytes) reader.cancel().catch(() => {});
-  const out = new Uint8Array(total);
-  let o = 0;
-  for (const c of chunks) {
-    out.set(c, o);
-    o += c.byteLength;
-  }
-  return out;
+interface FigureData {
+  meta: FigureMeta;
+  count: number;
+  position: Float32Array; // 3 a point: figure height 1, y up from the crop line, yaw axis at x = z = 0, z toward the viewer
+  normalXZ: Float32Array; // 2 a point: the horizontal surface normal
+  viewA: Uint8Array; // 4 a point: the video's brightness at head yaw -30, -20, -10, 0
+  viewB: Uint8Array; // 3 a point: at +10, +20, +30
+  ringStep: number; // the spacing between rings, in figure heights
 }
 
-async function loadFigure(url: string, count: number): Promise<FigureData> {
-  let fileUrl = url;
-  if (/\.json(\?|$)/.test(url)) {
-    const manifest = await (await fetch(url)).json();
-    fileUrl = new URL(manifest.file, new URL(url, location.href)).href;
-  }
-  const buf = await fetchPrefix(fileUrl, CASG_HEADER + count * CASG_STRIDE);
-  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-  if (String.fromCharCode(buf[0], buf[1], buf[2], buf[3]) !== 'CASG') throw new Error('signal: figure file is not CASG');
-  const version = dv.getUint16(4, true);
-  const header = dv.getUint16(6, true);
-  const stride = version >= 2 ? dv.getUint16(36, true) || CASG_STRIDE : CASG_STRIDE;
-  const n = Math.min(dv.getUint32(8, true), count, Math.floor((buf.byteLength - header) / stride));
-  const min = [0, 1, 2].map((d) => dv.getFloat32(12 + d * 4, true));
-  const max = [0, 1, 2].map((d) => dv.getFloat32(24 + d * 4, true));
-  const pos = new Float32Array(n * 3);
-  const nrm = new Float32Array(n * 3);
-  const weight = new Float32Array(n);
-  const group = new Uint8Array(n);
-  const order = new Float32Array(n);
-  for (let k = 0; k < n; k++) {
-    const o = header + k * stride;
-    if (version >= 2) {
-      // Packed position (11, 11 and 10 bits), weight, group and arrival, octahedral normal.
-      const q = dv.getUint32(o, true);
-      const qs = [q & 2047, (q >>> 11) & 2047, q >>> 22];
-      for (let d = 0; d < 3; d++) pos[k * 3 + d] = min[d] + (qs[d] / CASG_Q[d]) * (max[d] - min[d]);
-      weight[k] = buf[o + 4] / 255;
-      group[k] = buf[o + 5] & 3;
-      order[k] = (buf[o + 5] >> 2) / 63;
-      let u = (buf[o + 6] / 255) * 2 - 1;
-      let v = (buf[o + 7] / 255) * 2 - 1;
-      const z = 1 - Math.abs(u) - Math.abs(v);
-      if (z < 0) {
-        const ou = u;
-        u = (1 - Math.abs(v)) * (ou >= 0 ? 1 : -1);
-        v = (1 - Math.abs(ou)) * (v >= 0 ? 1 : -1);
-      }
-      const l = Math.hypot(u, v, z) || 1;
-      nrm[k * 3] = u / l;
-      nrm[k * 3 + 1] = v / l;
-      nrm[k * 3 + 2] = z / l;
-    } else {
-      for (let d = 0; d < 3; d++) pos[k * 3 + d] = (min[d] + max[d]) / 2 + (dv.getInt16(o + d * 2, true) / 32767) * ((max[d] - min[d]) / 2);
-      weight[k] = buf[o + 6] / 255;
-      group[k] = buf[o + 7] & 3;
-      order[k] = (buf[o + 7] >> 2) / 63;
-      nrm[k * 3 + 2] = 1;
-    }
-  }
-  return { count: n, pos, nrm, weight, group, order };
+const FIGURE_FILES = { hi: 60000, lo: 30000, phone: 16000 } as const;
+type FigureTier = keyof typeof FIGURE_FILES;
+
+/**
+ * Loads the video-built figure from a folder. The file is the one with exactly as many points as
+ * the tier has particles (hi 60,000, lo 30,000, phone 16,000), falling back to the tier's name.
+ * The old single-file path (anything ending in .bin or .json) means the default folder, /figure.
+ */
+async function loadFigure(url: string, count: number, tier: string): Promise<FigureData> {
+  const base = /\.(bin|json)(\?|$)/.test(url) ? '/figure' : url.replace(/\/+$/, '');
+  const byCount = (Object.keys(FIGURE_FILES) as FigureTier[]).find((k) => FIGURE_FILES[k] === count);
+  const name: FigureTier = byCount ?? (tier === 'phone' ? 'phone' : tier === 'low' ? 'lo' : 'hi');
+  const metaRes = await fetch(`${base}/figure-${name}.json`);
+  if (!metaRes.ok) throw new Error(`signal: ${base}/figure-${name}.json answered ${metaRes.status}`);
+  const meta: FigureMeta = await metaRes.json();
+  const binRes = await fetch(`${base}/${meta.file}`);
+  if (!binRes.ok) throw new Error(`signal: ${base}/${meta.file} answered ${binRes.status}`);
+  const buf = await binRes.arrayBuffer();
+  const n = meta.count;
+  if (buf.byteLength !== 16 * n) throw new Error(`signal: ${meta.file} should be ${16 * n} bytes, not ${buf.byteLength}`);
+  const p16 = new Int16Array(buf, 0, 3 * n);
+  const position = new Float32Array(3 * n);
+  for (let i = 0; i < 3 * n; i++) position[i] = p16[i] * meta.posScale;
+  const n8 = new Int8Array(buf, 6 * n, 2 * n);
+  const normalXZ = new Float32Array(2 * n);
+  for (let i = 0; i < 2 * n; i++) normalXZ[i] = n8[i] / 127;
+  // Ring spacing: the median step between the distinct heights of the rings.
+  const heights = Array.from(new Set(Array.from(p16.filter((_, k) => k % 3 === 1)))).sort((a, b) => b - a);
+  const steps = heights.slice(1).map((h, k) => (heights[k] - h) * meta.posScale).sort((a, b) => a - b);
+  const ringStep = steps.length ? steps[steps.length >> 1] : 1 / 200;
+  return { meta, count: n, position, normalXZ, viewA: new Uint8Array(buf, 8 * n, 4 * n), viewB: new Uint8Array(buf, 12 * n, 3 * n), ringStep };
 }
 
 // ---- Small helpers -----------------------------------------------------------------------------
@@ -250,7 +247,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   const lm = world.landmarks;
 
   // Windows first (sync), while the figure downloads.
-  const figurePromise = loadFigure(opts.figureUrl, N);
+  const figurePromise = loadFigure(opts.figureUrl, N, world.tier.tier);
   let liftRank = LIFT_RANK;
   let win: LitWindowSamples = world.sampleLitWindows(N, liftRank);
   while (win.count * MAX_PER_WINDOW < N && liftRank < MAX_LIFT_RANK) {
@@ -288,6 +285,29 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   let rMax = 0;
   for (let k = 0; k < used; k++) rMax = Math.max(rMax, wRank[byRank[k]]);
 
+  // ---- The figure: particle i is figure point i (its points are ordered ring by ring from the
+  // crown down). Windows are handed out in rank order, so the order the windows dim in follows the
+  // scan (crown first); within each of 48 slices of a few rings, windows on the left feed the left
+  // of the figure, so the light mostly rises instead of criss-crossing.
+  const F = fig.count;
+  const figX = (i: number) => (i < F ? fig.position[i * 3] : 0);
+  {
+    const SLICES = 48;
+    for (let s = 0; s < SLICES; s++) {
+      const a = Math.floor((s * N) / SLICES);
+      const b = Math.floor(((s + 1) * N) / SLICES);
+      const pts: number[] = [];
+      const wins: number[] = [];
+      for (let i = a; i < b; i++) {
+        pts.push(i);
+        wins.push(winOf[i]);
+      }
+      pts.sort((p, q) => figX(p) - figX(q) || p - q);
+      wins.sort((p, q) => wAcross[p] - wAcross[q] || p - q);
+      for (let k = 0; k < pts.length; k++) winOf[pts[k]] = wins[k];
+    }
+  }
+
   const aInfo = new Float32Array(N * 4);
   for (let i = 0; i < N; i++) {
     const j = winOf[i];
@@ -295,37 +315,72 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     aInfo[i * 4 + 1] = rMax > 0 ? clamp(wRank[j] / rMax, 0, 1) : aRand[i * 4];
   }
 
-  // ---- Pair points with figure points: leave in rank order, land in the figure's arrival order.
-  // Within each of 24 timing slices, windows on the left feed the left of the figure, so the light
-  // mostly rises instead of criss-crossing.
-  const F = fig.count;
-  const figOf = new Uint32Array(N);
-  {
-    const figByOrder = Array.from({ length: N }, (_, k) => k % F).sort((a, b) => fig.order[a] - fig.order[b] || a - b);
-    const SLICES = 24;
-    for (let s = 0; s < SLICES; s++) {
-      const a = Math.floor((s * N) / SLICES);
-      const b = Math.floor(((s + 1) * N) / SLICES);
-      const pts: number[] = [];
-      const figs: number[] = [];
-      for (let i = a; i < b; i++) {
-        pts.push(i);
-        figs.push(figByOrder[i]);
-      }
-      pts.sort((p, q) => wAcross[winOf[p]] - wAcross[winOf[q]] || p - q);
-      figs.sort((p, q) => fig.pos[p * 3] - fig.pos[q * 3] || p - q);
-      for (let k = 0; k < pts.length; k++) figOf[pts[k]] = figs[k];
+  // The figure's own attributes. Particles beyond the figure's count (only if a tier and its file
+  // disagree) sit below the crop line, unlit.
+  const aFigPos = new Float32Array(N * 3);
+  const aFigN = new Float32Array(N * 2);
+  const aFigViewA = new Uint8Array(N * 4);
+  const aFigViewB = new Uint8Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    if (i < F) {
+      aFigPos.set(fig.position.subarray(i * 3, i * 3 + 3), i * 3);
+      aFigN.set(fig.normalXZ.subarray(i * 2, i * 2 + 2), i * 2);
+      aFigViewA.set(fig.viewA.subarray(i * 4, i * 4 + 4), i * 4);
+      aFigViewB.set(fig.viewB.subarray(i * 3, i * 3 + 3), i * 3);
+    } else {
+      aFigPos[i * 3 + 1] = -10;
     }
   }
-  // Points beyond the figure's count reuse its points; nudge them so they do not stack exactly.
-  const figJitter = new Float32Array(N * 3);
-  if (F < N) for (let i = 0; i < N * 3; i++) figJitter[i] = (rand() - 0.5) * 0.004;
+
+  // Window dimming that follows the scan: when each particle leaves for the figure (crown first)
+  // and lands back from it (chest first), and its window's rank, sorted by time. The scan delays
+  // match the shader's: SCAN * (1 - y) + SCAN_JITTER * aRand.x into the figure, SCAN * y + ... out.
+  const travel = 1 - SCAN - SCAN_JITTER;
+  const scanIn = { t: new Float32Array(N), rank: new Float32Array(N) };
+  const scanOut = { t: new Float32Array(N), rank: new Float32Array(N) };
+  {
+    const inT: [number, number][] = [];
+    const outT: [number, number][] = [];
+    for (let i = 0; i < N; i++) {
+      const y = i < F ? fig.position[i * 3 + 1] : 0;
+      const r = wRank[winOf[i]];
+      inT.push([SCAN * (1 - y) + SCAN_JITTER * aRand[i * 4] + travel * LIFT_LAG, r]);
+      outT.push([SCAN * y + SCAN_JITTER * aRand[i * 4] + travel * (1 - LIFT_LAG), r]);
+    }
+    inT.sort((a, b) => a[0] - b[0]);
+    outT.sort((a, b) => a[0] - b[0]);
+    // In: the highest rank among the particles gone by time t (prefix maximum).
+    let m = 0;
+    inT.forEach(([t, r], k) => {
+      m = Math.max(m, r);
+      scanIn.t[k] = t;
+      scanIn.rank[k] = m;
+    });
+    // Out: the highest rank among the particles not yet landed after time t (suffix maximum).
+    m = 0;
+    for (let k = N - 1; k >= 0; k--) {
+      m = Math.max(m, outT[k][1]);
+      scanOut.t[k] = outT[k][0];
+      scanOut.rank[k] = m;
+    }
+  }
+  // The first index whose time is above t.
+  const after = (arr: Float32Array, t: number) => {
+    let lo = 0;
+    let hi = arr.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (arr[mid] <= t) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
 
   // Screen x each point ends up at in the field (follows where its window is), shared by F and E.
   const fieldX = new Float32Array(N);
   for (let i = 0; i < N; i++) fieldX[i] = clamp(wAcross[winOf[i]] + gauss() * 0.12, -0.08, 1.08);
 
-  const T = TARGETS.map(() => new Float32Array(N * 4));
+  const T = BUILT.map(() => new Float32Array(N * 4));
   const attrs = T.map((arr) => new BufferAttribute(arr, 4));
 
   // Fixed randoms per target, so a rebuild on resize lands every point in the same place.
@@ -369,12 +424,12 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   // Highlight: each column's amount now and where it is heading, and the dim on the others.
   const colHi = { target: -1, amt: new Float32Array(COLS), dim: 0 };
 
-  // Target B's frame in the world (rebuilt with the targets) and its normals in world space, as
-  // signed bytes. The turn rotates both about the frame's center in the shader.
-  const figFrame = { center: new Vector3(), x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), z: new Vector3(0, 0, 1), height: 1 };
-  const aNrm = new Int8Array(N * 4);
+  // Target B's frame in the world (rebuilt with the targets): the figure's base centre (the yaw
+  // axis at the crop line) and its axes scaled to its height (x right, y up, z toward the hero
+  // camera). The shader turns the figure in its own units and maps it out through this frame.
+  const figFrame = { origin: new Vector3(), basis: new Matrix3(), height: 1 };
   const turn = { yaw: 0, pitch: 0 };
-  // An even sample of the figure, in figure units, for figureBox.
+  // An even sample of the figure, for figureBox.
   const boxIdx = Array.from({ length: Math.min(BOX_SAMPLES, F) }, (_, j) => Math.floor((j * F) / Math.min(BOX_SAMPLES, F)));
 
   const uniforms = {
@@ -403,37 +458,33 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uRise: { value: 1 / 28 },
     uStray: { value: STRAYS },
     uLightR: { value: 100 },
-    uFigCenter: { value: new Vector3() },
-    uFigRot: { value: new Matrix3() },
+    uFigOrigin: { value: figFrame.origin },
+    uFigBasis: { value: figFrame.basis },
+    uFigYaw: { value: 0 },
+    uFigPitch: { value: 0 },
+    uFigYChin: { value: fig.meta.yChin },
+    uFigYNeckBase: { value: fig.meta.yNeckBase },
+    uFigTorsoRatio: { value: fig.meta.torsoYawRatio },
+    uFigDot: { value: 1.5 },
+    uFigGain: { value: FIGURE_GAIN },
+    uFigCore: { value: FIGURE_CORE },
+    uScan: { value: 0 },
+    uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
+    uCarryMix: { value: (world.tier.tier === 'phone' ? CARRY_MIX.phone : CARRY_MIX.desktop).slice() },
     uColAmt: { value: new Float32Array(COLS) },
     uColDim: { value: 0 },
   };
 
-  // The turn as one matrix: R = Ry(yaw) Rx(pitch) in the figure's own frame (x right, y up, z
-  // toward the hero camera), taken to world space as B R B^T with B the frame's axes.
-  const _B = new Matrix3();
-  const _Bt = new Matrix3();
-  const _R = new Matrix3();
   function setTurn(yaw: number, pitch: number) {
     turn.yaw = yaw;
     turn.pitch = pitch;
-    const { x, y, z } = figFrame;
-    _B.set(x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z);
-    const cy = Math.cos(yaw);
-    const sy = Math.sin(yaw);
-    const cp = Math.cos(pitch);
-    const sp = Math.sin(pitch);
-    // Ry * Rx, row major: the face (0, 0, 1) goes to (sin yaw cos pitch, sin pitch, cos yaw cos pitch)
-    // and the top of the head (0, 1, 0) tips back as the face tilts up.
-    _R.set(cy, -sy * sp, sy * cp, 0, cp, sp, -sy, -cy * sp, cy * cp);
-    _Bt.copy(_B).transpose();
-    uniforms.uFigRot.value.copy(_B).multiply(_R).multiply(_Bt);
+    uniforms.uFigYaw.value = yaw;
+    uniforms.uFigPitch.value = pitch;
   }
 
   const info: SignalInfo = { windows: used, liftRank: rMax, pointsPerWindow: N / used, figurePoints: F, phone: false, scale: 1 };
 
   let infoAttr: BufferAttribute | null = null;
-  let nrmAttr: BufferAttribute | null = null;
 
   function build() {
     const W = world.renderer.domElement.clientWidth || window.innerWidth;
@@ -471,41 +522,33 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     }
 
     // ---- B: the figure at FIGURE_ANCHOR through the hero pose, facing the camera, at its true
-    // depth. Its frame (center and axes) is kept for the turn, and its normals go to aNrm.
+    // depth, never under FIGURE_MIN_PX tall on desktop. Only its frame is set here; the shader
+    // places each point from its own attributes. tB holds the unturned positions (for reference).
     {
       const anchor = phone ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
       const D = S;
+      const heightPx = phone ? anchor.height * H : Math.max(anchor.height * H, FIGURE_MIN_PX);
       const center = unproject(hero, anchor.x, anchor.y, D);
-      const height = anchor.height * 2 * D * hero.tanHalf;
+      const height = (heightPx / H) * 2 * D * hero.tanHalf;
       const z = new Vector3().subVectors(hero.pos, center).normalize();
       const x = new Vector3().crossVectors(hero.up, z).normalize();
       const y = new Vector3().crossVectors(z, x);
-      figFrame.center.copy(center);
-      figFrame.x.copy(x);
-      figFrame.y.copy(y);
-      figFrame.z.copy(z);
+      // The anchor is the figure's centre; its base (y = 0) sits half a height below.
+      figFrame.origin.copy(center).addScaledVector(y, -0.5 * height);
+      figFrame.basis.set(x.x * height, y.x * height, z.x * height, x.y * height, y.y * height, z.y * height, x.z * height, y.z * height, z.z * height);
       figFrame.height = height;
-      uniforms.uFigCenter.value.copy(center);
+      uniforms.uFigDot.value = FIGURE_DOT * fig.ringStep * heightPx;
       const t = T[1];
+      const o = figFrame.origin;
       for (let i = 0; i < N; i++) {
-        const k = figOf[i];
-        const fx = fig.pos[k * 3] + figJitter[i * 3];
-        const fy = fig.pos[k * 3 + 1] + figJitter[i * 3 + 1];
-        const fz = fig.pos[k * 3 + 2] + figJitter[i * 3 + 2];
-        t[i * 4] = center.x + (x.x * fx + y.x * fy + z.x * fz) * height;
-        t[i * 4 + 1] = center.y + (x.y * fx + y.y * fy + z.y * fz) * height;
-        t[i * 4 + 2] = center.z + (x.z * fx + y.z * fy + z.z * fz) * height;
-        const g = fig.group[k];
-        const wgt = fig.weight[k];
-        t[i * 4 + 3] = FIGURE_GAIN[g] * (g === 0 ? 0.55 + 0.3 * wgt : 0.3 + 0.7 * wgt);
-        const nx = fig.nrm[k * 3];
-        const ny = fig.nrm[k * 3 + 1];
-        const nz = fig.nrm[k * 3 + 2];
-        aNrm[i * 4] = Math.round(127 * (x.x * nx + y.x * ny + z.x * nz));
-        aNrm[i * 4 + 1] = Math.round(127 * (x.y * nx + y.y * ny + z.y * nz));
-        aNrm[i * 4 + 2] = Math.round(127 * (x.z * nx + y.z * ny + z.z * nz));
+        const fx = aFigPos[i * 3];
+        const fy = aFigPos[i * 3 + 1];
+        const fz = aFigPos[i * 3 + 2];
+        t[i * 4] = o.x + (x.x * fx + y.x * fy + z.x * fz) * height;
+        t[i * 4 + 1] = o.y + (x.y * fx + y.y * fy + z.y * fz) * height;
+        t[i * 4 + 2] = o.z + (x.z * fx + y.z * fy + z.z * fz) * height;
+        t[i * 4 + 3] = i < F ? 1 : 0;
       }
-      setTurn(turn.yaw, turn.pitch);
     }
 
     // ---- C: a current low over the water across the lower part of the question view. Each point
@@ -637,46 +680,52 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- F: a sparse drifting field among the stars around the since and people poses: about
-    // 2.5% of the points are clear lights (as bright as the sky's bright stars, never the much
-    // brighter ones), 9.5% faint ones (like the faintest stars), and the rest are dark, so the
-    // field reads as a few more lights among the stars rather than a speckle over them.
+    // ---- S: a sparse drifting field among the stars around the since and people poses: per view,
+    // about 1.3% of all the points are clear lights (as bright as the sky's bright stars, never
+    // the much brighter ones), 4.7% faint ones (like the faintest stars), and the rest are dark,
+    // so the field reads as a few more lights among the stars rather than a speckle over them.
     {
       const r = fixed[5];
       const t = T[5];
+      // When People holds Since May's view, the whole field is in that one view: half the share
+      // lit keeps the same number of lights on screen, spread evenly from top to bottom.
+      const oneView = since.fwd.dot(people.fwd) > 0.9995 && since.pos.distanceTo(people.pos) < S * 0.01;
+      const clear = FIELD_CLEAR * (oneView ? 0.5 : 1);
+      const lit = FIELD_LIT * (oneView ? 0.5 : 1);
       for (let i = 0; i < N; i++) {
         const f = r[i * 4] < 0.5 ? since : people;
         const De = skyDepth(f);
         const depth = De * (0.7 + 0.8 * r[i * 4 + 1]);
-        const sy = 0.03 + 0.8 * Math.pow(r[i * 4 + 2], 1.25);
+        const sy = oneView ? 0.03 + 0.9 * r[i * 4 + 2] : 0.03 + 0.8 * Math.pow(r[i * 4 + 2], 1.25);
         const p = unproject(f, fieldX[i], sy, depth, _v);
         t[i * 4] = p.x;
         t[i * 4 + 1] = p.y;
         t[i * 4 + 2] = p.z;
         const k = r[i * 4 + 3];
-        t[i * 4 + 3] = k < FIELD_CLEAR ? 0.45 + 0.4 * (1 - k / FIELD_CLEAR) : k < FIELD_LIT ? 0.05 + 0.09 * ((FIELD_LIT - k) / (FIELD_LIT - FIELD_CLEAR)) : 0;
+        t[i * 4 + 3] = k < clear ? 0.45 + 0.4 * (1 - k / clear) : k < lit ? 0.05 + 0.09 * ((lit - k) / (lit - clear)) : 0;
       }
     }
 
     for (const a of attrs) a.needsUpdate = true;
     if (infoAttr) infoAttr.needsUpdate = true;
-    if (nrmAttr) nrmAttr.needsUpdate = true;
   }
 
   const arc = createArc({ color: COLORS.warm, motion, requestRender: () => world.requestRender() });
   build();
 
   const geometry = new BufferGeometry();
-  // All six targets stay on the geometry so they upload once; position and aTo point at the two
-  // the current morph uses.
-  TARGETS.forEach((k, i) => geometry.setAttribute(`t${k}`, attrs[i]));
+  // All six built targets stay on the geometry so they upload once; position and aTo point at the
+  // two the current morph uses.
+  BUILT.forEach((k, i) => geometry.setAttribute(`t${k}`, attrs[i]));
   geometry.setAttribute('position', attrs[ID.B]);
   geometry.setAttribute('aTo', attrs[ID.B]);
   geometry.setAttribute('aRand', new BufferAttribute(aRand, 4));
   infoAttr = new BufferAttribute(aInfo, 4);
   geometry.setAttribute('aInfo', infoAttr);
-  nrmAttr = new BufferAttribute(aNrm, 4, true);
-  geometry.setAttribute('aNrm', nrmAttr);
+  geometry.setAttribute('aFigPos', new BufferAttribute(aFigPos, 3));
+  geometry.setAttribute('aFigN', new BufferAttribute(aFigN, 2));
+  geometry.setAttribute('aFigViewA', new BufferAttribute(aFigViewA, 4, true));
+  geometry.setAttribute('aFigViewB', new BufferAttribute(aFigViewB, 3, true));
 
   const material = new RawShaderMaterial({
     glslVersion: GLSL3,
@@ -701,10 +750,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   arc.mesh.visible = false;
 
   // ---- Morph state ----
-  let cur = { from: 'B' as Target, to: 'B' as Target, t: 1 };
+  let cur = { from: 'B' as Built, to: 'B' as Built, t: 1 };
   let lastLift = { maxRank: -1, amount: -1 };
 
-  function lift(from: Target, to: Target, t: number) {
+  function lift(from: Built, to: Built, t: number) {
     let maxRank = 0;
     let amount = 0;
     const full = rMax + 1e-5;
@@ -717,6 +766,21 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       const away = from === 'A' ? t >= 0.5 : t < 0.5;
       if (away) {
         maxRank = full;
+        amount = LIFT_AMOUNT;
+      }
+    } else if (from === 'A' && to === 'B') {
+      // Into the figure: windows dim in the scan's order (the highest rank among the particles
+      // already on their way).
+      const k = after(scanIn.t, t);
+      if (k > 0) {
+        maxRank = k >= N ? full : scanIn.rank[k - 1];
+        amount = LIFT_AMOUNT;
+      }
+    } else if (to === 'A' && from === 'B') {
+      // Back from the figure, chest first: windows stay dim while any of their particles is out.
+      const k = after(scanOut.t, t);
+      if (k < N) {
+        maxRank = scanOut.rank[k] + 1e-5;
         amount = LIFT_AMOUNT;
       }
     } else if (from === 'A') {
@@ -748,6 +812,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     u.uFrom.value = ID[from];
     u.uTo.value = ID[to];
     u.uT.value = t;
+    // Into the figure the rings lock in from the crown down; out of it, chest first.
+    u.uScan.value = to === 'B' && from !== 'B' ? 1 : from === 'B' && to !== 'B' ? -1 : 0;
     if (from === 'A' && to !== 'A') {
       u.uDelaySrc.value = 1;
       u.uDelayFlip.value = 0;
@@ -815,7 +881,6 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     return false;
   }
   const _p = new Vector3();
-  const _q = new Vector3();
 
   // ---- The archive as data (11b.3) ----
   // Whether the columns are what the points show: held, mostly arrived, or barely left.
@@ -885,18 +950,29 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     figureBox(): ScreenBox | null {
       if (disposed || !figureShowing()) return null;
       const cam = world.camera;
-      const { center, x, y, z, height } = figFrame;
-      const R = uniforms.uFigRot.value;
+      const e = figFrame.basis.elements; // column major
+      const o = figFrame.origin;
+      const { yChin, yNeckBase, torsoYawRatio } = fig.meta;
+      const cp = Math.cos(turn.pitch);
+      const sp = Math.sin(turn.pitch);
       let x0 = Infinity;
       let y0 = Infinity;
       let x1 = -Infinity;
       let y1 = -Infinity;
       for (const k of boxIdx) {
-        const fx = fig.pos[k * 3] * height;
-        const fy = fig.pos[k * 3 + 1] * height;
-        const fz = fig.pos[k * 3 + 2] * height;
-        _q.set(x.x * fx + y.x * fy + z.x * fz, x.y * fx + y.y * fy + z.y * fz, x.z * fx + y.z * fy + z.z * fz).applyMatrix3(R);
-        _p.copy(center).add(_q).project(cam);
+        // As the shader: the head turns fully, the shoulders at torsoYawRatio, the neck between.
+        const fx = fig.position[k * 3];
+        const fy = fig.position[k * 3 + 1];
+        const fz = fig.position[k * 3 + 2];
+        const ht = clamp((fy - yNeckBase) / (yChin - yNeckBase), 0, 1);
+        const a = turn.yaw * (torsoYawRatio + (1 - torsoYawRatio) * smooth01(ht));
+        const c = Math.cos(a);
+        const s = Math.sin(a);
+        const px = fx * c + fz * s;
+        const pz0 = -fx * s + fz * c;
+        const py = 0.5 + (fy - 0.5) * cp - pz0 * sp;
+        const pz = (fy - 0.5) * sp + pz0 * cp;
+        _p.set(o.x + e[0] * px + e[3] * py + e[6] * pz, o.y + e[1] * px + e[4] * py + e[7] * pz, o.z + e[2] * px + e[5] * py + e[8] * pz).project(cam);
         if (_p.z > 1) continue;
         x0 = Math.min(x0, (_p.x + 1) / 2);
         x1 = Math.max(x1, (_p.x + 1) / 2);
@@ -960,9 +1036,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (disposed) return;
       arc.send();
     },
-    setMorph(from: Target, to: Target, t: number) {
+    setMorph(from: Target | 'F', to: Target | 'F', t: number) {
       if (disposed) return;
-      cur = { from, to, t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
+      cur = { from: built(from), to: built(to), t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
       apply();
     },
     setMotion(enabled: boolean) {

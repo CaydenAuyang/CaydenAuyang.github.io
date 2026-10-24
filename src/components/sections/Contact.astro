@@ -52,7 +52,7 @@ const headline = ignite(contact.heading);
     }
 
     <div class="contact__body wrap scrim">
-      <h2 id="contact-title" class="h2" {...headline.attrs} set:html={headline.html} />
+      <h2 id="contact-title" class="h2" {...headline.attrs}>{contact.heading}</h2>
       <p class="contact__email-wrap">
         <a class="contact__email" href={`mailto:${contact.email.text}`}
           ><span class="sr-only">{ui.emailLabel}: </span>{contact.email.text}</a
@@ -67,7 +67,7 @@ const headline = ignite(contact.heading);
       <p class="sr-only" role="status" data-copy-status></p>
       <p class="contact__portfolio t-body">{contact.portfolio.text}</p>
       <p class="contact__small t-meta">{contact.smallPrint}</p>
-      <p class="contact__lights-wrap" data-lights-wrap hidden>
+      <p class="contact__lights-wrap" data-lights-wrap>
         <button type="button" class="contact__lights" aria-pressed="false" data-lights>{ui.lights}</button>
       </p>
     </div>
@@ -197,12 +197,21 @@ const headline = ignite(contact.heading);
     border-color: var(--window);
   }
 
-  /* Lights: a quiet toggle under the small print; lit (window) while the show runs. */
-  .contact__lights-wrap[hidden] {
-    display: none;
-  }
+  /* Lights: a quiet toggle under the small print; lit (window) while the show runs. Its row is
+     there from the first paint wherever it can apply (JavaScript, motion on, not snapshot: the
+     js-intro class set in the head), invisible until the scene's interactions are running, so
+     showing it moves nothing. Elsewhere (reduced motion, snapshot, no JavaScript) it takes no
+     space. Without WebGL the row stays reserved and empty. */
   .contact__lights-wrap {
+    display: none;
     margin-top: var(--space-3) !important;
+  }
+  :global(html.js-intro) .contact__lights-wrap {
+    display: block;
+    visibility: hidden;
+  }
+  :global(html.js-intro) .contact__lights-wrap:global(.is-on) {
+    visibility: visible;
   }
   .contact__lights {
     display: inline-flex;

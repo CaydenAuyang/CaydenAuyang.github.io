@@ -5,6 +5,9 @@
 //     (html.has-interactions, added by the lead's interact.ts), with motion on or off. Never in
 //     snapshot mode or without WebGL (html.no-webgl), where there is nothing to click.
 //   - With motion on it waits for the intro (about 2.6 s after the page started loading).
+//   - It fades away once the page has scrolled a little (on phones it would otherwise slide up
+//     across the figure's bright outline) and comes back at the top. If it would touch the hero's
+//     lines on a short screen, it doesn't show at all.
 //   - The first successful pulse (`world:pulse` from interact.ts) fades it out, and localStorage
 //     remembers that, so a returning visitor who already pulsed doesn't see it again. Storage can
 //     be missing or blocked (private windows); then the hint simply shows again next visit.
@@ -48,6 +51,15 @@ if (hint && text && !html.hasAttribute('data-snapshot') && !pulsedBefore()) {
     watch.disconnect();
     label();
     hint.hidden = false;
+    // Short screens: no room under the hero's lines.
+    const lines = document.querySelector<HTMLElement>('.hero__text');
+    if (lines && hint.getBoundingClientRect().top < lines.getBoundingClientRect().bottom + 8) {
+      hint.hidden = true;
+      return;
+    }
+    const scrolled = () => hint.classList.toggle('is-scrolled', window.scrollY > window.innerHeight * 0.12);
+    window.addEventListener('scroll', scrolled, { passive: true });
+    scrolled();
     const wait = reduce.matches ? 0 : Math.max(0, 2600 - performance.now());
     window.setTimeout(() => {
       // One frame after unhiding, so the fade runs.

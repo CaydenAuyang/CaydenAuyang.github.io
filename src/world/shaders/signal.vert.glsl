@@ -2,7 +2,8 @@
 // leaving (position) and the one it is heading to (aTo); xyz is world space and w is a per-target
 // value (brightness, or the current's phase). The shader adds each target's live motion, then
 // flows between the two along a curved path with a per-point delay and curl noise that peaks
-// mid-flight. Target ids: 0 A city, 1 B figure, 2 C current, 3 D archive, 4 E two lights, 5 F field.
+// mid-flight. Target ids: 0 A city, 1 B figure, 2 C current, 3 D archive, 4 E two lights, 5 S star
+// field. The figure (B) places itself from its own attributes (the video-built point set).
 
 precision highp float;
 precision highp int;
@@ -14,7 +15,13 @@ in vec4 position;
 in vec4 aTo;
 in vec4 aRand; // x delay key, y size, z path, w phase (and D strays: w < uStray)
 in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest), w archive column 1 to 12 (0: a stray)
-in vec4 aNrm; // target B's surface normal in world space (xyz)
+// The figure (B), point i of the video-built set (site-handoff/figure-video): its position in
+// figure heights (y up from the crop line, the yaw axis at x = z = 0, z toward the viewer), its
+// horizontal surface normal, and the video's brightness at head yaw -30 to +30 in 10 degree steps.
+in vec3 aFigPos;
+in vec2 aFigN;
+in vec4 aFigViewA;
+in vec3 aFigViewB;
 
 uniform int uFrom;
 uniform int uTo;
@@ -49,13 +56,37 @@ uniform float uColAmt[12]; // each column's highlight, 0..1 (11b.3)
 uniform float uColDim; // how far the columns that aren't highlighted dim, 0..1
 // Two lights (E): their radius in world units.
 uniform float uLightR;
-// Figure (B): the turn, a rotation about the figure's own center (setFigureTurn).
-uniform vec3 uFigCenter;
-uniform mat3 uFigRot;
+// Figure (B): its frame in the world (the base centre, and the axes scaled to its height), the
+// turn (setFigureTurn: yaw, positive turning the face to screen right; pitch, positive up), the
+// heights where the neck blends the head's turn into the shoulders', how far the shoulders turn
+// against the head, its point size (CSS px), its brightness, and the scan (1 into the figure,
+// crown first; -1 out of it, chest first; 0 neither).
+uniform vec3 uFigOrigin;
+uniform mat3 uFigBasis;
+uniform float uFigYaw;
+uniform float uFigPitch;
+uniform float uFigYChin;
+uniform float uFigYNeckBase;
+uniform float uFigTorsoRatio;
+uniform float uFigDot;
+uniform float uFigGain;
+uniform float uFigCore; // the figure's white core, low so its skin stays amber and its T-shirt dark
+uniform float uScan;
+// Brightness a point carries up from its window in flight, and how it is shared out: x the share
+// of points that carry most of it, y their multiple of uCarry, z everyone else's, w how much
+// larger the carriers draw in flight toward a dark target (the field).
+uniform float uCarry;
+uniform vec4 uCarryMix;
 
 out vec3 vColor;
 out float vAlpha;
 out float vCore;
+out float vDot; // 1 for the figure's points (a crisp, even disc), 0 for the rest
+
+const vec3 FIG_WINDOW = vec3(1.0, 0.714, 0.361); // #FFB65C
+const vec3 FIG_COOL = vec3(0.812, 0.890, 1.0); // #CFE3FF
+const float SCAN = 0.35;
+const float SCAN_JITTER = 0.04;
 
 // ---- Simplex noise with its gradient (Stefan Gustavson and Ian McEwan, webgl-noise, MIT) -------
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -128,31 +159,42 @@ const float TAU = 6.28318530718;
 // Live position of a point in target k from its base b. alpha is its brightness there; fade is
 // the part of that which hides a wrap (the current and the columns loop), so a point in flight
 // toward a wrapping target can hide its jump; size scales the point there.
-vec3 live(int k, vec4 b, out float alpha, out float fade, out float size) {
+vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out vec3 col) {
   fade = 1.0;
   size = 1.0;
+  col = mix(uCool, uWarm, aInfo.x);
   float t = uTime;
   if (k == 0) {
     alpha = 0.0;
     return b.xyz;
   }
   if (k == 1) {
-    // Figure: turned about its center, then a slow shimmer and a gentle breath of brightness.
-    vec3 p = uFigCenter + uFigRot * (b.xyz - uFigCenter);
-    p += curl(b.xyz * (9.0 / uScale) + vec3(0.0, 0.0, t * 0.05)) * uScale * 0.0016 * uMotion;
-    alpha = b.w * (0.9 + 0.1 * sin(t * 1.3 + aRand.w * TAU));
-    // Facing: the normal against the direction to the camera, in view space. Points facing away
-    // fade and shrink (the figure is see-through light, so its far side would cross the face);
-    // points seen edge on brighten, so the outline reads at every angle.
-    vec3 vn = mat3(modelViewMatrix) * (uFigRot * aNrm.xyz);
-    float nl = length(vn);
-    vec3 vp = (modelViewMatrix * vec4(p, 1.0)).xyz;
-    float facing = nl > 0.1 ? dot(vn / nl, -normalize(vp)) : 1.0;
-    float front = smoothstep(-0.42, 0.0, facing);
-    float rim = 1.0 - abs(facing);
-    alpha *= mix(0.03, 1.0, front) * (1.0 + 0.9 * rim * rim * rim);
-    size = mix(0.55, 1.0, front);
-    return p;
+    // Figure (figure-video/README.md). The head turns fully, the shoulders at uFigTorsoRatio of
+    // it, and the neck blends between them; then the pitch, about (y 0.5, z 0). No jitter and one
+    // size for every point: the even lattice of rings is the look.
+    float headT = smoothstep(uFigYNeckBase, uFigYChin, aFigPos.y);
+    float a = uFigYaw * mix(uFigTorsoRatio, 1.0, headT);
+    float c = cos(a);
+    float s = sin(a);
+    vec3 q = vec3(aFigPos.x * c + aFigPos.z * s, aFigPos.y, -aFigPos.x * s + aFigPos.z * c);
+    float facing = -aFigN.x * s + aFigN.y * c;
+    float cp = cos(uFigPitch);
+    float sp = sin(uFigPitch);
+    vec2 yz = vec2(q.y - 0.5, q.z);
+    q.y = 0.5 + yz.x * cp - yz.y * sp;
+    q.z = yz.x * sp + yz.y * cp;
+    // Brightness from the video at the 7 head angles, cross-faded as he turns.
+    float tv = clamp((degrees(uFigYaw) + 30.0) / 10.0, 0.0, 6.0);
+    float v = aFigViewA.x * max(0.0, 1.0 - abs(tv)) + aFigViewA.y * max(0.0, 1.0 - abs(tv - 1.0)) + aFigViewA.z * max(0.0, 1.0 - abs(tv - 2.0)) + aFigViewA.w * max(0.0, 1.0 - abs(tv - 3.0)) + aFigViewB.x * max(0.0, 1.0 - abs(tv - 4.0)) + aFigViewB.y * max(0.0, 1.0 - abs(tv - 5.0)) + aFigViewB.z * max(0.0, 1.0 - abs(tv - 6.0));
+    // Skin in window; the dark points are hair, brows and eyes on the head (cool) and the T-shirt
+    // below the neck (dim window).
+    float dark = 1.0 - smoothstep(0.28, 0.52, v);
+    float head = smoothstep(uFigYNeckBase - 0.02, uFigYNeckBase + 0.02, aFigPos.y);
+    vec3 skin = FIG_WINDOW * (0.78 + 0.22 * smoothstep(0.55, 0.85, v));
+    col = mix(skin, mix(FIG_WINDOW * 0.24, FIG_COOL * 0.55, head), dark);
+    // Points turning away fade out; points along the outline glow a little brighter.
+    alpha = smoothstep(-0.25, 0.15, facing) * (0.7 + 0.3 * (1.0 - clamp(facing, 0.0, 1.0))) * uFigGain * b.w;
+    return uFigOrigin + uFigBasis * q;
   }
   if (k == 2) {
     // Current: drift along the band, meandering through curl noise, low over the water.
@@ -207,10 +249,17 @@ float easeInOut(float p) {
 }
 
 void main() {
-  // Per-point progress: a delay of up to 30% of the transition, then 70% to travel.
+  // Per-point progress: a delay of up to 30% of the transition, then 70% to travel. Into and out
+  // of the figure, a scan instead: its rings lock in from the crown down (and leave chest first)
+  // with only a whisper of randomness.
   float key = mix(aRand.x, aInfo.y, uDelaySrc);
   key = mix(key, 1.0 - key, uDelayFlip);
   float p = clamp((uT - 0.3 * key) / 0.7, 0.0, 1.0);
+  if (uScan != 0.0) {
+    float fy = clamp(aFigPos.y, 0.0, 1.0);
+    float delay = SCAN * (uScan > 0.0 ? 1.0 - fy : fy) + SCAN_JITTER * aRand.x;
+    p = clamp((uT - delay) / (1.0 - SCAN - SCAN_JITTER), 0.0, 1.0);
+  }
   float e = easeInOut(p);
   if (uMotion < 0.5) {
     p = step(0.5, uT);
@@ -220,15 +269,18 @@ void main() {
   float aF;
   float fF;
   float sF;
+  vec3 cF;
   float aT;
   float fT;
   float sT;
-  vec3 P0 = live(uFrom, position, aF, fF, sF);
+  vec3 cT;
+  vec3 P0 = live(uFrom, position, aF, fF, sF, cF);
   vec3 P1 = P0;
   aT = aF;
   fT = fF;
   sT = sF;
-  if (uTo != uFrom) P1 = live(uTo, aTo, aT, fT, sT);
+  cT = cF;
+  if (uTo != uFrom) P1 = live(uTo, aTo, aT, fT, sT, cT);
 
   vec3 pos = P0;
   float flight = 0.0;
@@ -250,21 +302,48 @@ void main() {
     float u = 1.0 - e;
     pos = u * u * P0 + 2.0 * u * e * ctrl + e * e * P1;
     flight = sin(3.14159265 * e);
-    pos += curl(pos * (2.2 / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7)) * min(L, uScale * 0.6) * 0.16 * flight;
+    // Each point reads the noise a little off its neighbours' (aRand), so a long hold mid-flight
+    // can't fold the cloud into a bright seam where the drifting field steepens.
+    // Low into and out of the figure (30%), so its rings land cleanly.
+    float curlK = (uFrom == 1 || uTo == 1) ? 0.3 : 1.0;
+    pos += curl(pos * (2.2 / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7) + (aRand.zxw - 0.5) * 0.3) * min(L, uScale * 0.6) * 0.16 * flight * curlK;
   }
 
   // Brightness through the flight. Leaving the city, a point brightens quickly as its window
   // dims; arriving, it fades just before it lands.
   float alpha = mix(aF, aT, e);
-  if (uFrom == 0 && uTo != 0) alpha = aT * smoothstep(0.0, 0.12, p);
-  if (uTo == 0 && uFrom != 0) alpha = aF * (1.0 - smoothstep(0.88, 1.0, p));
+  // Leaving the city, a point carries its window's light up through the flight (it brightens
+  // quickly as its window dims) and settles to the target's own brightness near the end, so the
+  // city visibly gives its light to the sky even where the target is sparse (the field). Coming
+  // back, it gathers that light on the way down and hands it to its window as it lands.
+  // Some of the points carry most of it, so it rises as sparks rather than a faint haze (on
+  // desktop a quarter, and the total stays the window's light: 0.25 * 3.2 + 0.75 * 0.27 = 1;
+  // phones, with fewer and smaller points, send up more and brighter sparks so the spray reads).
+  float carrier = step(1.0 - uCarryMix.x, aRand.w);
+  float carry = uCarry * mix(uCarryMix.z, uCarryMix.y, carrier);
+  float carrying = 0.0;
+  // Bright targets (the figure, the columns) keep their own brightness all the way.
+  if (uFrom == 0 && uTo != 0) {
+    carrying = (1.0 - smoothstep(0.55, 0.95, p)) * smoothstep(0.0, 0.12, p);
+    alpha = mix(max(carry, aT), aT, smoothstep(0.55, 0.95, p)) * smoothstep(0.0, 0.12, p);
+  }
+  if (uTo == 0 && uFrom != 0) {
+    carrying = smoothstep(0.05, 0.45, p) * (1.0 - smoothstep(0.88, 1.0, p));
+    alpha = mix(aF, max(carry, aF), smoothstep(0.05, 0.45, p)) * (1.0 - smoothstep(0.88, 1.0, p));
+  }
+  // Carriers draw a little larger while they carry, toward or from a dark end only.
+  float darkEnd = 1.0 - smoothstep(0.0, 0.3, uFrom == 0 ? aT : aF);
+  float carrySize = mix(1.0, uCarryMix.w, carrying * carrier * darkEnd);
   // Hide wraps: the target's own fade applies once the point is on its way there.
   alpha *= mix(1.0, fT, smoothstep(0.0, 0.03, e)) * mix(1.0, fF, smoothstep(0.0, 0.03, 1.0 - e));
   alpha *= (1.0 + 0.35 * flight) * uGain;
 
-  vColor = mix(uCool, uWarm, aInfo.x);
+  vColor = mix(cF, cT, e);
   vAlpha = alpha;
-  vCore = 0.55 + 0.45 * aRand.y;
+  // One core for every point in the figure; elsewhere each point's own.
+  float core = 0.55 + 0.45 * aRand.y;
+  vCore = mix(uFrom == 1 ? uFigCore : core, uTo == 1 ? uFigCore : core, e);
+  vDot = mix(uFrom == 1 ? 1.0 : 0.0, uTo == 1 ? 1.0 : 0.0, e);
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   if (alpha < 0.002) {
@@ -275,7 +354,10 @@ void main() {
   }
   gl_Position = projectionMatrix * mv;
   // 1.5 to 3.5 CSS px: bigger for brighter points and for nearer ones, a little bigger in flight.
+  // The figure's points are all one size (its rings' spacing on screen times FIGURE_DOT).
   float px = mix(1.5, 3.1, clamp(0.35 * aRand.y + 0.65 * min(alpha / max(uGain, 1e-3), 1.0), 0.0, 1.0));
-  px *= clamp(uScale / max(-mv.z, 1.0), 0.75, 1.4) * (1.0 + 0.15 * flight);
-  gl_PointSize = clamp(px, 1.5, 3.5) * mix(sF, sT, e) * uPixelRatio;
+  px = clamp(px * clamp(uScale / max(-mv.z, 1.0), 0.75, 1.4) * (1.0 + 0.15 * flight), 1.5, 3.5);
+  float pxF = uFrom == 1 ? uFigDot : px * sF;
+  float pxT = uTo == 1 ? uFigDot : px * sT;
+  gl_PointSize = mix(pxF, pxT, e) * carrySize * uPixelRatio;
 }

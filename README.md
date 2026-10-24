@@ -37,9 +37,9 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 | `src/world/timeline.ts`, `main.ts` | Scroll drives the scene; `main.ts` boots it after first paint. |
 | `src/world/interact.ts` | Every pointer, tap, drag and key the scene answers. It decides which presses belong to the world (never text or controls), and runs the figure's spring, drag and idle sway. |
 | `src/world/shaders/` | GLSL for every material. |
-| `public/world/` | The resampled figure (`figure-signal.bin`), its still, and the fallback stills of the hero scene. |
+| `public/figure/` | The figure of light, built from Cayden's turntable video: `figure-hi`, `figure-lo` and `figure-phone` (`.bin` with a `.json` describing it), exactly 60,000, 30,000 and 16,000 points, one per particle on each tier. Loaded as is, never resampled. |
+| `public/world/` | The fallback stills of the hero scene. |
 | `public/media/previews/` | The three project preview loops, MP4 and WebM, with posters (`src/data/previews.json`). |
-| `tools/figure/` | The figure pipeline: Cayden's photos to point data (photos and everything derived from them stay outside the repo). |
 | `tools/previews/` | Records the preview loops with Playwright. |
 
 ## Modes
@@ -57,7 +57,7 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Sky and stars fade in from black | on load | 0 to 700 ms | `timeline.ts` (intro), `sky.ts` |
 | Windows switch on in a wave, left to right | on load | 300 to 1,900 ms | `timeline.ts`, `skyline.ts` |
 | Hero name, line and small line wipe in | on load | at 600, 950 and 1,150 ms, 600 ms each | `timeline.ts`, `Hero.astro` |
-| A tenth of the lit windows stream up into the figure; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
+| A tenth of the lit windows stream up into the figure, which locks in ring by ring from the crown down; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
 | The intro jumps to its end | the first scroll, touch or key | at once | `timeline.ts` |
 | The canvas fades in over the page background | when the scene is ready | 600 ms | `base.css` |
 | The camera moves along the skyline | scroll, every section | eased into each section's view; headings use capped tangents, so the camera never swings past a stop | `timeline.ts`, `camera-path.ts` |
@@ -70,7 +70,7 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A rare window flickers; aviation lights blink; the water ripples; a ferry crosses | always | aviation 1 s; ferry about 90 s | `skyline.ts`, `peak.ts`, `harbour.ts` |
 | The current flows, the columns rise, the field drifts | while shown | slow | `signal.ts` |
 | The view tilts slightly toward the pointer | mouse or trackpad | ±1.5° yaw, ±0.8° pitch, about 600 ms lag | `renderer.ts` |
-| The figure turns toward the pointer: its x to ±30° of yaw, its y to ±5° of pitch; points facing away fade and the outline brightens | mouse or trackpad, in the hero | a spring that settles in about 600 ms with a slight overshoot | `interact.ts`, `signal.ts` |
+| The figure turns toward the pointer: its x to ±30° of yaw (the head fully, the shoulders 0.85 as far, the neck between), its y to ±5° of pitch; the hair, eyes and skin follow the video's own views, and points turning away fade | mouse or trackpad, in the hero | a spring that settles in about 600 ms with a slight overshoot | `interact.ts`, `signal.ts` |
 | Dragging on the figure turns it (on phones it springs back to center on release) | drag | follows the finger; one figure width covers the whole range | `interact.ts` |
 | The figure sways 8° each way | after 3 s without input | a 6 s cycle | `interact.ts` |
 | Windows near the mouse brighten (up to 60%) and warm, like a soft spotlight | mouse or trackpad | fades over 800 ms behind the pointer | `pulse.ts`, `tower.frag.glsl` |
