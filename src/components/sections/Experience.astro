@@ -5,15 +5,17 @@
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { experience } from '../../data/content';
+import { ignite } from '../ui/ignite';
 
 const { civic, roles } = experience;
+const headline = ignite(experience.heading);
 ---
 
 <section id="experience" class="scene xp" data-scene="experience" aria-labelledby="experience-title">
   <div class="wrap grid">
     <div class="xp__block scrim">
       <div class="xp__main">
-        <h2 id="experience-title" class="h2">{experience.heading}</h2>
+        <h2 id="experience-title" class="h2" {...headline.attrs} set:html={headline.html} />
         <div class="xp__civic stack">
           <div class="xp__where">
             <h3 class="t-sub">{civic.name}</h3>

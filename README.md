@@ -76,13 +76,14 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Windows near the mouse brighten (up to 60%) and warm, like a soft spotlight | mouse or trackpad | fades over 800 ms behind the pointer | `pulse.ts`, `tower.frag.glsl` |
 | A click or tap on the sky, city or water sends a pulse: a thin ring spreads over the harbour, windows switch on in a wave by distance, nearby stars glint | click or tap (never on text or controls) | light on the next frame; the wave settles in about 1 s, the ring fades in about 3 s; at most 3 at once, 400 ms apart | `interact.ts`, `pulse.ts`, `tower.frag.glsl`, `water.frag.glsl`, `stars.vert.glsl` |
 | The hint "Click anywhere in the city" ("Tap the city" on touch) fades in, then out after the first pulse, and stays away on later visits | after the intro; the first pulse | 400 ms | `Hero.astro`, `hero-hint.ts` |
+| Section headlines light up like neon tubes, letter by letter from the left, each striking with a flicker or two, then holding a faint glow | the first time each headline comes into view | all lit within 700 ms; once per headline | `ignite.ts` (components and scripts), `base.css` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
 | More panels open and close | click | 420 ms height | `More.astro`, `more.ts` |
 | The menu opens, its links step in | click | 240 ms; 420 ms | `Header.astro` |
 | Previews play | at least half visible | pause when not | `loop-video.ts` |
 | The Pomfret and Hong Kong labels fade in | at the bottom of the page | 400 ms | `Contact.astro` |
 
-With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading.
+With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start.
 
 ## Accessibility
 

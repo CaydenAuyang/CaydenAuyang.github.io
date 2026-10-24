@@ -3,12 +3,15 @@
 // its four notes (QuestionPanel.astro).
 import QuestionPanel from '../ui/QuestionPanel.astro';
 import { question } from '../../data/content';
+import { ignite } from '../ui/ignite';
+
+const headline = ignite(question.heading);
 ---
 
 <section id="question" class="scene question" data-scene="question" aria-labelledby="question-title">
   <div class="wrap">
     <div class="question__head stack scrim">
-      <h2 id="question-title" class="h2">{question.heading}</h2>
+      <h2 id="question-title" class="h2" {...headline.attrs} set:html={headline.html} />
       <p class="t-lead">{question.lead.text}</p>
     </div>
     <QuestionPanel

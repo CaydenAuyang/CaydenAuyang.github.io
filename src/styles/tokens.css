@@ -12,7 +12,7 @@
   luminance of each line's box; the number is the worst frame anywhere on the page.
 
     pairing                                size        worst   needs   where the worst frame is
-    window: headlines and the name         48-153px     7.21    3      Experience over the columns
+    window: headlines and the name         48-153px     5.70    3      a lit letter with its glow (390)
     window: links, inserted words          18-28px      5.70    4.5    GitHub, Contact (390)
     cool: project names, subheads          22-65px      8.99    3      Civic Exchange (snapshot)
     neon: small labels                     16px         5.42    4.5    Reflect. over the still

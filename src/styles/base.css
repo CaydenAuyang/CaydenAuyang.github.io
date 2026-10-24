@@ -262,6 +262,8 @@ html[data-snapshot] .world-canvas {
 .h2 {
   font-size: var(--fs-h2);
   color: var(--c-headline);
+  /* A lit neon sign: a faint window glow over the dark halo every headline carries. */
+  text-shadow: var(--ign-glow), var(--halo);
 }
 .t-project {
   font-size: var(--fs-project);
@@ -320,6 +322,138 @@ html[data-snapshot] .world-canvas {
 }
 .t-dim {
   color: var(--c-meta);
+}
+
+/*
+  Neon ignition (NIGHT-SIGNAL.md 11b.2). Section headlines are split into letters at build time
+  (src/components/ui/ignite.ts). Under html.js-ignite (motion on, not snapshot) each letter starts
+  as an unlit tube, and when src/scripts/ignite.ts adds .is-igniting it strikes: a hot flash, one
+  or two flickers off and on, then it holds lit with a faint glow. Letters start --stagger apart,
+  left to right, all done within 700 ms. Only color and glow change: nothing moves, nothing splits.
+  .is-lit is the resting state. Reduced motion, snapshot and no JavaScript: lit from the start.
+*/
+:root {
+  --ign-off: rgb(var(--window-rgb) / 0.16);
+  --ign-half: rgb(var(--window-rgb) / 0.45);
+  --ign-hot: #ffe0b8;
+  --ign-glow: 0 0 22px rgb(var(--window-rgb) / 0.28);
+  --ign-flash: 0 0 4px rgb(255 224 184 / 0.9), 0 0 18px rgb(var(--window-rgb) / 0.8), 0 0 40px rgb(var(--window-rgb) / 0.4);
+}
+html.js-ignite .ign__l {
+  color: var(--ign-off);
+  text-shadow: var(--halo);
+}
+html.js-ignite .is-igniting .ign__l {
+  animation: ign-a 320ms linear calc(var(--i) * var(--stagger)) both;
+}
+html.js-ignite .is-igniting .ign__l--b {
+  animation-name: ign-b;
+}
+html.js-ignite .is-igniting .ign__l--c {
+  animation-name: ign-c;
+}
+html.js-ignite .is-lit .ign__l {
+  color: inherit;
+  text-shadow: inherit;
+  animation: none;
+}
+/* Safety net: if ignite.ts never runs (it adds .ignite-ready at once), light everything at 4 s. */
+html.js-ignite:not(.ignite-ready) .ign__l {
+  animation: ign-safety 1ms linear 4s both;
+}
+@keyframes ign-safety {
+  to {
+    color: var(--window);
+    text-shadow: var(--ign-glow), var(--halo);
+  }
+}
+/* One flicker: strike, drop out, strike again and hold. */
+@keyframes ign-a {
+  0%,
+  14% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  15%,
+  27% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  28%,
+  45% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  46% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  100% {
+    color: var(--window);
+    text-shadow: var(--ign-glow), var(--halo);
+  }
+}
+/* Two flickers: strike, out, a weak half-strike, out, then on for good. */
+@keyframes ign-b {
+  0%,
+  9% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  10%,
+  19% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  20%,
+  31% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  32%,
+  38% {
+    color: var(--ign-half);
+    text-shadow: var(--halo);
+  }
+  39%,
+  51% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  52% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  100% {
+    color: var(--window);
+    text-shadow: var(--ign-glow), var(--halo);
+  }
+}
+/* One late flicker: a beat of nothing, strike, dip to half, then hold. */
+@keyframes ign-c {
+  0%,
+  29% {
+    color: var(--ign-off);
+    text-shadow: var(--halo);
+  }
+  30%,
+  41% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  42%,
+  55% {
+    color: var(--ign-half);
+    text-shadow: var(--halo);
+  }
+  56% {
+    color: var(--ign-hot);
+    text-shadow: var(--ign-flash), var(--halo);
+  }
+  100% {
+    color: var(--window);
+    text-shadow: var(--ign-glow), var(--halo);
+  }
 }
 
 /* ---- Layout --------------------------------------------------------------------------------- */

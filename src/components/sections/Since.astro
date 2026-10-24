@@ -3,13 +3,16 @@
 // and the full progress section from the long copy behind More.
 import More from '../ui/More.astro';
 import { since } from '../../data/content';
+import { ignite } from '../ui/ignite';
+
+const headline = ignite(since.heading);
 ---
 
 <section id="since" class="scene since" data-scene="since" aria-labelledby="since-title">
   <div class="wrap">
     <div class="since__block scrim">
       <div class="since__head stack">
-        <h2 id="since-title" class="h2">{since.heading}</h2>
+        <h2 id="since-title" class="h2" {...headline.attrs} set:html={headline.html} />
         <p class="t-lead">{since.lead.text}</p>
       </div>
       <ol class="strands">

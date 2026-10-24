@@ -106,6 +106,9 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
         data-snapshot       the address has ?snapshot (any value): poster screenshots.
         js-intro            motion on and not snapshot: the hero text starts masked and the
                             timeline wipes it in. A CSS safety net reveals it after 2.5 s anyway.
+        js-ignite           the same condition: section headlines start as unlit neon tubes and
+                            strike the first time they enter view (src/scripts/ignite.ts). A CSS
+                            safety net lights them after 4 s if that script never runs.
     -->
     <script is:inline>
       (function () {
@@ -115,7 +118,7 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
         if (reduce) html.setAttribute('data-motion', 'off');
         var snap = /[?&]snapshot(=|&|$)/.test(location.search);
         if (snap) html.setAttribute('data-snapshot', '');
-        if (!reduce && !snap) html.classList.add('js-intro');
+        if (!reduce && !snap) html.classList.add('js-intro', 'js-ignite');
       })();
     </script>
   </head>
@@ -139,5 +142,8 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
     <slot name="footer" />
 
     {world && <WorldBoot />}
+    <script>
+      import '../scripts/ignite';
+    </script>
   </body>
 </html>

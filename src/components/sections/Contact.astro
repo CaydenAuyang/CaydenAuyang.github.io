@@ -11,9 +11,12 @@
 import ExternalLink from '../ui/ExternalLink.astro';
 import { LIGHT_ANCHORS } from '../../world/contract';
 import { contact } from '../../data/content';
+import { ignite } from '../ui/ignite';
 import { ui } from '../../data/site';
 
 const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
+
+const headline = ignite(contact.heading);
 ---
 
 <footer class="site-footer">
@@ -28,7 +31,7 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     <p class="contact__light t-label" style={at(LIGHT_ANCHORS.hongKong)} aria-hidden="true">{contact.lights.hongKong}</p>
 
     <div class="contact__body wrap scrim">
-      <h2 id="contact-title" class="h2">{contact.heading}</h2>
+      <h2 id="contact-title" class="h2" {...headline.attrs} set:html={headline.html} />
       <p class="contact__email-wrap">
         <a class="contact__email" href={`mailto:${contact.email.text}`}
           ><span class="sr-only">{ui.emailLabel}: </span>{contact.email.text}</a

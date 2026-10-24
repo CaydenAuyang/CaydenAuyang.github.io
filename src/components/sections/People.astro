@@ -1,12 +1,15 @@
 ---
 // People.astro: section 6. The professionals outside Pomfret who shaped the work.
 import { people } from '../../data/content';
+import { ignite } from '../ui/ignite';
+
+const headline = ignite(people.heading);
 ---
 
 <section id="people" class="scene people" data-scene="people" aria-labelledby="people-title">
   <div class="wrap grid">
     <div class="people__block stack scrim">
-      <h2 id="people-title" class="h2">{people.heading}</h2>
+      <h2 id="people-title" class="h2" {...headline.attrs} set:html={headline.html} />
       <ul class="people__list">
         {
           people.list.map((person) => (
