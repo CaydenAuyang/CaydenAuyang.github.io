@@ -9,7 +9,7 @@ export const site = {
   themeColor: '#e2e8e9',
   // The share image (1200 x 630) in public/.
   ogImage: '/og.png',
-  ogImageAlt: 'Cayden Auyang, certificate portfolio.',
+  ogImageAlt: 'Cayden Auyang, with one line about his work, beside a figure of him drawn in points on a pale survey plate.',
   // The key the Motion On/Off choice is saved under in the visitor's browser.
   motionKey: 'ca:motion',
   // The key the Snapshot view choice is saved under.

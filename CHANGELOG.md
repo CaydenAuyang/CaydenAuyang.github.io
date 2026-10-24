@@ -16,3 +16,8 @@ Dated notes on what changed on the site.
 - Snapshot mode for poster screenshots (`?snapshot`, the footer switch, and print).
 - Project previews, the Summer archive, the Work plates and the Progress charts (built in parallel), plus a More work row.
 - Placeholder point figure data committed; the figure joins the hero once its renderer matches Datum.
+- The point figure joins the hero plate. It is built from Cayden's three photos (person segmentation for the outline, monocular depth for relief) and drawn as ink points that stream in from the Pomfret and Hong Kong ticks. Outline match against the photos (IoU): front 0.978, turned right 0.92, turned left 0.87. Only point data and stills rendered from the points are published.
+- The plate's corner and latitude labels sit on a vellum backing so points never cut into them.
+- The Progress lines draw left to right instead of jumping. The People heading drops the copy's trailing period.
+- Preview clips: three desktop loops (1280x800, under 2 MB each), checked frame by frame for flagged claims, student names and emails.
+- A share image in the Datum style (name, hero line, both coordinates and the point figure on a vellum plate), rendered once from the site's own fonts and figure still. The share-image script comes later.
