@@ -16,7 +16,24 @@ export const site = {
   snapshotKey: 'ca:snapshot',
 };
 
+// Places on the chart. Design labels allowed by the Datum spec.
+export const places = {
+  pomfret: { name: 'Pomfret', lat: 41.87, coords: '41.87° N 71.97° W' },
+  hongKong: { name: 'Hong Kong', lat: 22.32, coords: '22.32° N 114.17° E' },
+};
+
 export const ui = {
+  // Design labels from the Datum spec.
+  clockPomfret: 'Pomfret',
+  clockHongKong: 'Hong Kong',
+  index: 'Index',
+  openFullSite: 'Open the full site',
+  replay: 'Replay',
+  figure: (n: number) => `Fig. ${n}`,
+  heroCaption: 'Cayden',
+  heroCaptionCount: (count: string) => `, in ${count} points.`,
+  snapshot: 'Snapshot view',
+  // Interface words.
   skip: 'Skip to content',
   navLabel: 'Sections',
   newTab: '(opens in a new tab)',
@@ -32,11 +49,11 @@ export const ui = {
   noteRef: (n: number) => `Note ${n}`,
   viewLegend: 'Show the question as',
   viewMay: 'May',
-  viewMarked: 'Marked',
+  viewMarked: 'Edits',
   viewOctober: 'October',
-  backToEdit: 'Back to the edit',
-  deleted: 'deleted:',
-  inserted: 'inserted:',
+  backToEdit: (n: number) => `Back to edit ${n}`,
+  deleted: 'deleted',
+  inserted: 'inserted',
   notFoundTitle: 'Page not found',
   notFoundBody: 'There is nothing at this address.',
   notFoundLink: 'Go to the home page',

@@ -107,7 +107,9 @@ export const question = {
     { type: 'ins', text: ', or even their own records', after: 'the people they serve', noteId: 'records' },
     { type: 'replace', text: 'change that', insertText: 'help', noteId: 'help' },
     { type: 'ins', text: ', and how would we know it heard them correctly', after: '', noteId: 'heard-correctly' },
-    { type: 'replace', text: 'down to a school', insertText: 'to a nonprofit to a school', noteId: 'nonprofit' },
+    // Shown as the smallest change (strike "down", insert "to a nonprofit"), as in the approved
+    // wireframe; the October text is the same as replacing "down to a school".
+    { type: 'replace', text: 'down', insertText: 'to a nonprofit', noteId: 'nonprofit' },
   ] satisfies Edit[] as Edit[],
   // The margin notes, numbered on the page in the order their edits appear.
   notes: [

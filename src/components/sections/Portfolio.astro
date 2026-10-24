@@ -1,5 +1,5 @@
 ---
-// Portfolio.astro: section 7. Where the certificate's working files live. One paragraph for
+// Portfolio.astro: section 06. Where the certificate's working files live. One paragraph for
 // now; links can be added once Cayden shares those files.
 import { portfolio } from '../../data/content';
 import Say from '../ui/Say.astro';
@@ -8,7 +8,9 @@ import Say from '../ui/Say.astro';
 <section id="portfolio" class="section" aria-labelledby="portfolio-title">
   <div class="wrap">
     <div class="section__head">
-      <h2 id="portfolio-title" class="section__title">{portfolio.heading}</h2>
+      <h2 id="portfolio-title" class="section__title">
+        <span class="section__num" aria-hidden="true">06</span>{portfolio.heading}
+      </h2>
     </div>
     <p class="prose t-lead"><Say line={portfolio.body} /></p>
   </div>

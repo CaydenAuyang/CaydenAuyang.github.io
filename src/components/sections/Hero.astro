@@ -1,54 +1,233 @@
 ---
-// Hero.astro: section 1. The point figure, the name, and one plain line about the work.
+// Hero.astro: section 1. The name, one plain line, the school line, and the plate holding the
+// point figure.
 //
-// The figure itself is drawn by the figure agent's code (src/components/Figure.astro and
-// src/figure/). This section only leaves the container for it: the div with data-figure. The
-// container carries the figure's alt text, so whatever draws inside it should be aria-hidden.
+// The plate is a vellum chart with a 1px neatline, ticks every 10% along each edge, the corner
+// labels Pomfret and Hong Kong, and two latitude ticks on a 50° N (top) to 10° N (bottom)
+// scale: Pomfret's 41.87° N on the left edge, Hong Kong's 22.32° N on the right. The figure's
+// two point streams start at those two ticks; their positions are exposed as --origin-a-y and
+// --origin-b-y (fractions of the plate's height) for the figure code.
+//
+// The figure itself (src/components/Figure.astro, by the figure agent) goes inside the
+// data-figure container, which carries the alt text. Until it is wired in, the plate is empty.
+//
+// Talking to the figure:
+//   - it fires "figure:ready" (bubbling) when drawn; detail.count = points actually rendered,
+//     which fills the caption "Fig. 1  Cayden, in {N} points.";
+//   - the Replay button fires "figure:replay" on the figure's mount. Replay shows only once the
+//     figure is ready, and never with reduced motion, Motion: Off or snapshot mode.
 import { hero, meta } from '../../data/content';
+import { places, ui } from '../../data/site';
 import Say from '../ui/Say.astro';
+
+// Latitude scale: 50° N at the top edge, 10° N at the bottom.
+const latY = (lat: number) => (50 - lat) / 40;
+const pomfretY = latY(places.pomfret.lat);
+const hongKongY = latY(places.hongKong.lat);
+const [first, ...rest] = hero.name.split(' ');
 ---
 
 <section id="top" class="hero" aria-labelledby="hero-title">
-  <div class="wrap hero__inner">
-    <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}></div>
+  <div class="wrap grid hero__grid">
     <div class="hero__text">
-      <h1 id="hero-title" class="hero__name">{hero.name}</h1>
+      <h1 id="hero-title" class="hero__name">
+        <span>{first}</span>
+        {' '}
+        <span>{rest.join(' ')}</span>
+      </h1>
       <p class="hero__line t-lead"><Say line={hero.line} /></p>
       <p class="hero__school t-meta"><Say line={hero.school} /></p>
     </div>
+
+    <figure class="hero__figure-wrap">
+      <div
+        class="plate hero__plate"
+        style={`--origin-a-y: ${pomfretY.toFixed(4)}; --origin-b-y: ${hongKongY.toFixed(4)}`}
+        data-origin-a-y={pomfretY.toFixed(4)}
+        data-origin-b-y={hongKongY.toFixed(4)}
+      >
+        <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}></div>
+        <div class="hero__chart" aria-hidden="true">
+          <span class="hero__corner hero__corner--a">{places.pomfret.name}</span>
+          <span class="hero__corner hero__corner--b">{places.hongKong.name}</span>
+          <span class="hero__lat hero__lat--a tnum" style={`top: ${(pomfretY * 100).toFixed(2)}%`}
+            >{places.pomfret.lat.toFixed(2)}° N</span
+          >
+          <span class="hero__lat hero__lat--b tnum" style={`top: ${(hongKongY * 100).toFixed(2)}%`}
+            >{places.hongKong.lat.toFixed(2)}° N</span
+          >
+        </div>
+      </div>
+      <figcaption class="hero__caption t-small">
+        <span class="hero__fig tnum">{ui.figure(1)}</span>
+        <span>{ui.heroCaption}<span data-figure-count>.</span></span>
+        <button type="button" class="hero__replay" data-replay data-snapshot-hide hidden>{ui.replay}</button>
+      </figcaption>
+    </figure>
   </div>
 </section>
 
+<script>
+  import { motionAllowed, onMotionChange } from '../ui/motion';
+  import { ui } from '../../data/site';
+
+  const plate = document.querySelector<HTMLElement>('.hero__plate');
+  const count = document.querySelector<HTMLElement>('[data-figure-count]');
+  const replay = document.querySelector<HTMLButtonElement>('[data-replay]');
+  let ready = false;
+
+  const showReplay = () => {
+    if (replay) replay.hidden = !(ready && motionAllowed());
+  };
+
+  plate?.addEventListener('figure:ready', (event) => {
+    ready = true;
+    const n = (event as CustomEvent<{ count?: number }>).detail?.count;
+    if (count && typeof n === 'number' && n > 0) {
+      count.textContent = ui.heroCaptionCount(n.toLocaleString('en-US'));
+    }
+    showReplay();
+  });
+
+  replay?.addEventListener('click', () => {
+    const mount = plate?.querySelector('[data-figure-mount]') ?? plate?.querySelector('[data-figure]');
+    mount?.dispatchEvent(new CustomEvent('figure:replay', { bubbles: true }));
+  });
+
+  onMotionChange(showReplay);
+</script>
+
 <style>
-  .hero__inner {
-    display: grid;
-    gap: var(--space-6);
+  .hero__grid {
+    row-gap: var(--space-6);
     padding-block: var(--space-7) var(--space-section);
-  }
-  .hero__figure {
-    position: relative;
-    z-index: var(--z-figure);
-    width: 100%;
-    aspect-ratio: 4 / 5;
-    max-height: 70svh;
-    background: var(--bg-2);
-    border-radius: var(--radius);
   }
   .hero__text {
     display: grid;
     gap: var(--space-4);
-    max-width: var(--max-text);
+    align-content: start;
+    max-width: 34rem;
   }
   .hero__name {
-    font-size: var(--fs-h1);
+    font-size: var(--fs-name);
+    line-height: 0.98;
+    letter-spacing: -0.01em;
   }
-  @media (min-width: 900px) {
-    .hero__inner {
-      grid-template-columns: 1fr 1fr;
+
+  /* ---- The plate ---- */
+  .hero__figure-wrap {
+    display: grid;
+    gap: var(--space-3);
+  }
+  .hero__plate {
+    width: 100%;
+    aspect-ratio: 9 / 10;
+    overflow: hidden;
+  }
+  /* Ticks every 10% along all four edges, 6px long, 1px wide, in the neatline color. */
+  .hero__plate::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    --h: repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), var(--neatline) calc(10% - 1px) 10%);
+    --v: repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), var(--neatline) calc(10% - 1px) 10%);
+    background:
+      var(--h) top / 100% var(--tick) no-repeat,
+      var(--h) bottom / 100% var(--tick) no-repeat,
+      var(--v) left / var(--tick) 100% no-repeat,
+      var(--v) right / var(--tick) 100% no-repeat;
+  }
+  .hero__figure {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  .hero__chart {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    font-size: var(--fs-label);
+    line-height: 1.2;
+    color: var(--text-2);
+  }
+  .hero__corner {
+    position: absolute;
+    top: calc(var(--tick) + var(--space-2));
+  }
+  .hero__corner--a {
+    left: calc(var(--tick) + var(--space-2));
+  }
+  .hero__corner--b {
+    right: calc(var(--tick) + var(--space-2));
+  }
+  /* Latitude ticks: a longer tick on the edge, with its reading beside it. */
+  .hero__lat {
+    position: absolute;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+  .hero__lat::before {
+    content: '';
+    width: 14px;
+    height: 1px;
+    background: var(--neatline);
+  }
+  .hero__lat--a {
+    left: 0;
+  }
+  .hero__lat--b {
+    right: 0;
+    flex-direction: row-reverse;
+  }
+
+  /* ---- Caption ---- */
+  .hero__caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-3);
+    row-gap: var(--space-2);
+    color: var(--text-2);
+  }
+  .hero__fig {
+    color: var(--text);
+    font-weight: var(--fw-semibold);
+  }
+  .hero__replay {
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border: 1px solid var(--neatline);
+    color: var(--text);
+  }
+
+  /* ---- Laptop: text in columns 1 to 5, plate in 6 to 12 ---- */
+  @media (min-width: 1024px) {
+    .hero__grid {
       align-items: center;
+      padding-top: var(--space-8);
     }
-    .hero__figure {
-      order: 2;
+    .hero__text {
+      grid-column: 1 / span 5;
+    }
+    .hero__name span {
+      display: block;
+    }
+    .hero__figure-wrap {
+      grid-column: 6 / span 7;
+      justify-self: end;
+      /* 4:5, never taller than 760px. */
+      width: min(100%, 608px);
+    }
+    .hero__plate {
+      aspect-ratio: 4 / 5;
+    }
+    .hero__replay {
+      margin-left: auto;
     }
   }
 </style>

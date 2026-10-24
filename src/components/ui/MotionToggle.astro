@@ -9,11 +9,11 @@
 // choice lasts until the page closes.
 // When the switch changes data-motion, motion.ts sends the "ca:motion" event that the preview
 // videos, the figure and every other animation listen for.
-import { site, ui } from '../../data/site';
+import { ui } from '../../data/site';
 ---
 
-<div class="motion-toggle" data-motion-key={site.motionKey}>
-  <button type="button" class="motion-toggle__button t-label" data-motion-toggle aria-pressed="true">
+<div class="motion-toggle" data-snapshot-hide>
+  <button type="button" class="motion-toggle__button" data-motion-toggle aria-pressed="true">
     {ui.motion}: <span data-motion-state>{ui.motionOn}</span>
   </button>
   <p class="motion-toggle__note t-meta" data-motion-note aria-live="polite"></p>
@@ -79,9 +79,9 @@ import { site, ui } from '../../data/site';
   .motion-toggle__button {
     justify-self: start;
     min-height: 44px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--text-2);
-    border-radius: var(--radius);
+    padding: 0 var(--space-4);
+    border: 1px solid var(--neatline);
+    font-size: var(--fs-small);
   }
   .motion-toggle__button[aria-disabled='true'] {
     cursor: default;

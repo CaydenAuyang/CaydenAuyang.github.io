@@ -1,5 +1,5 @@
 ---
-// People.astro: section 6. Professionals outside Pomfret who shaped the work.
+// People.astro: section 05. Professionals outside Pomfret who shaped the work.
 // Confirmed connections only. If the list is empty, the section shows just its intro.
 import { people } from '../../data/content';
 import Say from '../ui/Say.astro';
@@ -8,7 +8,9 @@ import Say from '../ui/Say.astro';
 <section id="people" class="section" aria-labelledby="people-title">
   <div class="wrap">
     <div class="section__head">
-      <h2 id="people-title" class="section__title">{people.heading}</h2>
+      <h2 id="people-title" class="section__title">
+        <span class="section__num" aria-hidden="true">05</span>{people.heading}
+      </h2>
       <p class="t-lead"><Say line={people.intro} /></p>
     </div>
     {
@@ -20,7 +22,7 @@ import Say from '../ui/Say.astro';
               <p class="t-meta">
                 <Say line={person.title} />
               </p>
-              <p>
+              <p class="person__body">
                 <Say line={person.body} />
               </p>
             </li>
@@ -40,8 +42,14 @@ import Say from '../ui/Say.astro';
     display: grid;
     gap: var(--space-2);
     max-width: var(--max-text);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--rule);
   }
   .person__name {
-    font-size: var(--fs-h3);
+    font-size: var(--fs-project);
+    line-height: var(--lh-tight);
+  }
+  .person__body {
+    margin-top: var(--space-2);
   }
 </style>

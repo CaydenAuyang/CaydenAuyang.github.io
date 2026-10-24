@@ -1,23 +1,28 @@
 ---
-// TrackedQuestion.astro: the May question, edited in place into the October question.
+// TrackedQuestion.astro: the May question, edited in place into the October question, drawn
+// as a surveyor's revision marks (Datum).
 //
-// It takes the May text, the October text and an ordered list of edits (see `Edit` in
-// content.ts):
-//   del      strikes words in the May text,
-//   ins      inserts new words after an anchor in the May text,
-//   replace  strikes words and inserts new ones in their place.
-// Struck words are a real <del>, new words a real <ins>, each with a hidden "deleted:" or
-// "inserted:" so screen readers say what changed. After each noted edit sits a small numbered
-// link to its note in the list below (no hover needed, so it works on phones). The link is
-// described by the note's text, so a screen reader reads the note when the link is focused.
+// Input: the May text, the October text, an ordered list of edits (see `Edit` in content.ts)
+// and the notes. It renders:
+//   - struck words as a real <del> in slate with a dashed strike, plus a hidden "deleted";
+//   - inserted words as a real <ins> in Newsreader italic, plus a hidden "inserted";
+//   - before each noted edit, a small orange triangle with its number beside it in ink. The
+//     triangle and number are one link to the note (24px target), described by the note's text.
+//   - the notes: in the right margin on laptops (aligned to their triangle's line, with a
+//     hairline leader), as a numbered ledger under the sentence on phones. Each note's own
+//     triangle links back to its edit. No hover needed anywhere.
 //
-// A three-way switch (May / Marked / October) shows the clean May text, the marked-up version
-// or the clean October text. It is a real radio group, and it works with CSS alone (:has), so
-// it needs no JavaScript. Browsers without :has hide the switch and show the marked version,
-// which is also the default.
+// A May / Edits / October switch shows the clean May text, the marked version or the clean
+// October text. It is a real radio group that works with CSS alone (:has), so it needs no
+// JavaScript; browsers without :has hide it and show Edits, the default. The views sit in a
+// polite live region, so a screen reader reads the newly shown version.
 //
-// At build time it checks that the edits really turn the May text into the October text, and
-// stops the build if they don't, so the two can never drift apart.
+// Motion (M5, first time the sentence is 40% visible, motion allowed): edit by edit, the
+// triangle appears (180 ms), the dashed strike draws (320 ms), the insertion is revealed left
+// to right (520 ms), then its note fades in (240 ms); about 4.2 s in all. Any click, tap or key
+// jumps to the end. Without motion everything is simply in its end state.
+//
+// At build time it checks the edits really turn the May text into the October text.
 import type { Edit, Line, Note } from '../../data/content';
 import { ui } from '../../data/site';
 
@@ -32,52 +37,50 @@ interface Props {
 
 const { mayLabel, may, octoberLabel, october, edits, notes } = Astro.props;
 
-type Segment =
-  | { kind: 'keep'; text: string }
-  | { kind: 'del' | 'ins'; text: string; noteId?: string; ref: boolean };
-
 const fail = (message: string): never => {
   throw new Error(`TrackedQuestion: ${message}`);
 };
 
-// Turn the May text plus the edits into a row of kept, struck and inserted pieces.
-function trackChanges(text: string, list: Edit[]): Segment[] {
-  const out: Segment[] = [];
+type Piece =
+  | { kind: 'keep'; text: string }
+  | { kind: 'edit'; del?: string; ins?: string; noteId?: string; order: number };
+
+// Turn the May text plus the edits into kept text and edit groups (a group is one edit: struck
+// words, inserted words, or both, with its note).
+function pieces(text: string, list: Edit[]): Piece[] {
+  const out: Piece[] = [];
   let cursor = 0;
   const find = (needle: string) => {
     const at = text.indexOf(needle, cursor);
     if (at === -1) fail(`"${needle}" is not in the May text after position ${cursor}.`);
     return at;
   };
-  for (const edit of list) {
+  list.forEach((edit, order) => {
     if (edit.noteId && !notes.some((n) => n.id === edit.noteId)) {
       fail(`an edit points at note "${edit.noteId}", which is not in question.notes.`);
     }
     if (edit.type === 'del' || edit.type === 'replace') {
       const at = find(edit.text);
       if (at > cursor) out.push({ kind: 'keep', text: text.slice(cursor, at) });
-      out.push({ kind: 'del', text: edit.text, noteId: edit.noteId, ref: edit.type === 'del' && !!edit.noteId });
       cursor = at + edit.text.length;
-      if (edit.type === 'replace') {
-        if (!edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
-        out.push({ kind: 'ins', text: edit.insertText!, noteId: edit.noteId, ref: !!edit.noteId });
-      }
+      if (edit.type === 'replace' && !edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
+      out.push({ kind: 'edit', del: edit.text, ins: edit.type === 'replace' ? edit.insertText : undefined, noteId: edit.noteId, order });
     } else {
       const end = edit.after !== undefined ? find(edit.after) + edit.after.length : text.length;
       if (end > cursor) out.push({ kind: 'keep', text: text.slice(cursor, end) });
       cursor = end;
-      out.push({ kind: 'ins', text: edit.text, noteId: edit.noteId, ref: !!edit.noteId });
+      out.push({ kind: 'edit', ins: edit.text, noteId: edit.noteId, order });
     }
-  }
+  });
   if (cursor < text.length) out.push({ kind: 'keep', text: text.slice(cursor) });
   return out;
 }
 
-const segments = trackChanges(may.text, edits);
+const parts = pieces(may.text, edits);
 
 // The edits must produce the October text exactly (spaces aside).
 const squash = (t: string) => t.replace(/\s+/g, ' ').trim();
-const produced = segments.filter((s) => s.kind !== 'del').map((s) => s.text).join('');
+const produced = parts.map((p) => (p.kind === 'keep' ? p.text : (p.ins ?? ''))).join('');
 if (squash(produced) !== squash(october.text)) {
   fail(`the edits produce "${squash(produced)}", which is not the October text "${squash(october.text)}".`);
 }
@@ -87,6 +90,53 @@ const noteIds = [...new Set(edits.map((e) => e.noteId).filter((id): id is string
 const shownNotes = noteIds.map((id) => notes.find((n) => n.id === id)!);
 const number = (id: string) => noteIds.indexOf(id) + 1;
 
+// ---- M5 timeline: each edit starts 700 ms after the one before. ----
+const STAGGER = 700;
+const T_TAG = 180;
+const T_STRIKE = 320;
+const T_INS_WORD = 60; // extra delay per inserted word, so the reveal runs left to right
+const timing = (p: Extract<Piece, { kind: 'edit' }>) => {
+  const start = p.order * STAGGER;
+  const strike = start + (p.noteId ? T_TAG : 0);
+  const ins = strike + (p.del ? T_STRIKE : 0);
+  const insWords = p.ins ? p.ins.trim().split(/\s+/).length : 0;
+  const note = ins + (p.ins ? 520 + insWords * T_INS_WORD : 0);
+  return { start, strike, ins, note };
+};
+const noteDelay = new Map<string, number>();
+
+// The marked sentence is built as one HTML string: line breaks between tags would otherwise
+// put stray spaces around words. Every piece of text is escaped.
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const words = (t: string, cls: string, delay: (i: number) => number) => {
+  const lead = t.startsWith(' ') ? ' ' : '';
+  const trail = t.endsWith(' ') ? ' ' : '';
+  const list = t.trim().split(/\s+/);
+  return lead + list.map((w, i) => `<span class="${cls}" style="--d:${delay(i)}ms">${esc(w)}</span>`).join(' ') + trail;
+};
+const triangle = '<svg class="tq__tri" viewBox="0 0 10 9" aria-hidden="true" focusable="false"><path d="M5 0 10 9H0z"/></svg>';
+// Word joiners (U+2060) stop a line from breaking between a triangle and its edit, between a
+// word and a triangle that follows it, and before punctuation that follows an edit.
+const WJ = '\u2060';
+const marked = parts
+  .map((p, i) => {
+    const prev = parts[i - 1];
+    if (p.kind === 'keep') return (prev?.kind === 'edit' && /^[.,;:?!]/.test(p.text) ? WJ : '') + esc(p.text);
+    const t = timing(p);
+    if (p.noteId) noteDelay.set(p.noteId, t.note);
+    let html = '';
+    if (p.noteId) {
+      const n = number(p.noteId);
+      if (prev?.kind === 'keep' && !/\s$/.test(prev.text)) html += WJ;
+      html += `<a class="tq__tag" href="#note-${p.noteId}" id="edit-${p.noteId}" aria-label="${esc(ui.noteRef(n))}" aria-describedby="note-${p.noteId}-text" style="--d:${t.start}ms">${triangle}<span class="tq__tag-num">${n}</span></a>${WJ}`;
+    }
+    if (p.del) html += `<del class="tq__del"><span class="sr-only">${ui.deleted} </span>${words(p.del, 'tq__w', () => t.strike)}</del>`;
+    if (p.del && p.ins) html += ' ';
+    if (p.ins) html += `<ins class="tq__ins"><span class="sr-only">${ui.inserted} </span>${words(p.ins, 'tq__w', (i) => t.ins + i * T_INS_WORD)}</ins>`;
+    return html;
+  })
+  .join('');
+
 const views = [
   { id: 'may', label: ui.viewMay },
   { id: 'marked', label: ui.viewMarked },
@@ -94,7 +144,7 @@ const views = [
 ];
 ---
 
-<div class="tq">
+<div class="tq" data-tq data-m5="wait">
   <fieldset class="tq__switch">
     <legend class="sr-only">{ui.viewLegend}</legend>
     {
@@ -108,7 +158,7 @@ const views = [
             value={view.id}
             checked={view.id === 'marked'}
           />
-          <label class="tq__option t-label" for={`tq-view-${view.id}`}>
+          <label class="tq__option" for={`tq-view-${view.id}`}>
             {view.label}
           </label>
         </>
@@ -116,59 +166,129 @@ const views = [
     }
   </fieldset>
 
-  <div class="tq__view tq__view--may">
-    <p class="tq__label t-label">{mayLabel}</p>
-    <blockquote class="tq__text t-lead">
-      <p>{may.text}</p>
-    </blockquote>
-  </div>
+  <div class="grid tq__body" data-tq-body>
+    <div class="tq__views" aria-live="polite">
+      <div class="tq__view tq__view--may">
+        <p class="tq__label t-label">{mayLabel}</p>
+        <p class="tq__text">{may.text}</p>
+      </div>
+      <div class="tq__view tq__view--marked">
+        <p class="tq__text" set:html={marked} />
+      </div>
+      <div class="tq__view tq__view--october">
+        <p class="tq__label t-label">{octoberLabel}</p>
+        <p class="tq__text">{october.text}</p>
+      </div>
+    </div>
 
-  <div class="tq__view tq__view--marked">
-    {/* Written on one line on purpose: line breaks here would put stray spaces around words. */}
-    <p class="tq__text t-lead">{segments.map((s) => s.kind === 'keep' ? s.text : <>{s.kind === 'del' ? <del class="tq__del"><span class="sr-only">{`${ui.deleted} `}</span>{s.text}</del> : <ins class="tq__ins"><span class="sr-only">{`${ui.inserted} `}</span>{s.text}</ins>}{s.ref && s.noteId && <sup class="tq__ref"><a href={`#note-${s.noteId}`} id={`edit-${s.noteId}`} aria-label={ui.noteRef(number(s.noteId))} aria-describedby={`note-${s.noteId}-text`}>{number(s.noteId)}</a></sup>}</>)}</p>
+    <ol class="tq__notes" data-tq-notes>
+      {
+        shownNotes.map((note) => (
+          <li class="tq__note" id={`note-${note.id}`} data-note-for={note.id} style={`--d:${noteDelay.get(note.id) ?? 0}ms`}>
+            <a class="tq__tag tq__tag--note" href={`#edit-${note.id}`} aria-label={ui.backToEdit(number(note.id))}>
+              <Fragment set:html={triangle} />
+              <span class="tq__tag-num">{number(note.id)}</span>
+            </a>
+            <p class="tq__note-text" id={`note-${note.id}-text`}>
+              {note.text}
+            </p>
+          </li>
+        ))
+      }
+    </ol>
   </div>
-
-  <div class="tq__view tq__view--october">
-    <p class="tq__label t-label">{octoberLabel}</p>
-    <blockquote class="tq__text t-lead">
-      <p>{october.text}</p>
-    </blockquote>
-  </div>
-
-  <ol class="tq__notes">
-    {
-      shownNotes.map((note) => (
-        <li class="tq__note" id={`note-${note.id}`}>
-          <span class="tq__note-num t-label">{number(note.id)}.</span>
-          <p class="tq__note-text" id={`note-${note.id}-text`}>
-            {note.text}
-          </p>
-          <a class="tq__back t-label" href={`#edit-${note.id}`}>
-            {ui.backToEdit}
-          </a>
-        </li>
-      ))
-    }
-  </ol>
 </div>
+
+<script>
+  import { motionAllowed, onMotionChange } from './motion';
+
+  const tq = document.querySelector<HTMLElement>('[data-tq]');
+  const body = document.querySelector<HTMLElement>('[data-tq-body]');
+  const notesList = document.querySelector<HTMLElement>('[data-tq-notes]');
+
+  // ---- M5: play once on first view, jump to the end on any input ----
+  if (tq) {
+    const finish = () => {
+      if (tq.dataset.m5 !== 'done') tq.dataset.m5 = 'done';
+      removeJumps();
+    };
+    const jump = () => finish();
+    const addJumps = () => {
+      ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => document.addEventListener(t, jump, { passive: true, once: true }));
+    };
+    const removeJumps = () => {
+      ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((t) => document.removeEventListener(t, jump));
+    };
+
+    if (!motionAllowed() || !('IntersectionObserver' in window)) {
+      tq.dataset.m5 = 'done';
+    } else {
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          io.disconnect();
+          if (tq.dataset.m5 !== 'wait') return;
+          tq.dataset.m5 = 'play';
+          addJumps();
+          setTimeout(finish, 4800);
+        },
+        { threshold: 0.4 },
+      );
+      const sentence = tq.querySelector('.tq__view--marked');
+      if (sentence) io.observe(sentence);
+    }
+    // Switching views or turning motion off ends the sequence.
+    tq.querySelectorAll('input[name="tq-view"]').forEach((r) => r.addEventListener('change', finish));
+    onMotionChange((enabled) => {
+      if (!enabled) finish();
+    });
+  }
+
+  // ---- Laptop: line each margin note up with its triangle ----
+  const wide = window.matchMedia('(min-width: 1024px)');
+  function align() {
+    if (!body || !notesList) return;
+    const items = Array.from(notesList.querySelectorAll<HTMLElement>('[data-note-for]'));
+    items.forEach((li) => (li.style.marginTop = ''));
+    const markedShown = !!document.querySelector<HTMLInputElement>('#tq-view-marked:checked');
+    if (!wide.matches || !markedShown) return;
+    const top0 = notesList.getBoundingClientRect().top;
+    let floor = 0;
+    for (const li of items) {
+      const tag = document.getElementById(`edit-${li.dataset.noteFor}`);
+      if (!tag) continue;
+      const want = tag.getBoundingClientRect().top - top0;
+      const here = li.getBoundingClientRect().top - top0;
+      const target = Math.max(want, floor);
+      const shift = Math.max(0, target - here);
+      li.style.marginTop = `${shift}px`;
+      floor = li.getBoundingClientRect().bottom - top0 + 16;
+    }
+  }
+  let raf = 0;
+  const queue = () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(align);
+  };
+  queue();
+  document.fonts?.ready.then(queue);
+  window.addEventListener('resize', queue);
+  wide.addEventListener('change', queue);
+  document.querySelectorAll('input[name="tq-view"]').forEach((r) => r.addEventListener('change', queue));
+</script>
 
 <style>
   .tq {
     display: grid;
     gap: var(--space-6);
-    max-width: var(--max-text);
   }
 
-  /* The switch: three radios styled as one segmented control. The real inputs stay in the page
-     (keyboard and screen readers use them) but are drawn as their labels. */
+  /* ---- The switch: three radios drawn as one segmented control ---- */
   .tq__switch {
     display: none;
     justify-self: start;
-    margin: 0;
     padding: 2px;
-    border: 1px solid var(--text-2);
-    border-radius: var(--radius);
-    min-inline-size: 0;
+    border: 1px solid var(--neatline);
   }
   @supports selector(:has(*)) {
     .tq__switch {
@@ -185,11 +305,10 @@ const views = [
   .tq__option {
     display: inline-flex;
     align-items: center;
-    min-height: 36px;
-    padding: var(--space-1) var(--space-3);
-    border-radius: 2px;
+    min-height: 40px;
+    padding: 0 var(--space-4);
+    font-size: var(--fs-small);
     cursor: pointer;
-    color: var(--text);
   }
   .tq__radio:checked + .tq__option {
     background: var(--text);
@@ -198,12 +317,13 @@ const views = [
   .tq__radio:focus-visible + .tq__option {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
+    box-shadow: 0 0 0 6px var(--focus-halo);
   }
 
-  /* Views: Marked shows by default; the switch swaps in May or October. */
+  /* ---- Views: Edits by default; the switch swaps in May or October ---- */
   .tq__view {
     display: grid;
-    gap: var(--space-2);
+    gap: var(--space-3);
   }
   .tq__view--may,
   .tq__view--october {
@@ -217,63 +337,162 @@ const views = [
   .tq:has(#tq-view-october:checked) .tq__view--marked {
     display: none;
   }
+  /* M6: the newly shown view fades in (200 ms). */
+  :global(html.js-motion) .tq__view {
+    animation: tq-in var(--dur-in) var(--ease-quick);
+  }
+  @keyframes tq-in {
+    from {
+      opacity: 0;
+    }
+  }
 
-  .tq__label {
-    color: var(--text-2);
-  }
+  /* ---- The sentence ---- */
   .tq__text {
-    margin: 0;
+    font-family: var(--font-display);
+    font-weight: var(--fw-display);
+    font-size: var(--fs-question);
+    line-height: var(--lh-question);
+    color: var(--text);
   }
-  .tq__del {
-    color: var(--del);
-    text-decoration: line-through;
-    text-decoration-thickness: 1.5px;
-  }
-  /* A replacement sits right after the words it replaces; a small gap keeps them apart. */
-  .tq__del + .tq__ins {
-    margin-left: 0.2em;
-  }
-  .tq__ins {
-    color: var(--ins);
-    text-decoration: underline;
-    text-decoration-thickness: 1.5px;
-    text-underline-offset: 0.2em;
-  }
-  .tq__ref {
-    font-size: 0.65em;
-    line-height: 0;
-  }
-  .tq__ref a {
+  .tq__view--marked :global(.tq__w) {
     display: inline-block;
+  }
+  /* Struck words: slate roman with a dashed strike (1.5px, dash 4, gap 3). */
+  .tq__view--marked :global(.tq__del) {
+    color: var(--del);
+    text-decoration: none;
+  }
+  .tq__view--marked :global(.tq__del .tq__w) {
+    position: relative;
+  }
+  .tq__view--marked :global(.tq__del .tq__w::after) {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 52%;
+    height: 1.5px;
+    background: repeating-linear-gradient(to right, var(--del) 0 4px, transparent 4px 7px);
+    transform-origin: left center;
+  }
+  /* Inserted words: Newsreader italic in the orange text color, no underline. */
+  .tq__view--marked :global(.tq__ins) {
+    font-style: italic;
+    font-weight: var(--fw-regular);
+    color: var(--ins);
+    text-decoration: none;
+  }
+  /* The triangle tag: orange triangle, ink number beside it, a 24px target. */
+  .tq :global(.tq__tag) {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     min-width: 24px;
     min-height: 24px;
-    line-height: 24px;
     padding-inline: 2px;
-    text-align: center;
+    margin-right: 0.12em;
+    vertical-align: 0.35em;
+    font-family: var(--font-body);
+    font-size: var(--fs-label);
+    font-weight: var(--fw-semibold);
+    font-style: normal;
+    line-height: 1;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .tq :global(.tq__tri) {
+    width: 10px;
+    height: 9px;
+    fill: var(--mark);
+    flex: none;
   }
 
+  /* ---- Notes: a ledger on phones ---- */
   .tq__notes {
-    display: grid;
-    gap: var(--space-4);
+    margin-top: var(--space-6);
+    border-top: 1px solid var(--rule);
   }
   .tq__note {
+    position: relative;
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--space-2) var(--space-3);
-    padding: var(--space-4);
-    background: var(--bg-2);
-    border-radius: var(--radius);
-    scroll-margin-top: var(--space-6);
+    gap: var(--space-3);
+    align-items: start;
+    padding-block: var(--space-4);
+    border-bottom: 1px solid var(--rule);
   }
-  .tq__note-num {
-    color: var(--text-2);
-    padding-top: 0.15em;
+  .tq__tag--note {
+    vertical-align: baseline;
+    margin-top: 1px;
   }
   .tq__note-text {
     font-size: var(--fs-small);
+    line-height: 1.5;
   }
-  .tq__back {
-    grid-column: 2;
-    justify-self: start;
+
+  /* ---- Laptop: sentence in columns 1 to 8, notes in the margin (9 to 12) ---- */
+  @media (min-width: 1024px) {
+    .tq__views {
+      grid-column: 1 / span 8;
+    }
+    .tq__notes {
+      grid-column: 9 / span 4;
+      margin-top: 0;
+      border-top: 0;
+    }
+    .tq__note {
+      border-bottom: 0;
+      padding-block: 0;
+      padding-left: var(--space-4);
+      border-left: 1px solid var(--rule);
+    }
+    .tq__note + .tq__note {
+      margin-top: var(--space-4);
+    }
+    /* The hairline leader, reaching back toward the sentence. */
+    .tq__note::before {
+      content: '';
+      position: absolute;
+      top: 0.8em;
+      right: 100%;
+      width: var(--gutter);
+      height: 1px;
+      background: var(--neatline);
+      opacity: 0.6;
+    }
+  }
+
+  /* ---- M5 start state: only while motion is allowed and the sequence hasn't run ---- */
+  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__tag:not(.tq__tag--note)),
+  :global(html.js-motion) .tq[data-m5='play'] :global(.tq__tag:not(.tq__tag--note)) {
+    transition:
+      opacity 180ms var(--ease-quick) var(--d),
+      transform 180ms var(--ease-quick) var(--d);
+  }
+  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__tag:not(.tq__tag--note)) {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  :global(html.js-motion) .tq[data-m5='play'] :global(.tq__del .tq__w::after) {
+    transition: transform 320ms var(--ease-draw) var(--d);
+  }
+  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__del .tq__w::after) {
+    transform: scaleX(0);
+  }
+  /* clip-path can't animate to "none", so the end value is an inset that reaches a little past
+     the word (italic letters lean out of their box). */
+  :global(html.js-motion) .tq[data-m5='play'] :global(.tq__ins .tq__w) {
+    clip-path: inset(-0.25em -0.3em -0.25em -0.1em);
+    transition: clip-path 520ms var(--ease-settle) var(--d);
+  }
+  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__ins .tq__w) {
+    clip-path: inset(-0.25em 100% -0.25em -0.1em);
+  }
+  :global(html.js-motion) .tq[data-m5='play'] .tq__note {
+    transition: opacity 240ms var(--ease-quick) var(--d);
+  }
+  :global(html.js-motion) .tq[data-m5='wait'] .tq__note {
+    opacity: 0;
   }
 </style>

@@ -17,6 +17,30 @@ import Portfolio from '../components/sections/Portfolio.astro';
   <Summer />
   <Work />
   <Progress />
-  <People />
-  <Portfolio />
+  <!-- People and Portfolio share a row on laptops. -->
+  <div class="duo">
+    <People />
+    <Portfolio />
+  </div>
 </Base>
+
+<style>
+  @media (min-width: 1024px) {
+    .duo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      max-width: var(--max-page);
+      margin-inline: auto;
+      border-top: 1px solid var(--rule);
+    }
+    .duo > :global(.section) {
+      border-top: 0;
+    }
+    .duo > :global(.section:first-child .wrap) {
+      padding-right: calc(var(--gutter) / 2);
+    }
+    .duo > :global(.section:last-child .wrap) {
+      padding-left: calc(var(--gutter) / 2);
+    }
+  }
+</style>

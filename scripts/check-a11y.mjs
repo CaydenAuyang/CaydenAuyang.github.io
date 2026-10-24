@@ -19,7 +19,8 @@ import { chromium } from 'playwright-core';
 import { AxeBuilder } from '@axe-core/playwright';
 
 const BASE = process.env.BASE || 'http://localhost:4321';
-const PAGES = ['/', '/404'];
+// '/?snapshot' checks snapshot mode (white ground, no motion, no buttons).
+const PAGES = ['/', '/?snapshot', '/404'];
 
 const setups = [
   { name: 'laptop', viewport: { width: 1440, height: 900 }, reducedMotion: 'no-preference' },
