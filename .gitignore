@@ -17,7 +17,3 @@ tools/previews/raw/
 .DS_Store
 .claude/
 *.log
-
-# On hold until cleared: the project preview clips and their manifest stay local for now.
-public/media/previews/
-src/data/previews.json
