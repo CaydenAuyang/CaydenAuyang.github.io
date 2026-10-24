@@ -21,3 +21,4 @@ Dated notes on what changed on the site.
 - The Progress lines draw left to right instead of jumping. The People heading drops the copy's trailing period.
 - Preview clips: three desktop loops (1280x800, under 2 MB each), checked frame by frame for flagged claims, student names and emails.
 - A share image in the Datum style (name, hero line, both coordinates and the point figure on a vellum plate), rendered once from the site's own fonts and figure still. The share-image script comes later.
+- The point figure is cleaned up: hair falls as curtains from a thin center part, hidden surfaces are culled so no seams show at the jaw or collar, and the face interior is sparser. Outline match: front 0.978, turned right 0.936, turned left 0.880. The share image is re-rendered with it.
