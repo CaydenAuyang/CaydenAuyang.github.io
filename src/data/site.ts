@@ -25,6 +25,14 @@ export const ui = {
   more: 'More',
   less: 'Less',
   viewLegend: 'Show the question as',
+  // The question scrubber (NIGHT-SIGNAL.md 11b.5): its label (content.md Interface labels) and what
+  // each stop says to screen readers.
+  scrubLabel: 'Drag from May to October',
+  scrubStep: (k: number, n: number, what: string) => `Edit ${k} of ${n}: ${what}`,
+  scrubStruck: (words: string) => `"${words}" struck`,
+  scrubInserted: (words: string) => `"${words}" inserted`,
+  scrubReplaced: (from: string, to: string) => `"${from}" replaced with "${to}"`,
+  scrubNote: (n: number) => `, note ${n}`,
   deleted: 'deleted',
   inserted: 'inserted',
   note: 'note',

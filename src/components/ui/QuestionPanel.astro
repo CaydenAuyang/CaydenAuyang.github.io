@@ -14,6 +14,15 @@
 // The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
 // alone.
 //
+// The scrubber (NIGHT-SIGNAL.md 11b.5, src/scripts/question.ts): under the question, a native
+// range input from May to October in seven stops. 0 is May (clean), 1 to 5 apply the five edits
+// one by one in reading order (marked as in the Edits view), 6 is October (clean). The switch
+// becomes three presets that move it: May 0, Edits 5 (the default), October 6. Each strike draws
+// and each insertion lights as the handle passes it, and its note number glows. Arrow keys move one
+// edit at a time; aria-valuetext says what each stop shows. With JavaScript the one marked
+// paragraph shows every stop (each edit is a span the script turns on and off); without it, the
+// switch shows the three fixed views as before. Snapshot: the marked version, no scrubber.
+//
 // At build time it checks that the edits turn the May text into the October text exactly; if
 // not, the build stops with an error, so a typo can't ship.
 import type { Edit, Line } from '../../data/content';
@@ -74,17 +83,36 @@ if (produced !== october.text) fail(`the edits produce\n  "${produced}"\nwhich i
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 // A word joiner keeps a note number on the same line as the word before it.
 const WJ = '⁠';
+// Each edit is a span the scrubber turns on (applied) and off (the May words); on is the default,
+// which is the Edits view. A replacement's space sits inside its insertion, so it goes with it.
+let step = 0;
 const marked = pieces
   .map((p) => {
     if (p.kind === 'keep') return esc(p.text);
-    let out = '';
+    step += 1;
+    let out = `<span class="qp__edit is-on" data-step="${step}"${p.note ? ` data-note="${p.note}"` : ''}>`;
     if (p.del) out += `<del class="qp__del"><span class="sr-only">${ui.deleted}: </span>${esc(p.del)}</del>`;
-    if (p.del && p.ins && !p.ins.startsWith(',')) out += ' ';
-    if (p.ins) out += `<ins class="qp__ins"><span class="sr-only">${ui.inserted}: </span>${esc(p.ins)}</ins>`;
+    const space = p.del && p.ins && !p.ins.startsWith(',') ? ' ' : '';
+    if (p.ins) out += `<ins class="qp__ins">${space}<span class="sr-only">${ui.inserted}: </span>${esc(p.ins)}</ins>`;
     if (p.note) out += `${WJ}<sup class="qp__n"><span class="sr-only">${ui.note} </span>${p.note}</sup>`;
-    return out;
+    return `${out}</span>`;
   })
   .join('');
+
+// What each stop of the scrubber shows, for screen readers (aria-valuetext).
+const editPieces = pieces.filter((p): p is Extract<Piece, { kind: 'edit' }> => p.kind === 'edit');
+const trimWords = (t: string) => t.replace(/^[,\s]+/, '');
+const stopTexts = [
+  views.may,
+  ...editPieces.map((p, i) => {
+    const what = p.del && p.ins ? ui.scrubReplaced(p.del, trimWords(p.ins)) : p.del ? ui.scrubStruck(p.del) : ui.scrubInserted(trimWords(p.ins ?? ''));
+    const text = ui.scrubStep(i + 1, editPieces.length, what + (p.note ? ui.scrubNote(p.note) : ''));
+    return i === editPieces.length - 1 ? `${views.edits}. ${text}` : text;
+  }),
+  views.october,
+];
+const EDITS_STOP = editPieces.length;
+const LAST_STOP = editPieces.length + 1;
 ---
 
 <div class="qp">
@@ -99,10 +127,31 @@ const marked = pieces
       <label for="qp-october">{views.october}</label>
     </fieldset>
 
-    <div class="qp__views" aria-live="polite">
+    <div class="qp__views" aria-live="polite" data-qp-views>
       <p class="qp__text qp__view qp__view--may">{may.text}</p>
-      <p class="qp__text qp__view qp__view--edits" set:html={marked} />
+      <p class="qp__text qp__view qp__view--edits" data-qp-marked set:html={marked} />
       <p class="qp__text qp__view qp__view--october">{october.text}</p>
+    </div>
+
+    <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide hidden>
+      <label class="qp__scrub-label" for="qp-scrub">{ui.scrubLabel}</label>
+      <div class="qp__track" style={`--stops: ${LAST_STOP}`}>
+        <input
+          id="qp-scrub"
+          class="qp__range"
+          type="range"
+          min="0"
+          max={LAST_STOP}
+          step="1"
+          value={EDITS_STOP}
+          aria-valuetext={stopTexts[EDITS_STOP]}
+          data-texts={JSON.stringify(stopTexts)}
+          data-edits-stop={EDITS_STOP}
+        />
+        <span class="qp__ticks" aria-hidden="true">
+          {stopTexts.map((_, i) => <span class="qp__tick" style={`--t: ${i}`} />)}
+        </span>
+      </div>
     </div>
   </div>
 
@@ -110,7 +159,7 @@ const marked = pieces
     {
       notes.map((note, i) => (
         <li class="qp__note">
-          <span class="qp__note-n" aria-hidden="true">
+          <span class="qp__note-n" aria-hidden="true" data-note={i + 1}>
             {i + 1}
           </span>
           <span class="sr-only">{`${ui.note} ${i + 1}: `}</span>
@@ -120,6 +169,10 @@ const marked = pieces
     }
   </ol>
 </div>
+
+<script>
+  import '../../scripts/question';
+</script>
 
 <style>
   .qp {
@@ -234,11 +287,20 @@ const marked = pieces
     display: none !important;
   }
 
+  /*
+    The marked paragraph. Each edit is on (applied: struck words dim with a line through,
+    insertions in window with their note number) or off (the May words, plain; insertions and
+    numbers gone). .is-clean is October: struck words gone, insertions plain. The line through is a
+    1px background, so it can draw left to right as the scrubber passes; forced colors get a real
+    line-through.
+  */
   .qp__text :global(.qp__del) {
     color: var(--dim);
-    text-decoration-line: line-through;
-    text-decoration-thickness: 1px;
-    text-decoration-color: var(--strike);
+    text-decoration: none;
+    background: linear-gradient(var(--strike), var(--strike)) no-repeat 0 58% / 100% 1px;
+    transition:
+      background-size 320ms var(--ease-out),
+      color 320ms var(--ease-out);
   }
   .qp__text :global(.qp__ins) {
     color: var(--window);
@@ -252,6 +314,148 @@ const marked = pieces
     margin-left: 0.15em;
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+  .qp__text :global(.qp__edit:not(.is-on) .qp__del) {
+    color: inherit;
+    background-size: 0% 1px;
+  }
+  .qp__text :global(.qp__edit:not(.is-on) .qp__ins),
+  .qp__text :global(.qp__edit:not(.is-on) .qp__n),
+  .qp__text:global(.is-clean) :global(.qp__del),
+  .qp__text:global(.is-clean) :global(.qp__n),
+  .qp__text :global(.qp__edit:not(.is-on) .qp__del .sr-only),
+  .qp__text:global(.is-clean) :global(.qp__ins .sr-only) {
+    display: none;
+  }
+  .qp__text:global(.is-clean) :global(.qp__ins) {
+    color: inherit;
+  }
+  /* Just applied: the insertion lights up like the windows, and its number glows. */
+  .qp__text :global(.qp__edit.is-new .qp__ins) {
+    animation: qp-ins 520ms var(--ease-out);
+  }
+  .qp__text :global(.qp__edit.is-new .qp__n),
+  .qp__note-n:global(.is-glow) {
+    animation: qp-glow 900ms var(--ease-out);
+  }
+  @keyframes qp-ins {
+    from {
+      opacity: 0;
+      color: var(--ign-hot);
+      text-shadow: 0 0 14px rgb(var(--window-rgb) / 0.8);
+    }
+  }
+  @keyframes qp-glow {
+    0% {
+      text-shadow: none;
+    }
+    25% {
+      color: var(--ign-hot);
+      text-shadow:
+        0 0 6px rgb(var(--window-rgb) / 0.95),
+        0 0 18px rgb(var(--window-rgb) / 0.7);
+    }
+  }
+  @media (forced-colors: active) {
+    .qp__text :global(.qp__edit.is-on .qp__del) {
+      text-decoration: line-through;
+    }
+  }
+
+  /* With the scrubber, the one marked paragraph shows every stop. */
+  .qp:global(.is-scrub) .qp__view--may,
+  .qp:global(.is-scrub) .qp__view--october {
+    display: none !important;
+  }
+  .qp:global(.is-scrub) .qp__view--edits {
+    display: block !important;
+  }
+
+  /* The scrubber: a native range input, 44px tall, a thin track that fills in window up to the
+     handle, and one small tick per stop that lights once the handle has reached it. */
+  .qp__scrub {
+    margin-top: var(--space-5);
+    max-width: 34rem;
+  }
+  .qp__scrub[hidden] {
+    display: none;
+  }
+  .qp__scrub-label {
+    display: block;
+    margin-bottom: var(--space-1);
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--dim);
+  }
+  .qp__track {
+    --thumb: 22px;
+    --p: 0;
+    position: relative;
+  }
+  .qp__range {
+    display: block;
+    width: 100%;
+    height: var(--tap);
+    margin: 0;
+    background: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+  }
+  .qp__range::-webkit-slider-runnable-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(to right, var(--window) calc(var(--p) * 100%), var(--rule) calc(var(--p) * 100%));
+  }
+  .qp__range::-moz-range-track {
+    height: 2px;
+    border-radius: 1px;
+    background: linear-gradient(to right, var(--window) calc(var(--p) * 100%), var(--rule) calc(var(--p) * 100%));
+  }
+  .qp__range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: var(--thumb);
+    height: var(--thumb);
+    margin-top: calc((2px - var(--thumb)) / 2);
+    border-radius: 50%;
+    border: 2px solid var(--night);
+    background: var(--window);
+    box-shadow:
+      0 0 0 1px rgb(var(--window-rgb) / 0.5),
+      0 0 14px rgb(var(--window-rgb) / 0.55);
+  }
+  .qp__range::-moz-range-thumb {
+    width: var(--thumb);
+    height: var(--thumb);
+    border-radius: 50%;
+    border: 2px solid var(--night);
+    background: var(--window);
+    box-shadow:
+      0 0 0 1px rgb(var(--window-rgb) / 0.5),
+      0 0 14px rgb(var(--window-rgb) / 0.55);
+  }
+  .qp__range:focus-visible {
+    border-radius: var(--radius-control);
+  }
+  .qp__ticks {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .qp__tick {
+    position: absolute;
+    top: 50%;
+    left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--t) / var(--stops));
+    width: 4px;
+    height: 4px;
+    margin: 6px 0 0 -2px;
+    border-radius: 50%;
+    background: var(--rule);
+    transition: background var(--dur-quick) var(--ease-out);
+  }
+  .qp__tick:global(.is-lit) {
+    background: var(--window);
   }
 
   .qp__notes {
