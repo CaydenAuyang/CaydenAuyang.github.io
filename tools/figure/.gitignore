@@ -1,0 +1,6 @@
+# Original photos and anything made directly from them stay on this computer.
+input/
+work/
+*.heic
+*.HEIC
+node_modules/
