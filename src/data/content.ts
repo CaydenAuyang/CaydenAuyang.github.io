@@ -207,10 +207,17 @@ export interface Project {
   caption: Line;
 }
 
+// Smaller cards under the three projects: no video, each linking to its GitHub repo.
+export interface MoreItem {
+  name: string;
+  body: Line;
+  link: Link;
+}
+
 export const work = {
   heading: 'Work',
   intro: {
-    text: 'Three projects. Each preview is a short recording; each card opens the live site.',
+    text: 'Three main projects, then more work below them. Each main preview is a short recording; each card opens the live site.',
   } satisfies Line,
   projects: [
     {
@@ -293,6 +300,44 @@ export const work = {
       caption: { text: 'aisimply.co' },
     },
   ] satisfies Project[],
+  more: {
+    heading: 'More work',
+    items: [
+      {
+        name: 'Han Dynasty Jeopardy',
+        body: {
+          text: 'An interactive Jeopardy game about the Han Dynasty, built as a teaching tool for my Advanced Global Studies class.',
+          source: 'POSTER; 20-Repos/CaydenAuyang/Han-Dynasty-Jeopardy',
+        },
+        link: {
+          text: 'github.com/CaydenAuyang/Han-Dynasty-Jeopardy',
+          href: 'https://github.com/CaydenAuyang/Han-Dynasty-Jeopardy',
+        },
+      },
+      {
+        name: 'Inferno Acoustic Map',
+        body: {
+          text: "An interactive map of Dante's Inferno that traces how sound becomes corrupted as sin deepens, from the noise of the Styx to the silence of Cocytus. Built for my Advanced English course on the Inferno.",
+          source: 'POSTER; 20-Repos/CaydenAuyang/Inferno-Acoustic-Map',
+        },
+        link: {
+          text: 'github.com/CaydenAuyang/Inferno-Acoustic-Map',
+          href: 'https://github.com/CaydenAuyang/Inferno-Acoustic-Map',
+        },
+      },
+      {
+        name: 'Screen-parsing GUI agent',
+        body: {
+          text: 'A prototype from my summer 2025 internship at Wisers: a macOS agent that reads the screen with computer vision and OCR, then plans its steps with a language model.',
+          source: 'OCH §3, GUI; 20-Repos/CaydenAuyang/screen-parsing-gui-agent',
+        },
+        link: {
+          text: 'github.com/CaydenAuyang/screen-parsing-gui-agent',
+          href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent',
+        },
+      },
+    ] satisfies MoreItem[],
+  },
 };
 
 // ---- 5. Progress -------------------------------------------------------------------------------

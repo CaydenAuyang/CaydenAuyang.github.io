@@ -355,9 +355,8 @@ const views = [
     line-height: var(--lh-question);
     color: var(--text);
   }
-  .tq__view--marked :global(.tq__w) {
-    display: inline-block;
-  }
+  /* Words stay plain inline boxes, so lines only break at spaces (inline-blocks would let a
+     line break between a word and the period after it). */
   /* Struck words: slate roman with a dashed strike (1.5px, dash 4, gap 3). */
   .tq__view--marked :global(.tq__del) {
     color: var(--del);
@@ -383,16 +382,14 @@ const views = [
     color: var(--ins);
     text-decoration: none;
   }
-  /* The triangle tag: orange triangle, ink number beside it, a 24px target. */
+  /* The triangle tag: orange triangle, ink number beside it. It stays an inline box (so it never
+     wraps away from its edit); the padding gives it a 24px tall hit area. */
   .tq :global(.tq__tag) {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    min-width: 24px;
-    min-height: 24px;
-    padding-inline: 2px;
-    margin-right: 0.12em;
-    vertical-align: 0.35em;
+    display: inline;
+    padding: 5px 3px;
+    margin-right: 0.08em;
+    vertical-align: 0.4em;
+    white-space: nowrap;
     font-family: var(--font-body);
     font-size: var(--fs-label);
     font-weight: var(--fw-semibold);
@@ -402,10 +399,12 @@ const views = [
     text-decoration: none;
   }
   .tq :global(.tq__tri) {
+    display: inline-block;
     width: 10px;
     height: 9px;
+    margin-right: 2px;
+    vertical-align: -0.02em;
     fill: var(--mark);
-    flex: none;
   }
 
   /* ---- Notes: a ledger on phones ---- */
@@ -422,9 +421,10 @@ const views = [
     padding-block: var(--space-4);
     border-bottom: 1px solid var(--rule);
   }
-  .tq__tag--note {
+  .tq .tq__tag--note {
+    display: inline-block;
+    padding: 2px 3px;
     vertical-align: baseline;
-    margin-top: 1px;
   }
   .tq__note-text {
     font-size: var(--fs-small);
@@ -464,14 +464,16 @@ const views = [
   }
 
   /* ---- M5 start state: only while motion is allowed and the sequence hasn't run ---- */
-  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__tag:not(.tq__tag--note)),
   :global(html.js-motion) .tq[data-m5='play'] :global(.tq__tag:not(.tq__tag--note)) {
-    transition:
-      opacity 180ms var(--ease-quick) var(--d),
-      transform 180ms var(--ease-quick) var(--d);
+    transition: opacity 180ms var(--ease-quick) var(--d);
+  }
+  :global(html.js-motion) .tq[data-m5='play'] :global(.tq__tag:not(.tq__tag--note) .tq__tri) {
+    transition: transform 180ms var(--ease-quick) var(--d);
   }
   :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__tag:not(.tq__tag--note)) {
     opacity: 0;
+  }
+  :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__tag:not(.tq__tag--note) .tq__tri) {
     transform: scale(0.6);
   }
   :global(html.js-motion) .tq[data-m5='play'] :global(.tq__del .tq__w::after) {
@@ -487,7 +489,7 @@ const views = [
     transition: clip-path 520ms var(--ease-settle) var(--d);
   }
   :global(html.js-motion) .tq[data-m5='wait'] :global(.tq__ins .tq__w) {
-    clip-path: inset(-0.25em 100% -0.25em -0.1em);
+    clip-path: inset(-0.25em calc(100% + 0.1em) -0.25em -0.1em);
   }
   :global(html.js-motion) .tq[data-m5='play'] .tq__note {
     transition: opacity 240ms var(--ease-quick) var(--d);
