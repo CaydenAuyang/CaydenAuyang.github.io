@@ -53,7 +53,8 @@ function layout(counts: number[], w: number, h: number, columns: boolean): Layou
   const ty = new Float32Array(total);
   const gap = columns ? Math.max(6, w * 0.018) : Math.max(4, h * 0.03);
   const band = ((columns ? w : h) - gap * (n - 1)) / n;
-  const length = columns ? h : w;
+  // Leave a little headroom above the tallest column.
+  const length = columns ? h * 0.94 : w;
 
   // The largest dot pitch at which the biggest notebook still fits.
   let pitch = 1.5;
@@ -81,7 +82,7 @@ function layout(counts: number[], w: number, h: number, columns: boolean): Layou
       }
     }
   });
-  return { tx, ty, r: Math.max(0.75, pitch * 0.34) };
+  return { tx, ty, r: Math.max(0.75, pitch * 0.37) };
 }
 
 function setup(canvas: HTMLCanvasElement) {

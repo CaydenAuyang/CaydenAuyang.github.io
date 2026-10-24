@@ -11,7 +11,7 @@
 //
 // Recordings come from src/data/previews.json through datum/previews.ts. A project without
 // one shows an empty plate that says the recording is to come.
-import { work, type Project } from '../../data/content';
+import { work, type Project, type Line, type Link } from '../../data/content';
 import LoopVideo from '../ui/LoopVideo.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import Say from '../ui/Say.astro';
@@ -26,6 +26,15 @@ const descent: { id: Project['id']; level: Level; scale: string }[] = [
   { id: 'ai-simply', level: 'org', scale: 'Small organizations' },
   { id: 'civic-ai-club', level: 'school', scale: 'A school' },
 ];
+
+// "More work": three smaller cards under the plates, no video and no locator. Read softly, so
+// the page builds whether or not content.ts has the row yet.
+interface MoreWork {
+  heading: string;
+  items: { name: string; body: Line; link: Link }[];
+}
+const more = (work as { more?: MoreWork }).more;
+const moreItems = more?.items ?? [];
 
 // Fig. 1 is the hero figure, so the previews are Figs. 2 to 4.
 const plates = descent.flatMap((step, i) => {
@@ -100,6 +109,34 @@ const plates = descent.flatMap((step, i) => {
             )}
           </article>
         ))
+      }
+
+      {
+        more && moreItems.length > 0 && (
+          <div class="more">
+            <h3 id="work-more-title" class="more__title">
+              {more.heading}
+            </h3>
+            <ul class="more__list" aria-labelledby="work-more-title">
+              {moreItems.map((item) => (
+                <li class="more__card plate">
+                  <h4 class="more__name">
+                    <ExternalLink href={item.link.href}>
+                      {item.name}
+                      <svg class="arrow arrow--name" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+                        <path d="M3 9 9 3M4.5 3H9v4.5" />
+                      </svg>
+                    </ExternalLink>
+                  </h4>
+                  <p class="more__body">
+                    <Say line={item.body} />
+                  </p>
+                  <p class="more__path">{item.link.text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
       }
     </div>
   </div>
@@ -235,6 +272,40 @@ const plates = descent.flatMap((step, i) => {
     color: var(--text-2);
   }
 
+  /* ---- More work: three smaller cards. ---- */
+  .more {
+    display: grid;
+    gap: var(--space-5);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--rule);
+  }
+  .more__title {
+    font-size: 1.75rem;
+    line-height: var(--lh-tight);
+  }
+  .more__list {
+    display: grid;
+    gap: var(--space-4);
+  }
+  .more__card {
+    display: grid;
+    gap: var(--space-3);
+    align-content: start;
+    padding: var(--space-5) var(--space-4);
+  }
+  .more__name {
+    font-size: 1.375rem;
+    line-height: var(--lh-head);
+  }
+  .more__name :global(a) {
+    text-decoration-thickness: 1.5px;
+  }
+  .more__path {
+    font-size: var(--fs-label);
+    color: var(--text-2);
+    overflow-wrap: anywhere;
+  }
+
   /* ---- Laptops: video in columns 1 to 7, text in 8 to 12. ---- */
   @media (min-width: 1024px) {
     .work {
@@ -280,6 +351,13 @@ const plates = descent.flatMap((step, i) => {
     .project__study::before {
       top: calc(-1 * var(--space-5));
       height: calc(var(--space-5) + 26px);
+    }
+    .more__list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--gutter);
+    }
+    .more__card {
+      padding: var(--space-5);
     }
   }
 </style>
