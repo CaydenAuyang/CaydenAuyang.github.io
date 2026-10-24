@@ -18,7 +18,7 @@ import Say from '../ui/Say.astro';
         <ul class="people">
           {people.list.map((person) => (
             <li class="person">
-              <h3 class="person__name">{person.name}</h3>
+              <h3 class="person__name">{person.name.replace(/\.$/, '')}</h3>
               <p class="t-meta">
                 <Say line={person.title} />
               </p>
