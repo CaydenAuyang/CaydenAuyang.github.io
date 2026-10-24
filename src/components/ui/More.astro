@@ -1,0 +1,87 @@
+---
+// More.astro: an inline expander for the longer copy (content-long.md).
+//
+// A real <button aria-expanded aria-controls> and the panel it opens. The panel's height
+// animates open and shut (none under reduced motion) (src/scripts/more.ts).
+//   - Without JavaScript the panel is simply open and the button is hidden.
+//   - Snapshot mode: open, button hidden, so the printed page carries every word.
+// `label` is read to screen readers after "More" ("More about the summer").
+// After each open or close it dispatches `world:layout`, so the timeline can re-measure.
+import { ui } from '../../data/site';
+
+interface Props {
+  id: string;
+  label: string;
+  class?: string;
+}
+const { id, label, class: className } = Astro.props;
+---
+
+<div class:list={['more', className]} data-more>
+  <button
+    type="button"
+    class="more__btn"
+    aria-expanded="false"
+    aria-controls={id}
+    data-more-btn
+    data-needs-js
+    data-snapshot-hide
+  >
+    <span data-more-text>{ui.more}</span><span class="sr-only"> {label}</span>
+    <svg class="more__chev" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+      <path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.5"></path>
+    </svg>
+  </button>
+  <div id={id} class="more__panel" data-more-panel>
+    <div class="more__inner prose">
+      <slot />
+    </div>
+  </div>
+</div>
+
+<script>
+  import '../../scripts/more';
+</script>
+
+<style>
+  .more__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--tap);
+    padding: 0 var(--space-3);
+    margin-left: calc(var(--space-3) * -1);
+    border-radius: var(--radius-control);
+    font-size: 18px;
+    font-weight: var(--fw-medium);
+    color: var(--text);
+    transition: color var(--dur-quick) var(--ease-out);
+  }
+  .more__btn:hover {
+    color: var(--window);
+  }
+  .more__chev {
+    transition: transform var(--dur-height) var(--ease-in-out);
+  }
+  .more__btn[aria-expanded='true'] .more__chev {
+    transform: rotate(180deg);
+  }
+
+  .more__panel {
+    overflow: hidden;
+  }
+  /* With JavaScript, closed until opened. */
+  :global(html.js) .more__panel:not([data-open]) {
+    display: none;
+  }
+  /* Snapshot: every panel open. */
+  :global(html[data-snapshot]) .more__panel {
+    display: block !important;
+    height: auto !important;
+  }
+  .more__inner {
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-2);
+    color: var(--text);
+  }
+</style>

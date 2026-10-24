@@ -1,14 +1,26 @@
 ---
 // ExternalLink.astro: a link to another site. It always opens in a new tab, because this site is
 // shown inside the certificate program's Google Site, in a frame that can't navigate away.
-// rel="noopener" keeps the new tab from reaching back into this page.
+// rel="noopener" keeps the new tab from reaching back into this page. Screen readers hear
+// "(opens in a new tab)"; `hint` adds hidden context after the visible words (for link text
+// such as "GitHub" that repeats on the page).
 import { ui } from '../../data/site';
 
 interface Props {
   href: string;
   class?: string;
+  hint?: string;
+  arrow?: boolean;
 }
-const { href, class: className } = Astro.props;
+const { href, class: className, hint, arrow = false } = Astro.props;
 ---
 
-<a href={href} class={className} target="_blank" rel="noopener"><slot /><span class="sr-only"> {ui.newTab}</span></a>
+<a href={href} class={className} target="_blank" rel="noopener"
+  ><slot />{hint && <span class="sr-only">{`, ${hint}`}</span>}<span class="sr-only"> {ui.newTab}</span>{
+    arrow && (
+      <svg class="arrow" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+        <path d="M3.5 10.5 10.5 3.5M5 3.5h5.5V9" fill="none" stroke="currentColor" stroke-width="1.5" />
+      </svg>
+    )
+  }</a
+>

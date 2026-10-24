@@ -1,311 +1,458 @@
 /*
-  base.css: the ground rules every page shares. Direction: Datum.
+  base.css: the page-wide rules. A small reset, the type roles, the layout grid, the world's
+  layers (the fixed canvas and the still behind it), and the shared bits every section uses
+  (scrims, facts, links, focus). Component styles live in their own .astro files.
 
-  In order:
-    1. a reset, so every browser starts equal,
-    2. page defaults (fonts, colors, sizes) and links,
-    3. shared layout helpers: the page wrap, the 12-column grid, sections, plates,
-    4. keyboard focus, the skip link, screen-reader-only text,
-    5. the "To come" placeholder chip,
-    6. motion and snapshot rules,
-    7. print.
-
-  Components style themselves in their own <style> blocks. This file only sets defaults and
-  the few helpers several components share, so it never has to fight a component's rules.
-  Loaded once by src/layouts/Base.astro, after tokens.css.
+  Modes, set on <html> by the script at the top of Base.astro before anything is drawn:
+    .js                 JavaScript runs.
+    [data-motion=off]   the device asks for reduced motion.
+    [data-snapshot]     ?snapshot in the address: poster screenshots. Motion off, every section in
+                        full, controls that make no sense on paper hidden.
+    .js-intro           motion on and not snapshot: the hero text starts masked and wipes in.
+    .is-ready           set by the world once its first frame is drawn: the canvas fades in.
 */
 
-/* ---- 1. Reset ----------------------------------------------------------------------------- */
+/* ---- Reset ---------------------------------------------------------------------------------- */
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
-html,
-body,
+
+html {
+  /* The page ground. The fallback and the canvas sit above this, behind everything else. */
+  background: var(--night);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-regular);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Keeps the page from shifting sideways when the menu locks scrolling. */
+  scrollbar-gutter: stable;
+  scrollbar-color: rgb(var(--text-rgb) / 0.25) var(--night);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* The ground is painted on <html>, so the fixed world layers show through. */
+  background: transparent;
+  overflow-x: clip;
+}
+
 h1,
 h2,
 h3,
 h4,
 p,
+ul,
+ol,
 figure,
 blockquote,
 dl,
 dd,
-ul,
-ol,
 fieldset {
   margin: 0;
 }
-ul[class],
-ol[class] {
+
+ul,
+ol {
   padding: 0;
   list-style: none;
 }
+
+fieldset {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
 img,
-svg,
 video,
+svg,
 canvas {
   display: block;
   max-width: 100%;
 }
-img,
-video {
-  height: auto;
-}
-button,
-input {
+
+button {
   font: inherit;
   color: inherit;
-}
-button {
   background: none;
   border: 0;
   padding: 0;
   cursor: pointer;
 }
-fieldset {
-  padding: 0;
-  border: 0;
-  min-inline-size: 0;
+
+a {
+  color: inherit;
 }
-[hidden] {
+
+::selection {
+  background: rgb(var(--window-rgb) / 0.35);
+  color: var(--text);
+}
+
+html.menu-open {
+  overflow: hidden;
+}
+/* Under the menu only the dimmed world shows, not the page's own text. */
+html.menu-open main,
+html.menu-open .site-footer,
+html.menu-open .site-header {
+  visibility: hidden;
+}
+
+/* ---- Focus: a window-colored ring with a dark halo ------------------------------------------ */
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--focus-halo);
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+/* Sections and <main> take focus from the skip link and the menu; no ring for a whole block. */
+[tabindex='-1']:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ---- Utilities ------------------------------------------------------------------------------ */
+
+.sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-skip);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--text);
+  color: var(--night);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible,
+.skip-link:focus {
+  transform: none;
+}
+
+/* Hidden in snapshot mode: controls that make no sense on paper. */
+html[data-snapshot] [data-snapshot-hide] {
+  display: none !important;
+}
+/* Hidden without JavaScript: controls that need it. */
+html:not(.js) [data-needs-js] {
   display: none !important;
 }
 
-/* ---- 2. Page defaults --------------------------------------------------------------------- */
-html {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 100%;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Jumps to a section land below the sticky header. */
-  scroll-padding-top: calc(var(--header-h) + 32px);
+/* ---- The world: a still behind a fixed canvas, both behind the page ------------------------- */
+
+.world-fallback {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-fallback);
+  pointer-events: none;
+  /* Night at the top, the sky toward the horizon, haze along it, dark water below. */
+  background:
+    radial-gradient(120% 40% at 40% 84%, rgb(43 33 64 / 0.85) 0%, rgb(43 33 64 / 0) 70%),
+    linear-gradient(
+      to bottom,
+      var(--night) 0%,
+      #080b1c 28%,
+      var(--sky) 58%,
+      #1d1b3c 74%,
+      var(--glow) 84%,
+      #0b0c17 88%,
+      var(--night) 100%
+    );
 }
-body {
-  background: var(--bg);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body);
-  overflow-x: clip;
+/* The lead's still render of the hero scene, when it exists (Base.astro checks at build time). */
+.world-fallback[data-still] {
+  background-image: var(--still);
+  background-size: cover;
+  background-position: 50% 50%;
 }
-h1,
-h2,
-h3,
-h4 {
+
+.world-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-world);
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fade) var(--ease-out);
+}
+html.is-ready .world-canvas {
+  opacity: 1;
+}
+html[data-motion='off'] .world-canvas,
+html[data-snapshot] .world-canvas {
+  transition: none;
+}
+
+/* ---- Type roles ----------------------------------------------------------------------------- */
+
+.t-display,
+.h2,
+.t-project {
   font-family: var(--font-display);
   font-weight: var(--fw-display);
-  line-height: var(--lh-head);
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
   text-wrap: balance;
 }
-p,
-li,
-dd,
-figcaption {
+.h2 {
+  font-size: var(--fs-h2);
+}
+.t-project {
+  font-size: var(--fs-project);
+}
+.t-lead {
+  font-size: var(--fs-lead);
+  line-height: 1.45;
+  max-width: var(--measure);
   text-wrap: pretty;
 }
-strong {
-  font-weight: var(--fw-semibold);
-}
-
-/* Links: ink text with an orange underline that turns ink on hover or focus (M12). */
-a {
-  color: inherit;
-  text-decoration-line: underline;
-  text-decoration-color: var(--mark);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 0.2em;
-  transition: text-decoration-color var(--dur-link) linear;
-}
-a:hover,
-a:focus-visible {
-  text-decoration-color: currentColor;
-}
-
-/* Small text styles. */
-.t-label {
-  font-size: var(--fs-label);
-  line-height: 1.35;
-  color: var(--text-2);
+.t-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  max-width: var(--measure);
+  text-wrap: pretty;
 }
 .t-small {
   font-size: var(--fs-small);
   line-height: 1.5;
 }
-.t-meta {
-  font-size: var(--fs-small);
-  color: var(--text-2);
+.t-dim {
+  color: var(--dim);
 }
-.t-lead {
+.t-sub {
   font-size: var(--fs-lead);
-  line-height: 1.45;
-}
-.tnum {
-  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
 }
 
-/* ---- 3. Layout helpers -------------------------------------------------------------------- */
+/* ---- Layout --------------------------------------------------------------------------------- */
+
 .wrap {
   width: 100%;
   max-width: var(--max-page);
   margin-inline: auto;
-  padding-inline: var(--margin);
+  padding-inline: var(--gutter);
 }
-/* One column on phones; 12 columns from 1024px. Place children with grid-column. */
+
+/* 12 columns on desktop; one on phones. Edges line up across sections. */
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  column-gap: var(--gutter);
+  column-gap: var(--space-4);
 }
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
+    column-gap: var(--space-5);
   }
 }
-.section {
-  padding-block: var(--space-section);
-  border-top: 1px solid var(--rule);
-}
-/* Section heading: a small number ("01") then the title. The number is a design label and is
-   hidden from screen readers, so the heading reads as its title. */
-.section__head {
-  display: grid;
-  gap: var(--space-4);
-  max-width: 48rem;
-  margin-bottom: var(--space-7);
-}
-.section__title {
-  font-size: var(--fs-h2);
-  line-height: var(--lh-tight);
-}
-.section__num {
+
+main {
+  position: relative;
+  z-index: var(--z-content);
   display: block;
-  margin-bottom: var(--space-2);
-  font-family: var(--font-body);
-  font-size: var(--fs-label);
-  font-weight: var(--fw-regular);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: var(--text-2);
 }
-.prose {
-  max-width: var(--max-text);
+/* Scrims reach past their blocks; clip them at the page edge (clip makes no scroll container,
+   so pinned and fixed elements are unaffected). */
+main,
+.site-footer {
+  overflow-x: clip;
 }
-.prose > * + * {
+
+/*
+  Scenes. Each section is a stop on the camera's path, so it is tall enough for the world to
+  move behind it (NIGHT-SIGNAL.md section 6). The content sits in the middle; the rest is empty
+  world. On phones the sections are as tall as their content plus generous air.
+*/
+.scene {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-block: 22vh;
+  scroll-margin-top: 0;
+}
+@media (min-width: 768px) {
+  .scene {
+    min-height: var(--scene-h, 120vh);
+    padding-block: var(--space-9);
+  }
+}
+
+/* ---- Shared pieces -------------------------------------------------------------------------- */
+
+/*
+  Scrims: night behind text that could overlap light. Never a box.
+  .scrim         for blocks that can sit over the city or the water. A wide ellipse that holds
+                 night at 60% under the whole block, then fades to 0 well outside it. Its text
+                 also carries a dark halo (inherited text-shadow), which darkens the light right
+                 around each letter: night at 60% alone keeps text at 6.44:1 even over a fully lit
+                 window, and the halo covers dim and window text there too.
+  .scrim--soft   for text that sits over dark sky by design (the hero, the contact). A smaller
+                 ellipse that fades from the middle, so it never dims the figure or the lights.
+*/
+/* No isolation here on purpose: each scrim joins <main>'s (or the footer's) stacking context at
+   z-index -1, so every scrim paints under every word and panel, even where a later block's scrim
+   reaches back over an earlier block. */
+.scrim {
+  position: relative;
+  text-shadow: var(--halo);
+}
+.scrim::before {
+  content: '';
+  position: absolute;
+  inset: -80%;
+  z-index: -1;
+  background: var(--scrim-wide);
+  pointer-events: none;
+}
+.scrim--soft::before {
+  inset: -18% -14%;
+  background: var(--scrim);
+}
+
+/* Block rhythm: a headline, then the parts under it, on the 8px scale. */
+.stack > * + * {
+  margin-top: var(--space-3);
+}
+.stack > .h2 + *,
+.stack > .t-project + * {
   margin-top: var(--space-4);
 }
-/* A plate: vellum, a 1px neatline, square corners, no shadow. Ticks and labels belong to each
-   component. */
-.plate {
+
+/* Facts: short lines, each marked with one small lit window. Never stat tiles. */
+.facts {
+  display: grid;
+  gap: var(--space-2);
+  max-width: var(--measure);
+}
+.facts > li {
   position: relative;
-  background: var(--plate);
-  border: var(--neat) solid var(--neatline);
+  padding-left: var(--space-5);
+  font-size: var(--fs-body);
+  line-height: 1.45;
+}
+.facts > li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 6px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--window);
+  box-shadow: 0 0 10px 1px rgb(var(--window-rgb) / 0.55);
 }
 
-/* ---- 4. Focus, skip link, screen-reader text ---------------------------------------------- */
-/* 2px ink outline, 2px offset, with a vellum halo on both sides so it shows on footage. */
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 6px var(--focus-halo);
+/* Prose inside the More panels. */
+.prose > * + * {
+  margin-top: var(--space-3);
 }
-/* Focus moved by the skip link lands on <main>; it needs no ring of its own. */
-main:focus {
-  outline: none;
+.prose p,
+.prose li {
+  max-width: var(--measure);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
 }
-.skip-link {
+.prose strong {
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+.prose ul {
+  display: grid;
+  gap: var(--space-2);
+}
+.prose ul > li {
+  position: relative;
+  padding-left: var(--space-4);
+}
+.prose ul > li::before {
+  content: '';
   position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
-  z-index: var(--z-skip);
-  padding: var(--space-3) var(--space-4);
-  background: var(--text);
-  color: var(--bg);
-  font-weight: var(--fw-semibold);
-  text-decoration: none;
-  transform: translateY(-200%);
-}
-.skip-link:focus {
-  transform: none;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
+  left: 2px;
+  top: 0.7em;
+  width: 8px;
   height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
+  background: var(--dim);
 }
 
-/* ---- 5. "To come" chip -------------------------------------------------------------------- */
-/* Anything only Cayden can supply shows as this dashed chip until he does (pending: true in
-   content.ts), so nobody mistakes it for finished copy. */
-.pending {
+/* Links that act as actions: window color, 18px and up, a 44px tall target. */
+.action-link {
   display: inline-flex;
   align-items: center;
-  padding: 2px var(--space-2);
-  border: 1.5px dashed var(--text-2);
-  color: var(--text-2);
-  font-size: var(--fs-label);
-  line-height: 1.4;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  font-size: 18px;
+  font-weight: var(--fw-medium);
+  color: var(--window);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.3em;
+  text-decoration-color: rgb(var(--window-rgb) / 0.45);
+  transition: text-decoration-color var(--dur-quick) var(--ease-out);
+}
+.action-link:hover {
+  text-decoration-color: var(--window);
+}
+.action-link .arrow {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  transition: transform var(--dur-quick) var(--ease-out);
+}
+.action-link:hover .arrow {
+  transform: translate(2px, -2px);
 }
 
-/* ---- 6. Motion and snapshot --------------------------------------------------------------- */
-/* Reduced motion (device setting), Motion: Off (footer switch) and snapshot mode all show every
-   animation's end state. Components gate their starting positions on html.js-motion, which the
-   first script in Base.astro only adds when motion is allowed; this is the backstop. */
+/* Reduced motion and snapshot: nothing slides or fades. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
-html[data-motion='off'] *,
-html[data-motion='off'] *::before,
-html[data-motion='off'] *::after,
 html[data-snapshot] *,
 html[data-snapshot] *::before,
 html[data-snapshot] *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-}
-
-/* Interface that has no place in a screenshot or on paper (video buttons, Replay, the Motion
-   switch, the Index button, "Open the full site", the clocks). Mark it data-snapshot-hide. */
-html[data-snapshot] [data-snapshot-hide] {
-  display: none !important;
-}
-
-/* ---- 7. Print ----------------------------------------------------------------------------- */
-@media print {
-  [data-snapshot-hide] {
-    display: none !important;
-  }
-  .plate,
-  figure,
-  li {
-    break-inside: avoid;
-  }
-  h2,
-  h3 {
-    break-after: avoid;
-  }
-  /* External links print their address, small, after the text. */
-  a[href^='http']::after {
-    content: ' (' attr(href) ')';
-    font-size: 0.75em;
-    color: var(--text-2);
-    word-break: break-all;
-  }
+  transition: none !important;
+  animation: none !important;
 }

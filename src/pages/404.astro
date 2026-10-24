@@ -1,72 +1,33 @@
 ---
 // 404.astro: shown at any address that doesn't exist. GitHub Pages serves dist/404.html for
-// those. It has no canonical link (Base.astro leaves it out on this page).
-// The plate shows points scattered and never assembled: a still drawing, no motion.
+// those. Same night, no scene: the still (or gradient) behind a short message. It has no
+// canonical link (Base.astro leaves it out on this page).
 import Base from '../layouts/Base.astro';
 import { site, ui } from '../data/site';
-
-// Scattered points, the same on every build (a small seeded random).
-let seed = 404;
-const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-const dots = Array.from({ length: 160 }, () => ({
-  x: (4 + rand() * 92).toFixed(2),
-  y: (4 + rand() * 92).toFixed(2),
-  r: (0.35 + rand() * 0.55).toFixed(2),
-  o: rand() < 0.03,
-}));
 ---
 
 <Base title={`${ui.notFoundTitle} · ${site.name}`} noindex>
   <section class="nf" aria-labelledby="nf-title">
-    <div class="wrap grid nf__grid">
-      <div class="nf__text prose">
-        <h1 id="nf-title" class="nf__title">{ui.notFoundTitle}</h1>
-        <p class="t-lead">{ui.notFoundBody}</p>
-        <p><a href="/">{ui.notFoundLink}</a></p>
-      </div>
-      <div class="plate nf__plate" aria-hidden="true">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-          {dots.map((d) => <circle cx={d.x} cy={d.y} r={d.r} class={d.o ? 'nf__dot nf__dot--o' : 'nf__dot'} />)}
-        </svg>
-      </div>
+    <div class="wrap nf__body scrim">
+      <h1 id="nf-title" class="h2">{ui.notFoundTitle}</h1>
+      <p class="t-lead">{ui.notFoundBody}</p>
+      <p><a class="action-link" href="/">{ui.notFoundLink}</a></p>
     </div>
   </section>
 </Base>
 
 <style>
-  .nf__grid {
-    row-gap: var(--space-7);
-    padding-block: var(--space-8) var(--space-section);
+  .nf {
+    display: flex;
+    align-items: center;
+    min-height: 100vh;
+    min-height: 100svh;
+    padding-block: var(--space-9);
   }
-  .nf__title {
-    font-size: var(--fs-h2);
-    line-height: var(--lh-tight);
+  .nf__body > * + * {
+    margin-top: var(--space-4);
   }
-  .nf__plate {
-    aspect-ratio: 9 / 10;
-  }
-  .nf__plate svg {
-    width: 100%;
-    height: 100%;
-  }
-  .nf__dot {
-    fill: var(--figure-point);
-    opacity: 0.75;
-  }
-  .nf__dot--o {
-    fill: var(--figure-origin-b);
-    opacity: 1;
-  }
-  @media (min-width: 1024px) {
-    .nf__grid {
-      align-items: center;
-    }
-    .nf__text {
-      grid-column: 1 / span 5;
-    }
-    .nf__plate {
-      grid-column: 7 / span 6;
-      aspect-ratio: 4 / 3;
-    }
+  .nf__body > p:last-child {
+    margin-top: var(--space-3);
   }
 </style>

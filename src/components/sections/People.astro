@@ -1,55 +1,41 @@
 ---
-// People.astro: section 05. Professionals outside Pomfret who shaped the work.
-// Confirmed connections only. If the list is empty, the section shows just its intro.
+// People.astro: section 6. The professionals outside Pomfret who shaped the work.
 import { people } from '../../data/content';
-import Say from '../ui/Say.astro';
 ---
 
-<section id="people" class="section" aria-labelledby="people-title">
-  <div class="wrap">
-    <div class="section__head">
-      <h2 id="people-title" class="section__title">
-        <span class="section__num" aria-hidden="true">05</span>{people.heading}
-      </h2>
-      <p class="t-lead"><Say line={people.intro} /></p>
-    </div>
-    {
-      people.list.length > 0 && (
-        <ul class="people">
-          {people.list.map((person) => (
+<section id="people" class="scene people" data-scene="people" aria-labelledby="people-title">
+  <div class="wrap grid">
+    <div class="people__block stack scrim">
+      <h2 id="people-title" class="h2">{people.heading}</h2>
+      <ul class="people__list">
+        {
+          people.list.map((person) => (
             <li class="person">
-              <h3 class="person__name">{person.name.replace(/\.$/, '')}</h3>
-              <p class="t-meta">
-                <Say line={person.title} />
-              </p>
-              <p class="person__body">
-                <Say line={person.body} />
-              </p>
+              <p class="person__name t-sub">{person.name}</p>
+              <p class="t-small t-dim">{person.role.text}</p>
+              <p class="t-body person__text">{person.text.text}</p>
             </li>
-          ))}
-        </ul>
-      )
-    }
+          ))
+        }
+      </ul>
+    </div>
   </div>
 </section>
 
 <style>
   .people {
-    display: grid;
-    gap: var(--space-6);
+    --scene-h: 60vh;
   }
   .person {
     display: grid;
-    gap: var(--space-2);
-    max-width: var(--max-text);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--rule);
+    gap: var(--space-1);
   }
-  .person__name {
-    font-size: var(--fs-project);
-    line-height: var(--lh-tight);
-  }
-  .person__body {
+  .person__text {
     margin-top: var(--space-2);
+  }
+  @media (min-width: 1024px) {
+    .people__block {
+      grid-column: 7 / span 6;
+    }
   }
 </style>

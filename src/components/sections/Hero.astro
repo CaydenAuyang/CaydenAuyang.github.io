@@ -1,244 +1,227 @@
 ---
-// Hero.astro: section 1. The name, one plain line, the school line, and the plate holding the
-// point figure.
+// Hero.astro: the name, one line, one small line, and the scroll cue, over the dark sky.
 //
-// The plate is a vellum chart with a 1px neatline, ticks every 10% along each edge, the corner
-// labels Pomfret and Hong Kong, and two latitude ticks on a 50° N (top) to 10° N (bottom)
-// scale: Pomfret's 41.87° N on the left edge, Hong Kong's 22.32° N on the right. The figure's
-// two point streams start at those two ticks; their positions are exposed as --origin-a-y and
-// --origin-b-y (fractions of the plate's height) for the figure code.
+// The layout follows the world contract (src/world/contract.ts), so the text never sits on the
+// figure of light or the skyline:
+//   - desktop (768px and up): the figure sits right of center (FIGURE_ANCHOR.desktop), so the
+//     text sits to its left, in the left 45% of the width, ending above the tower tops
+//     (HERO_FRAMING.desktop.skylineTop).
+//   - phone: the figure sits high in the middle (FIGURE_ANCHOR.phone), so the text sits below
+//     it and above the tower tops (HERO_FRAMING.phone.skylineTop).
+// The anchors arrive as CSS custom properties; a soft radial scrim sits behind the text.
 //
-// The figure itself (src/components/Figure.astro) sits inside the data-figure container, which
-// carries the alt text, so the figure's own canvas and still are decorative.
-//
-// Talking to the figure:
-//   - it fires "figure:ready" (bubbling) when drawn; detail.count = points actually rendered,
-//     which fills the caption "Fig. 1  Cayden, in {N} points.";
-//   - the Replay button fires "figure:replay" on the figure's mount. Replay shows only once the
-//     figure is ready, and never with reduced motion, Motion: Off or snapshot mode.
+// Timeline hooks: data-intro="name|line|small" (masked under html.js-intro until the timeline
+// adds .is-in; revealed after 2.5 s regardless), data-scroll-cue (the timeline adds .is-gone on
+// the first scroll). The figure's description is a role="img" box at the figure's place, shown
+// to assistive tech only once the world (or its still) is drawn.
+import { FIGURE_ANCHOR, HERO_FRAMING, PHONE_MAX_WIDTH } from '../../world/contract';
 import { hero, meta } from '../../data/content';
-import { places, ui } from '../../data/site';
-import Say from '../ui/Say.astro';
-import Figure from '../Figure.astro';
 
-// Latitude scale: 50° N at the top edge, 10° N at the bottom.
-const latY = (lat: number) => (50 - lat) / 40;
-const pomfretY = latY(places.pomfret.lat);
-const hongKongY = latY(places.hongKong.lat);
-const [first, ...rest] = hero.name.split(' ');
+// The CSS below switches layouts at 768px. If the contract's phone width moves, stop the build
+// so the breakpoint gets updated with it.
+if (PHONE_MAX_WIDTH !== 767) {
+  throw new Error(`Hero.astro: PHONE_MAX_WIDTH is now ${PHONE_MAX_WIDTH}; update the 768px media queries in the Pages CSS.`);
+}
+
+const d = FIGURE_ANCHOR.desktop;
+const p = FIGURE_ANCHOR.phone;
+const vars = [
+  `--fig-x-d: ${d.x}`,
+  `--fig-y-d: ${d.y}`,
+  `--fig-h-d: ${d.height}`,
+  `--fig-x-p: ${p.x}`,
+  `--fig-y-p: ${p.y}`,
+  `--fig-h-p: ${p.height}`,
+  `--sky-top-d: ${HERO_FRAMING.desktop.skylineTop}`,
+  `--sky-top-p: ${HERO_FRAMING.phone.skylineTop}`,
+].join('; ');
 ---
 
-<section id="top" class="hero" aria-labelledby="hero-title">
-  <div class="wrap grid hero__grid">
-    <div class="hero__text">
-      <h1 id="hero-title" class="hero__name">
-        <span>{first}</span>
-        {' '}
-        <span>{rest.join(' ')}</span>
-      </h1>
-      <p class="hero__line t-lead"><Say line={hero.line} /></p>
-      <p class="hero__school t-meta"><Say line={hero.school} /></p>
-    </div>
+<section id="hero" class="hero" data-scene="hero" aria-labelledby="hero-name" style={vars}>
+  <div class="hero__figure" role="img" aria-label={meta.figureAlt}></div>
 
-    <figure class="hero__figure-wrap">
-      <div
-        class="plate hero__plate"
-        style={`--origin-a-y: ${pomfretY.toFixed(4)}; --origin-b-y: ${hongKongY.toFixed(4)}`}
-        data-origin-a-y={pomfretY.toFixed(4)}
-        data-origin-b-y={hongKongY.toFixed(4)}
-      >
-        <div class="hero__figure" data-figure role="img" aria-label={meta.figureAlt}>
-          <Figure decorative />
-        </div>
-        <div class="hero__chart" aria-hidden="true">
-          <span class="hero__corner hero__corner--a">{places.pomfret.name}</span>
-          <span class="hero__corner hero__corner--b">{places.hongKong.name}</span>
-          <span class="hero__lat hero__lat--a tnum" style={`top: ${(pomfretY * 100).toFixed(2)}%`}
-            >{places.pomfret.lat.toFixed(2)}° N</span
-          >
-          <span class="hero__lat hero__lat--b tnum" style={`top: ${(hongKongY * 100).toFixed(2)}%`}
-            >{places.hongKong.lat.toFixed(2)}° N</span
-          >
-        </div>
-      </div>
-      <figcaption class="hero__caption t-small">
-        <span class="hero__fig tnum">{ui.figure(1)}</span>
-        <span>{ui.heroCaption}<span data-figure-count>.</span></span>
-        <button type="button" class="hero__replay" data-replay data-snapshot-hide hidden>{ui.replay}</button>
-      </figcaption>
-    </figure>
+  <div class="hero__text scrim scrim--soft">
+    <h1 id="hero-name" class="hero__name t-display" data-intro="name">
+      {
+        hero.nameLines.map((line, i) => (
+          <>
+            {i > 0 && ' '}
+            <span class="hero__name-line">{line}</span>
+          </>
+        ))
+      }
+    </h1>
+    <p class="hero__line" data-intro="line">{hero.line.text}</p>
+    <p class="hero__small" data-intro="small">{hero.small.text}</p>
+  </div>
+
+  <div class="hero__cue" data-scroll-cue data-snapshot-hide aria-hidden="true">
+    <span>{hero.scrollCue}</span>
+    <span class="hero__cue-line"></span>
   </div>
 </section>
 
-<script>
-  import { motionAllowed, onMotionChange } from '../ui/motion';
-  import { ui } from '../../data/site';
-
-  const plate = document.querySelector<HTMLElement>('.hero__plate');
-  const count = document.querySelector<HTMLElement>('[data-figure-count]');
-  const replay = document.querySelector<HTMLButtonElement>('[data-replay]');
-  let ready = false;
-
-  const showReplay = () => {
-    if (replay) replay.hidden = !(ready && motionAllowed());
-  };
-
-  plate?.addEventListener('figure:ready', (event) => {
-    ready = true;
-    const n = (event as CustomEvent<{ count?: number }>).detail?.count;
-    if (count && typeof n === 'number' && n > 0) {
-      count.textContent = ui.heroCaptionCount(n.toLocaleString('en-US'));
-    }
-    showReplay();
-  });
-
-  replay?.addEventListener('click', () => {
-    const mount = plate?.querySelector('[data-figure-mount]') ?? plate?.querySelector('[data-figure]');
-    mount?.dispatchEvent(new CustomEvent('figure:replay', { bubbles: true }));
-  });
-
-  onMotionChange(showReplay);
-</script>
-
 <style>
-  .hero__grid {
-    row-gap: var(--space-6);
-    padding-block: var(--space-7) var(--space-section);
+  .hero {
+    position: relative;
+    height: 100vh;
+    height: 100svh;
+    min-height: 520px;
   }
+
+  /* Where the figure of light is drawn: a box for its description, invisible. */
+  .hero__figure {
+    position: absolute;
+    left: calc(var(--fig-x-p) * 100%);
+    top: calc(var(--fig-y-p) * 100%);
+    height: calc(var(--fig-h-p) * 100%);
+    aspect-ratio: 4 / 5;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    display: none;
+  }
+  :global(html.is-ready) .hero__figure,
+  :global(html:has([data-world-fallback][data-still])) .hero__figure {
+    display: block;
+  }
+
+  /* Phone: under the figure, above the tower tops. */
   .hero__text {
-    display: grid;
-    gap: var(--space-4);
-    align-content: start;
-    max-width: 34rem;
+    position: absolute;
+    left: var(--gutter);
+    right: var(--gutter);
+    top: calc((var(--fig-y-p) + var(--fig-h-p) / 2) * 100% + var(--space-3));
   }
   .hero__name {
     font-size: var(--fs-name);
-    line-height: 0.98;
-    letter-spacing: -0.01em;
+    font-weight: var(--fw-display-heavy);
+  }
+  .hero__name-line {
+    display: block;
+  }
+  .hero__line {
+    margin-top: var(--space-3);
+    max-width: 30ch;
+    font-size: var(--fs-lead);
+    line-height: 1.4;
+    text-wrap: pretty;
+  }
+  .hero__small {
+    margin-top: var(--space-2);
+    max-width: 44ch;
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--dim);
   }
 
-  /* ---- The plate ---- */
-  .hero__figure-wrap {
-    display: grid;
-    gap: var(--space-3);
+  /* Desktop: left of the figure, ending above the tower tops. */
+  @media (min-width: 768px) {
+    .hero__figure {
+      left: calc(var(--fig-x-d) * 100%);
+      top: calc(var(--fig-y-d) * 100%);
+      height: calc(var(--fig-h-d) * 100%);
+    }
+    .hero__text {
+      top: auto;
+      right: auto;
+      bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-6));
+      /* The left ~45%: the name at the spec's size reaches about 48% of the width, which still
+         clears the figure's head (its widest part, the shoulders, sits lower). */
+      width: max-content;
+      max-width: 52%;
+    }
+    /* The spec's scale, held down on short windows so the block clears the header. */
+    .hero__name {
+      font-size: min(var(--fs-name), 15.5vh);
+    }
+    .hero__line {
+      margin-top: var(--space-4);
+      max-width: 26ch;
+    }
+    .hero__small {
+      margin-top: var(--space-3);
+    }
   }
-  .hero__plate {
-    width: 100%;
-    aspect-ratio: 9 / 10;
-    overflow: hidden;
-  }
-  /* Ticks every 10% along all four edges, 6px long, 1px wide, in the neatline color. */
-  .hero__plate::before {
-    content: '';
+
+  /* The scroll cue: bottom right, over the dark water. */
+  .hero__cue {
     position: absolute;
-    inset: 0;
-    pointer-events: none;
-    z-index: 2;
-    --h: repeating-linear-gradient(to right, transparent 0 calc(10% - 1px), var(--neatline) calc(10% - 1px) 10%);
-    --v: repeating-linear-gradient(to bottom, transparent 0 calc(10% - 1px), var(--neatline) calc(10% - 1px) 10%);
-    background:
-      var(--h) top / 100% var(--tick) no-repeat,
-      var(--h) bottom / 100% var(--tick) no-repeat,
-      var(--v) left / var(--tick) 100% no-repeat,
-      var(--v) right / var(--tick) 100% no-repeat;
-  }
-  .hero__figure {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-  }
-  .hero__chart {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    pointer-events: none;
-    font-size: var(--fs-label);
-    line-height: 1.2;
-    color: var(--text-2);
-  }
-  /* Labels sit on a vellum backing so points passing under them never cut into the text. */
-  .hero__corner,
-  .hero__lat {
-    background: var(--plate);
-    padding: 1px 4px;
-  }
-  .hero__corner {
-    position: absolute;
-    top: calc(var(--tick) + var(--space-2));
-  }
-  .hero__corner--a {
-    left: calc(var(--tick) + var(--space-2));
-  }
-  .hero__corner--b {
-    right: calc(var(--tick) + var(--space-2));
-  }
-  /* Latitude ticks: a longer tick on the edge, with its reading beside it. */
-  .hero__lat {
-    position: absolute;
-    transform: translateY(-50%);
+    right: var(--gutter);
+    bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    color: var(--dim);
+    text-shadow: var(--halo);
+    transition: opacity 400ms var(--ease-out);
   }
-  .hero__lat::before {
+  .hero__cue-line {
+    position: relative;
+    width: 1px;
+    height: 32px;
+    overflow: hidden;
+    background: rgb(var(--text-rgb) / 0.18);
+  }
+  .hero__cue-line::after {
     content: '';
-    width: 14px;
-    height: 1px;
-    background: var(--neatline);
+    position: absolute;
+    inset: 0;
+    background: var(--window);
+    transform-origin: top;
+    animation: cue 2.4s var(--ease-in-out) infinite;
   }
-  .hero__lat--a {
-    left: 0;
-    padding-left: 0;
+  @keyframes cue {
+    0% {
+      transform: scaleY(0);
+      transform-origin: top;
+    }
+    45% {
+      transform: scaleY(1);
+      transform-origin: top;
+    }
+    55% {
+      transform: scaleY(1);
+      transform-origin: bottom;
+    }
+    100% {
+      transform: scaleY(0);
+      transform-origin: bottom;
+    }
   }
-  .hero__lat--b {
-    right: 0;
-    padding-right: 0;
-    flex-direction: row-reverse;
+  :global(html[data-motion='off']) .hero__cue-line::after {
+    animation: none;
+    transform: none;
+    opacity: 0.6;
+  }
+  .hero__cue:global(.is-gone) {
+    opacity: 0;
+    pointer-events: none;
   }
 
-  /* ---- Caption ---- */
-  .hero__caption {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    column-gap: var(--space-3);
-    row-gap: var(--space-2);
-    color: var(--text-2);
+  /*
+    The intro: with html.js-intro the three lines start masked and wipe in left to right when
+    the timeline adds .is-in (600 ms, power3.out). Safety net: if .is-in hasn't come 2.5 s after
+    load, they reveal anyway. The insets reach past the box so descenders are never clipped.
+  */
+  :global(html.js-intro) [data-intro] {
+    clip-path: inset(-0.3em 100% -0.3em -0.3em);
+    transition: clip-path var(--dur-reveal) var(--ease-out);
+    animation: intro-safety var(--dur-reveal) var(--ease-out) 2.5s forwards;
   }
-  .hero__fig {
-    color: var(--text);
-    font-weight: var(--fw-semibold);
+  :global(html.js-intro) [data-intro]:global(.is-in) {
+    clip-path: inset(-0.3em -0.3em -0.3em -0.3em);
   }
-  .hero__replay {
-    min-height: 44px;
-    padding: 0 var(--space-4);
-    border: 1px solid var(--neatline);
-    color: var(--text);
-  }
-
-  /* ---- Laptop: text in columns 1 to 5, plate in 6 to 12 ---- */
-  @media (min-width: 1024px) {
-    .hero__grid {
-      align-items: center;
-      padding-top: var(--space-8);
-    }
-    .hero__text {
-      grid-column: 1 / span 5;
-    }
-    .hero__name span {
-      display: block;
-    }
-    .hero__figure-wrap {
-      grid-column: 6 / span 7;
-      justify-self: end;
-      /* 4:5, never taller than 760px. */
-      width: min(100%, 608px);
-    }
-    .hero__plate {
-      aspect-ratio: 4 / 5;
-    }
-    .hero__replay {
-      margin-left: auto;
+  @keyframes intro-safety {
+    to {
+      clip-path: inset(-0.3em -0.3em -0.3em -0.3em);
     }
   }
 </style>
+
+<script>
+  // The timeline hides the cue on the first scroll; this covers a page where it didn't load.
+  const cue = document.querySelector('[data-scroll-cue]');
+  if (cue) window.addEventListener('scroll', () => cue.classList.add('is-gone'), { once: true, passive: true });
+</script>

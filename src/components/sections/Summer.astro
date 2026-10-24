@@ -1,170 +1,66 @@
 ---
-// Summer.astro: section 02. The Civic Exchange internship, June 9 to August 28, 2026.
-//
-// Beside the text sits the archive plate: one dot per document, 2,347 in all, in the 12
-// notebooks I built (columns on laptops, rows on phones). Each notebook's dot count is its real
-// size from the engagement record; the notebooks are not labelled on the page. The canvas is
-// decorative (aria-hidden); its caption, the "12 searchable notebooks" line from content.ts,
-// carries the meaning. Motion M7 (src/scripts/datum/archive.ts): the dots settle from a loose
-// scatter into their notebooks once, on first view. With motion off they are drawn in place.
+// Summer.astro: section 3. Civic Exchange, summer 2026: headline, subhead, meta, lead, four
+// facts, and the full section from the long copy behind More.
+import More from '../ui/More.astro';
 import { summer } from '../../data/content';
-import Say from '../ui/Say.astro';
-
-const paragraphs = [summer.problem, summer.listening];
-
-// Documents per notebook, in notebook order: Overview, Energy, Mobility, Buildings, Finance,
-// Nature, Waste, Cross-cutting, Urban Liveability, Community, Consumption, Sustainable Finance
-// team. Sum: 2,347.
-const notebooks = [80, 264, 299, 179, 300, 293, 42, 290, 170, 117, 13, 300];
-
-// The archive line from "What I built" is also the plate's caption.
-const archiveLine = summer.built.items[0];
-
-// Design label: Hong Kong's coordinates.
-const coordinates = '22.32° N 114.17° E';
 ---
 
-<section id="summer" class="section" aria-labelledby="summer-title">
-  <div class="wrap">
-    <div class="section__head">
-      <h2 id="summer-title" class="section__title"><span class="section__num" aria-hidden="true">02</span>{summer.heading}</h2>
-      <div class="summer__meta">
-        <p class="summer__coord t-label tnum">{coordinates}</p>
-        <p class="t-meta"><Say line={summer.meta} /></p>
+<section id="summer" class="scene summer" data-scene="summer" aria-labelledby="summer-title">
+  <div class="wrap grid">
+    <div class="summer__block stack scrim">
+      <h2 id="summer-title" class="h2">{summer.heading}</h2>
+      <div class="summer__where">
+        <p class="t-sub">{summer.subhead}</p>
+        <p class="t-small t-dim">{summer.meta.text}</p>
       </div>
-    </div>
-
-    <div class="summer">
-      <figure class="archive">
-        <div class="archive__plate plate">
-          <canvas class="archive__canvas" data-archive data-counts={notebooks.join(',')} aria-hidden="true"></canvas>
-        </div>
-        <figcaption class="archive__cap">
-          <Say line={archiveLine} />
-        </figcaption>
-      </figure>
-
-      <div class="summer__text prose">
+      <p class="t-lead">{summer.lead.text}</p>
+      <ul class="facts">
+        {summer.facts.map((fact) => <li>{fact.text}</li>)}
+      </ul>
+      <More id="summer-more" label={summer.moreLabel}>
         {
-          paragraphs.map((p) => (
-            <p>
-              <strong>{p.title}</strong> <Say line={p.body} />
-            </p>
+          summer.more.map((block) => (
+            <>
+              {block.text && (
+                <p>
+                  <strong>{block.title}</strong> {block.text.text}
+                </p>
+              )}
+              {block.list && (
+                <>
+                  <p>
+                    <strong>{block.title}</strong>
+                  </p>
+                  <ul>
+                    {block.list.map((item) => (
+                      <li>{item.text}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
           ))
         }
-        <h3 class="summer__subhead">{summer.built.title}</h3>
-        <ul class="summer__list">
-          {
-            summer.built.items.map((item) => (
-              <li>
-                <Say line={item} />
-              </li>
-            ))
-          }
-        </ul>
-        <p>
-          <strong>{summer.takeaway.title}</strong> <Say line={summer.takeaway.body} />
-        </p>
-      </div>
+      </More>
     </div>
   </div>
 </section>
 
-<script>
-  import '../../scripts/datum/archive';
-</script>
-
 <style>
-  .summer__meta {
+  .summer {
+    --scene-h: 140vh;
+  }
+  .summer__where {
     display: grid;
     gap: var(--space-1);
   }
-  .summer__coord {
-    color: var(--text-2);
+  .summer .facts {
+    margin-top: var(--space-4);
   }
-
-  .summer {
-    display: grid;
-    gap: var(--space-7);
-  }
-
-  /* ---- The archive plate ---- */
-  .archive {
-    display: grid;
-    gap: var(--space-3);
-    align-content: start;
-  }
-  .archive__plate {
-    padding: var(--space-3);
-  }
-  .archive__canvas {
-    width: 100%;
-    aspect-ratio: 8 / 5;
-    /* The dots are drawn in this color, so snapshot mode darkens them too. */
-    color: var(--text);
-  }
-  /* Without JavaScript there is nothing to draw: keep the caption only. */
-  :global(html:not(.js)) .archive__plate {
-    display: none;
-  }
-  .archive__cap {
-    font-size: var(--fs-small);
-    line-height: 1.45;
-    color: var(--text-2);
-  }
-
-  /* ---- Text ---- */
-  .summer__subhead {
-    font-family: var(--font-body);
-    font-size: var(--fs-body);
-    font-weight: var(--fw-semibold);
-    line-height: var(--lh-body);
-    padding-top: var(--space-2);
-  }
-  .summer__list {
-    display: grid;
-    gap: var(--space-3);
-  }
-  .summer__list li {
-    position: relative;
-    padding-left: 22px;
-  }
-  .summer__list li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.8em;
-    width: 12px;
-    height: 1px;
-    background: var(--neatline);
-  }
-  .summer__list + p {
-    margin-top: var(--space-5);
-  }
-
-  /* ---- Laptops: text in columns 1 to 6, the archive plate in 7 to 12. ---- */
+  /* Desktop: the right half, clear of the archive rising over Central (left of center). */
   @media (min-width: 1024px) {
-    .summer {
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      column-gap: var(--gutter);
-      align-items: start;
-    }
-    .summer__text {
-      grid-column: 1 / 7;
-      grid-row: 1;
-    }
-    /* The plate stays beside the text while it is read. */
-    .archive {
-      grid-column: 7 / 13;
-      grid-row: 1;
-      position: sticky;
-      top: calc(var(--header-h) + var(--space-6));
-    }
-    .archive__plate {
-      padding: var(--space-4);
-    }
-    .archive__canvas {
-      aspect-ratio: 9 / 4;
+    .summer__block {
+      grid-column: 7 / span 6;
     }
   }
 </style>

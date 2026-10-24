@@ -24,6 +24,7 @@ type HighlightKey = 'och' | 'ais' | 'club';
 
 /** What each scene does as you scroll through it (progress 0 to 1). */
 interface Beat {
+  /** The camera key this scene arrives at. */
   key: SceneKey;
   /** Camera moves from the previous key into this one over this share of the scene. */
   arrive: number;
@@ -36,7 +37,7 @@ const BEATS: Record<SceneKey, Beat> = {
   hero: { key: 'hero', arrive: 0, morph: { hold: 'B' } },
   question: { key: 'question', arrive: 0.9, morph: { from: 'B', to: 'C', over: [0.05, 0.75] } },
   summer: { key: 'summer', arrive: 0.8, morph: { from: 'C', to: 'D', over: [0.05, 0.7] } },
-  och: { key: 'och', arrive: 0.45, morph: { from: 'D', to: 'A', over: [0, 0.35] }, highlight: 'och' },
+  och: { key: 'och', arrive: 0, morph: { hold: 'A' }, highlight: 'och' },
   ais: { key: 'ais', arrive: 0.45, morph: { hold: 'A' }, highlight: 'ais' },
   club: { key: 'club', arrive: 0.45, morph: { hold: 'A' }, highlight: 'club' },
   more: { key: 'more', arrive: 0.6, morph: { hold: 'A' } },
@@ -45,14 +46,28 @@ const BEATS: Record<SceneKey, Beat> = {
   contact: { key: 'contact', arrive: 0.7, morph: { from: 'F', to: 'E', over: [0, 0.6] } },
 };
 
-/** Where on the page each scene key lives. Work's projects are their own scenes. */
-function sceneElements(): { key: SceneKey; el: HTMLElement }[] {
-  const out: { key: SceneKey; el: HTMLElement }[] = [];
+/**
+ * The top of Work (its headline, before the first project): the camera travels to the first stop
+ * while the archive columns dissolve back into the city, so they are gone before OurCityHealth's
+ * text arrives.
+ */
+const WORK_INTRO: Beat = { key: 'och', arrive: 1, morph: { from: 'D', to: 'A', over: [0, 0.8] } };
+
+interface Scene {
+  key: SceneKey;
+  beat: Beat;
+  el: HTMLElement;
+}
+
+/** Where on the page each scene lives, in page order. Work's projects are their own scenes. */
+function sceneElements(): Scene[] {
+  const out: Scene[] = [];
   const pick = (selector: string) => document.querySelector<HTMLElement>(selector);
-  const add = (key: SceneKey, el: HTMLElement | null) => el && out.push({ key, el });
+  const add = (key: SceneKey, el: HTMLElement | null, beat: Beat = BEATS[key]) => el && out.push({ key, el, beat });
   add('hero', pick('[data-scene="hero"]'));
   add('question', pick('[data-scene="question"]'));
   add('summer', pick('[data-scene="summer"]'));
+  add('och', pick('[data-scene="work"]'), WORK_INTRO);
   add('och', pick('[data-stop="och"]'));
   add('ais', pick('[data-stop="ais"]'));
   add('club', pick('[data-stop="club"]'));
@@ -128,51 +143,34 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   // ---- Scenes, pins and progress ----
   const scenes = sceneElements();
-  const progress = new Map<SceneKey, number>();
-  const starts = new Map<SceneKey, ScrollTrigger>();
   const pinned = motion && !snapshot && desktop.matches;
 
-  for (const { key, el } of scenes) {
-    if (pinned && el.hasAttribute('data-pin')) {
-      // A pinned project holds for about 120vh of scroll (spec section 6).
-      starts.set(
-        key,
-        ScrollTrigger.create({
-          trigger: el,
-          start: 'top top',
-          end: '+=120%',
-          pin: true,
-          pinSpacing: true,
-          onUpdate: (self) => progress.set(key, self.progress),
-          onRefresh: (self) => progress.set(key, self.progress),
-        }),
-      );
-    } else {
-      starts.set(
-        key,
-        ScrollTrigger.create({
-          trigger: el,
-          start: 'top center',
-          end: 'bottom center',
-          onUpdate: (self) => progress.set(key, self.progress),
-          onRefresh: (self) => progress.set(key, self.progress),
-        }),
-      );
-    }
-  }
+  // One trigger per scene, in page order (ScrollTrigger needs pins created in order).
+  const triggers: ScrollTrigger[] = scenes.map(({ el }) =>
+    pinned && el.hasAttribute('data-pin')
+      ? // A pinned project holds for about 120vh of scroll (spec section 6).
+        ScrollTrigger.create({ trigger: el, start: 'top top', end: '+=120%', pin: true, pinSpacing: true })
+      : ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center' }),
+  );
 
-  /** The scene the viewport is in: the last one whose start we have passed. */
+  // A More toggle changes the page height: measure again.
+  window.addEventListener('world:layout', () => ScrollTrigger.refresh());
+
+  /**
+   * The scene the viewport is in (the last one whose start we have passed) and how far through it
+   * we are, measured from its start to the next scene's start (the last scene uses its own end).
+   */
   function current(): { index: number; p: number } {
     const y = window.scrollY;
     let index = 0;
-    scenes.forEach(({ key }, i) => {
-      const st = starts.get(key);
-      if (st && y >= st.start - 1) index = i;
+    triggers.forEach((st, i) => {
+      if (y >= st.start - 1) index = i;
     });
-    const key = scenes[index]?.key;
-    const st = key ? starts.get(key) : undefined;
-    const p = st ? clamp01((y - st.start) / Math.max(1, st.end - st.start)) : 0;
-    return { index, p };
+    const st = triggers[index];
+    if (!st) return { index: 0, p: 0 };
+    const next = triggers[index + 1];
+    const end = next ? next.start : st.end;
+    return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)) };
   }
 
   // ---- World half ----
@@ -205,8 +203,8 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       const { index, p } = current();
       const scene = scenes[index];
       if (!scene) return;
-      const beat = BEATS[scene.key];
-      const prevKey = index > 0 ? scenes[index - 1].key : beat.key;
+      const beat = scene.beat;
+      const prevKey = index > 0 ? scenes[index - 1].beat.key : beat.key;
 
       // Camera: arrive at this scene's key over the first part of the scene.
       let a = beat.arrive > 0 ? span(p, 0, beat.arrive) : 1;

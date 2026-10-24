@@ -1,363 +1,226 @@
 ---
-// Work.astro: section 03. The three projects as Datum plates, in the order of the question's
-// descent: a city (OurCityHealth), small organizations (AI Simply), a school (Civic AI Club).
-// content.ts keeps its own order; only the render order changes here.
+// Work.astro: section 4. The headline, then one stop per project (OurCityHealth, AI Simply,
+// Civic AI Club), then the More work cards.
 //
-// Each plate: a scale tag with the nested-box locator, the project name as a new-tab link, the
-// role line, the 16:10 video plate (ui/LoopVideo.astro) captioned "Fig. n", the summary and
-// points, and an "Open {name}" link. OurCityHealth adds its independent study as an indented
-// paired plate. Phones stack everything; from 1024px the video takes columns 1 to 7 and the
-// text 8 to 12.
-//
-// Recordings come from src/data/previews.json through datum/previews.ts. A project without
-// one shows an empty plate that says the recording is to come.
-import { work, type Project, type Line, type Link } from '../../data/content';
+// Timeline hooks: each project is `data-stop="och|ais|club"` with `data-pin`; the More work
+// cards are `data-stop="more"`. On desktop (1024px and up) with motion on, the timeline pins each
+// project for about 120vh of scroll, so a project is exactly one viewport tall there: the video
+// large on the left, the text beside it. Unpinned (reduced motion, snapshot, phones, tablets) the
+// same layout simply scrolls, with the text under the video below 1024px.
 import LoopVideo from '../ui/LoopVideo.astro';
+import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
-import Say from '../ui/Say.astro';
-import Locator from '../datum/Locator.astro';
-import { clipFor } from '../datum/previews';
-
-type Level = 'city' | 'org' | 'school';
-
-// The descent, with each plate's scale tag (design labels).
-const descent: { id: Project['id']; level: Level; scale: string }[] = [
-  { id: 'ourcityhealth', level: 'city', scale: 'A city' },
-  { id: 'ai-simply', level: 'org', scale: 'Small organizations' },
-  { id: 'civic-ai-club', level: 'school', scale: 'A school' },
-];
-
-// "More work": three smaller cards under the plates, no video and no locator. Read softly, so
-// the page builds whether or not content.ts has the row yet.
-interface MoreWork {
-  heading: string;
-  items: { name: string; body: Line; link: Link }[];
-}
-const more = (work as { more?: MoreWork }).more;
-const moreItems = more?.items ?? [];
-
-// Fig. 1 is the hero figure, so the previews are Figs. 2 to 4.
-const plates = descent.flatMap((step, i) => {
-  const project = work.projects.find((p) => p.id === step.id);
-  if (!project) return [];
-  return [{ ...step, project, fig: `Fig. ${i + 2}`, clip: clipFor(project.id, project.name) }];
-});
+import { clipFor } from '../ui/previews';
+import { work } from '../../data/content';
+import { ui } from '../../data/site';
 ---
 
-<section id="work" class="section" aria-labelledby="work-title">
-  <div class="wrap">
-    <div class="section__head">
-      <h2 id="work-title" class="section__title"><span class="section__num" aria-hidden="true">03</span>{work.heading}</h2>
-      <p class="t-lead"><Say line={work.intro} /></p>
-    </div>
-    <div class="work">
-      {
-        plates.map(({ project, level, scale, fig, clip }) => (
-          <article class="project" id={`work-${project.id}`} aria-labelledby={`work-${project.id}-title`} data-project>
-            <header class="project__head">
-              <p class="project__scale">
-                <Locator level={level} />
-                <span>{scale}</span>
-              </p>
-              <h3 id={`work-${project.id}-title`} class="project__name">
-                <ExternalLink href={project.link.href}>
-                  {project.name}
-                  <svg class="arrow arrow--name" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
-                    <path d="M3 9 9 3M4.5 3H9v4.5" />
-                  </svg>
-                </ExternalLink>
-              </h3>
-              <p class="project__role">
-                <Say line={project.role} />
-              </p>
-            </header>
+<section id="work" class="work" data-scene="work" aria-labelledby="work-title">
+  <div class="wrap work__head scrim">
+    <h2 id="work-title" class="h2">{work.heading}</h2>
+  </div>
 
-            <div class="project__figure">
-              <LoopVideo name={project.name} id={project.id} caption={project.caption.text} fig={fig} src={clip} />
-            </div>
-
-            <div class="project__text">
-              <p>
-                <Say line={project.summary} />
-              </p>
-              <ul class="project__points">
-                {project.points.map((point) => (
-                  <li>
-                    <Say line={point} />
-                  </li>
-                ))}
-              </ul>
-              <p class="project__open">
-                <ExternalLink href={project.link.href}>
-                  Open {project.name}
-                  <svg class="arrow" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
-                    <path d="M3 9 9 3M4.5 3H9v4.5" />
-                  </svg>
-                </ExternalLink>
-              </p>
-            </div>
-
-            {project.study && (
-              <div class="project__study plate">
-                <h4 class="project__study-name">
-                  {project.study.name} <span class="project__study-when">{project.study.when}</span>
-                </h4>
-                <p>
-                  <Say line={project.study.body} />
-                </p>
-              </div>
-            )}
-          </article>
-        ))
-      }
-
-      {
-        more && moreItems.length > 0 && (
-          <div class="more">
-            <h3 id="work-more-title" class="more__title">
-              {more.heading}
+  {
+    work.projects.map((project) => (
+      <article class="stop" data-stop={project.stop} data-pin aria-labelledby={`${project.stop}-name`}>
+        <div class="wrap grid stop__grid">
+          <LoopVideo class="stop__video" name={project.name} caption={project.caption} src={clipFor(project.previewId)} />
+          <div class="stop__text stack scrim">
+            <h3 id={`${project.stop}-name`} class="t-project">
+              {project.name}
             </h3>
-            <ul class="more__list" aria-labelledby="work-more-title">
-              {moreItems.map((item) => (
-                <li class="more__card plate">
-                  <h4 class="more__name">
-                    <ExternalLink href={item.link.href}>
-                      {item.name}
-                      <svg class="arrow arrow--name" viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
-                        <path d="M3 9 9 3M4.5 3H9v4.5" />
-                      </svg>
-                    </ExternalLink>
-                  </h4>
-                  <p class="more__body">
-                    <Say line={item.body} />
-                  </p>
-                  <p class="more__path">{item.link.text}</p>
-                </li>
+            <p class="t-small t-dim stop__role">{project.role.text}</p>
+            <p class="t-lead">{project.lead.text}</p>
+            <ul class="facts">
+              {project.facts.map((fact) => (
+                <li>{fact.text}</li>
               ))}
             </ul>
+            <div class="stop__actions">
+              <ExternalLink class="action-link" href={project.link.href} hint={project.name} arrow>
+                {project.link.label}
+              </ExternalLink>
+              {project.more && (
+                <More id={`${project.stop}-more`} label={ui.moreAbout(project.name)} class="stop__more">
+                  {project.more.map((block) => (
+                    <>
+                      {block.text && (
+                        <p>
+                          {block.title && <strong>{block.title}</strong>} {block.text.text}
+                        </p>
+                      )}
+                      {block.list && (
+                        <ul>
+                          {block.list.map((item) => (
+                            <li>{item.text}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ))}
+                </More>
+              )}
+            </div>
           </div>
-        )
-      }
+        </div>
+      </article>
+    ))
+  }
+
+  <div class="more-work" data-stop="more">
+    <div class="wrap scrim">
+      <h3 class="more-work__title t-sub">{work.moreWork.heading}</h3>
+      <ul class="more-work__list">
+        {
+          work.moreWork.items.map((item) => (
+            <li class="card">
+              <h4 class="card__name">{item.name}</h4>
+              <p class="card__line">{item.line.text}</p>
+              <ExternalLink class="action-link card__link" href={item.href} hint={item.name} arrow>
+                {work.moreWork.linkLabel}
+              </ExternalLink>
+            </li>
+          ))
+        }
+      </ul>
     </div>
   </div>
 </section>
 
-<script>
-  import '../../scripts/datum/work';
-</script>
-
 <style>
   .work {
-    display: grid;
-    gap: var(--space-8);
+    position: relative;
+    padding-top: 22vh;
+    padding-bottom: 22vh;
+  }
+  @media (min-width: 768px) {
+    .work {
+      padding-top: 40vh;
+      padding-bottom: 30vh;
+    }
   }
 
-  .project {
+  .work__head {
+    margin-bottom: var(--space-7);
+  }
+
+  /* ---- A project stop ---- */
+  .stop {
+    position: relative;
+    display: flex;
+    align-items: center;
+    padding-block: var(--space-8);
+  }
+  @media (min-width: 768px) {
+    .stop {
+      min-height: 120vh;
+    }
+  }
+  .stop__grid {
+    row-gap: var(--space-5);
+    align-items: center;
+  }
+  .stop__role {
+    margin-top: var(--space-2) !important;
+  }
+  .stop__text .facts {
+    margin-top: var(--space-4);
+  }
+  .stop__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-5);
+    margin-top: var(--space-4) !important;
+  }
+  /* The More button sits beside the link; its panel opens on the line below. */
+  .stop__actions :global(.stop__more) {
+    display: contents;
+  }
+  .stop__actions :global(.more__panel) {
+    flex-basis: 100%;
+  }
+
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .stop__grid :global(.stop__video),
+    .stop__text {
+      grid-column: 1 / -1;
+    }
+    .stop__text {
+      max-width: 40rem;
+    }
+  }
+
+  /* Desktop: the video large on the left, the text beside it. */
+  @media (min-width: 1024px) {
+    .stop__grid :global(.stop__video) {
+      grid-column: 1 / span 7;
+    }
+    .stop__text {
+      grid-column: 8 / span 5;
+    }
+    .stop__text .t-lead {
+      font-size: var(--fs-lead);
+    }
+    /* Pinned (motion on, JavaScript on, not snapshot): exactly one viewport tall. */
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop {
+      height: 100vh;
+      min-height: 0;
+      padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+    }
+    /* Keep the pinned frame inside the viewport on short windows. */
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop__grid :global(.stop__video) {
+      max-width: calc((100vh - var(--header-h) - 160px) * 1.6);
+      justify-self: start;
+      width: 100%;
+    }
+  }
+
+  /* ---- More work ---- */
+  .more-work {
+    position: relative;
+    padding-block: var(--space-8);
+  }
+  @media (min-width: 768px) {
+    .more-work {
+      padding-block: var(--space-9);
+    }
+  }
+  .more-work__title {
+    margin-bottom: var(--space-5);
+  }
+  .more-work__list {
     display: grid;
     gap: var(--space-5);
   }
-
-  /* ---- Head: scale tag on a hairline, then the name and role. ---- */
-  .project__head {
-    display: grid;
+  @media (min-width: 1024px) {
+    .more-work__list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-5);
+    }
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-2);
     padding-top: var(--space-4);
     border-top: 1px solid var(--rule);
   }
-  .project__scale {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-bottom: var(--space-2);
-    font-size: var(--fs-label);
-    font-weight: var(--fw-semibold);
-    line-height: 1.3;
-    color: var(--text-2);
+  .card__name {
+    font-family: var(--font-display);
+    font-weight: var(--fw-display);
+    font-size: clamp(20px, 1vw + 14px, 26px);
+    line-height: 1.05;
+    letter-spacing: var(--track-display);
   }
-  .project__name {
-    font-size: var(--fs-project);
-    line-height: var(--lh-tight);
+  .card__line {
+    max-width: 40ch;
+    font-size: var(--fs-body);
+    line-height: 1.5;
+    color: var(--dim);
+    flex: 1;
   }
-  .project__name :global(a) {
-    text-decoration-thickness: 2px;
-    text-underline-offset: 0.14em;
-  }
-  .project__role {
-    font-size: var(--fs-small);
-    color: var(--text-2);
-  }
-
-  /* The new-tab arrow, drawn in the text color. */
-  .arrow {
-    display: inline-block;
-    width: 0.6em;
-    height: 0.6em;
-    margin-left: 0.2em;
-    vertical-align: 0.05em;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.5;
-  }
-  .arrow--name {
-    width: 0.38em;
-    height: 0.38em;
-    margin-left: 0.14em;
-    vertical-align: 0.42em;
-    stroke-width: 1.75;
-  }
-
-  /* ---- Text ---- */
-  .project__text {
-    display: grid;
-    gap: var(--space-4);
-    max-width: var(--max-text);
-    align-content: start;
-  }
-  .project__points {
-    display: grid;
-    gap: var(--space-3);
-  }
-  /* Survey ticks instead of bullets. */
-  .project__points li {
-    position: relative;
-    padding-left: 22px;
-  }
-  .project__points li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.8em;
-    width: 12px;
-    height: 1px;
-    background: var(--neatline);
-  }
-  .project__open {
-    font-weight: var(--fw-semibold);
-  }
-  .project__open :global(a) {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-  }
-
-  /* ---- OurCityHealth's independent study: an indented plate, joined by a leader. ---- */
-  .project__study {
-    --indent: var(--space-4);
-    display: grid;
-    gap: var(--space-3);
-    margin-left: var(--indent);
-    padding: var(--space-4);
-    max-width: var(--max-text);
-  }
-  .project__study::before {
-    content: '';
-    position: absolute;
-    left: calc(-1 * var(--indent) - 1px);
-    top: calc(-1 * var(--space-5));
-    width: calc(var(--indent) - 4px);
-    height: calc(var(--space-5) + 22px);
-    border-left: 1px solid var(--neatline);
-    border-bottom: 1px solid var(--neatline);
-  }
-  .project__study-name {
-    font-size: 1.5rem;
-    line-height: var(--lh-head);
-  }
-  .project__study-when {
-    display: block;
-    margin-top: var(--space-1);
-    font-family: var(--font-body);
-    font-size: var(--fs-small);
-    font-weight: var(--fw-regular);
-    color: var(--text-2);
-  }
-
-  /* ---- More work: three smaller cards. ---- */
-  .more {
-    display: grid;
-    gap: var(--space-5);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--rule);
-  }
-  .more__title {
-    font-size: 1.75rem;
-    line-height: var(--lh-tight);
-  }
-  .more__list {
-    display: grid;
-    gap: var(--space-4);
-  }
-  .more__card {
-    display: grid;
-    gap: var(--space-3);
-    align-content: start;
-    padding: var(--space-5) var(--space-4);
-  }
-  .more__name {
-    font-size: 1.375rem;
-    line-height: var(--lh-head);
-  }
-  .more__name :global(a) {
-    text-decoration-thickness: 1.5px;
-  }
-  .more__path {
-    font-size: var(--fs-label);
-    color: var(--text-2);
-    overflow-wrap: anywhere;
-  }
-
-  /* ---- Laptops: video in columns 1 to 7, text in 8 to 12. ---- */
-  @media (min-width: 1024px) {
-    .work {
-      gap: var(--space-9);
-    }
-    .project {
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      grid-template-rows: auto auto 1fr;
-      column-gap: var(--gutter);
-      row-gap: var(--space-5);
-    }
-    .project__head {
-      grid-column: 1 / -1;
-      grid-row: 1;
-      grid-template-columns: auto 1fr;
-      align-items: baseline;
-      column-gap: var(--space-5);
-    }
-    .project__scale,
-    .project__name {
-      grid-column: 1 / -1;
-    }
-    .project__role {
-      grid-column: 1 / -1;
-    }
-    .project__figure {
-      grid-column: 1 / 8;
-      grid-row: 2;
-    }
-    .project__text {
-      grid-column: 8 / 13;
-      grid-row: 2 / span 2;
-      padding-left: var(--space-2);
-    }
-    .project__study {
-      --indent: var(--space-6);
-      grid-column: 1 / 8;
-      grid-row: 3;
-      align-self: start;
-      max-width: none;
-      padding: var(--space-5);
-    }
-    .project__study::before {
-      top: calc(-1 * var(--space-5));
-      height: calc(var(--space-5) + 26px);
-    }
-    .more__list {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--gutter);
-    }
-    .more__card {
-      padding: var(--space-5);
-    }
+  .card__link {
+    align-self: flex-start;
   }
 </style>

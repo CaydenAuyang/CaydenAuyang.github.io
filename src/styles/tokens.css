@@ -1,184 +1,138 @@
 /*
-  tokens.css: the site's design decisions, written down once. Direction: Datum.
+  tokens.css: every color, size, space, easing and layer the site uses, in one place.
+  Spec: NIGHT-SIGNAL.md section 3 (art direction).
 
-  The idea: a surveyor's chart. Pale chart ground, vellum plates with thin neatlines, ink text,
-  and one orange used only for marks. Tokens are named values that every other file uses
-  instead of a raw value. Components use the SEMANTIC names (second block), never raw hex.
+  Contrast ratios below were measured with the WCAG 2.x formula (relative luminance, sRGB) in
+  node. AA needs 4.5:1 for body text and 3:1 for text 18.66px bold / 24px regular and up, and for
+  interface parts such as focus rings.
 
-  Contrast ratios are WCAG 2.2 ratios, measured against the ground each color is used on.
-  Body text needs 4.5:1; large text and UI parts (focus rings, control borders) need 3:1.
+                 on night   on sky    on glow
+    text           16.67     14.32     12.46    body text, everywhere
+    dim             6.73      5.78      5.03    secondary text, everywhere
+    window         11.60      9.97      8.68    accent text, used only at 18px and up (a design
+                                                rule, stricter than AA needs)
+    cool           15.43     13.26     11.54    never text (distant stars, cool windows)
+    neon            6.47      5.56      4.84    never text (aviation lights)
 
-  Snapshot mode (html[data-snapshot], and always when printing) swaps the semantic colors for
-  white ground and darker text, for poster screenshots. See the bottom of this file.
+  Glass (night at 45% over the world): over glow it composites to #1A1529 (text 14.69, dim 5.93,
+  window 10.22); over sky to #0C1025 (text 15.57, dim 6.28).
+  Scrim (night at 60%) even over a fully lit window: text keeps 6.44 (5.33 over a cool window).
+  dim drops to 2.60 and window to 4.48 there, so text over the city also carries a dark halo
+  (--halo) that darkens the light right around each letter. Pure night at 80% would be needed for
+  dim to pass on the scrim alone, which would black out the city behind every block.
+  The focus ring is window on a night halo: 11.60 against the halo.
 */
 
 :root {
-  /* ---- Raw colors -------------------------------------------------------------------------- */
-  --chart: #e2e8e9; /* page ground */
-  --vellum: #f4f7f7; /* plates: figure frame, video frames, charts, archive */
-  --ink: #13212d; /* text, figure points, footer ground. 13.21:1 on chart, 15.19:1 on vellum */
-  --slate: #4a5965; /* secondary text, struck words, neatlines, control borders. 5.83:1 on chart, 6.70:1 on vellum */
-  --orange: #cc5216; /* MARKS ONLY, never text: 3.54:1 on chart, 4.07:1 on vellum, 3.73:1 on ink */
-  --orange-text: #a84210; /* orange TEXT on light grounds (inserted words). 4.91:1 on chart, 5.65:1 on vellum */
-  --mist: #9aabb4; /* secondary text on the ink footer. 6.90:1 on ink */
+  /* ---- Palette ---- */
+  --night: #05070d; /* page ground, deepest water */
+  --sky: #121838; /* sky near the horizon */
+  --glow: #2b2140; /* light-pollution haze along the horizon */
+  --window: #ffb65c; /* lit windows, the one accent: links, inserted words, focus */
+  --cool: #cfe3ff; /* about 20% of windows, distant stars */
+  --neon: #ff4f8b; /* aviation lights; never text */
+  --text: #eee9e1; /* primary text */
+  --dim: #8e95a8; /* secondary text */
 
-  /* ---- Semantic colors (use these) --------------------------------------------------------- */
-  --bg: var(--chart);
-  --plate: var(--vellum);
-  --text: var(--ink); /* 13.21:1 on --bg, 15.19:1 on --plate */
-  --text-2: var(--slate); /* 5.83:1 on --bg, 6.70:1 on --plate */
-  --mark: var(--orange); /* triangles, delivered dots, link underlines, active locator box (graphics, 3.54:1) */
-  --ins: var(--orange-text); /* inserted words in the question: 4.91:1 on --bg */
-  --del: var(--slate); /* struck words, kept readable: 5.83:1 on --bg */
-  --neatline: var(--slate); /* 1px plate borders and ticks, control borders: 5.83:1 on --bg */
-  --rule: rgb(74 89 101 / 0.4); /* hairlines (slate at 40%), decorative only */
-  --focus: var(--ink); /* focus outline: 13.21:1 on --bg, 15.19:1 on --plate */
-  --focus-halo: var(--vellum); /* 2px halo around the outline so it shows on dark footage */
-  --footer-bg: var(--ink);
-  --footer-text: var(--chart); /* 13.21:1 on ink */
-  --footer-text-2: var(--mist); /* 6.90:1 on ink */
-  --footer-focus: var(--chart); /* focus outline on the footer: 13.21:1 on ink */
-  --figure-point: var(--ink); /* the figure's settled points and the Pomfret stream */
-  --figure-origin-b: var(--orange); /* the Hong Kong stream, and the 3% orange speckle */
-  /* The figure's points never get lighter than this alpha (snapshot raises it). */
-  --figure-alpha-floor: 0.55;
-  --figure-point-scale: 1;
+  /* Channels, for transparent mixes: rgb(var(--night-rgb) / 0.6) */
+  --night-rgb: 5 7 13;
+  --window-rgb: 255 182 92;
+  --text-rgb: 238 233 225;
 
-  /* ---- Type ---------------------------------------------------------------------------------
-     Newsreader (roman 500, italic 400): the name, section titles, the question, project names,
-     big numerals. Atkinson Hyperlegible Next (400, 600): everything else. Labels are sentence
-     case, never all caps. Both load through Astro's font API (astro.config.mjs), which creates
-     --font-newsreader and --font-atkinson and metric-matches the fallbacks. */
-  --font-display: var(--font-newsreader), Georgia, serif;
-  --font-body: var(--font-atkinson), Arial, sans-serif;
+  /* ---- Surfaces ---- */
+  /* Glass: only the question panel and the video frames. */
+  --glass-bg: rgb(var(--night-rgb) / 0.45);
+  --glass-border: rgb(var(--window-rgb) / 0.18);
+  --glass-blur: 16px;
+  --glow-soft: 0 0 64px 0 rgb(var(--window-rgb) / 0.08);
+  /* Scrim behind text that could overlap light: night at 60% fading to 0. Never a box. */
+  --scrim: radial-gradient(
+    closest-side,
+    rgb(var(--night-rgb) / 0.6) 0%,
+    rgb(var(--night-rgb) / 0.5) 45%,
+    rgb(var(--night-rgb) / 0) 100%
+  );
+  /* The same night at 60%, held flat under a whole text block (the block sits inside the
+     plateau, which ends at 55% of the ellipse's radius), then fading to 0. */
+  --scrim-wide: radial-gradient(
+    closest-side,
+    rgb(var(--night-rgb) / 0.6) 0%,
+    rgb(var(--night-rgb) / 0.6) 55%,
+    rgb(var(--night-rgb) / 0.3) 78%,
+    rgb(var(--night-rgb) / 0) 100%
+  );
+  /* A dark halo around letters that sit over light. Inherited from .scrim. */
+  --halo: 0 0 2px rgb(var(--night-rgb) / 0.5), 0 0 12px rgb(var(--night-rgb) / 0.85), 0 0 28px rgb(var(--night-rgb) / 0.55);
+  --rule: rgb(var(--text-rgb) / 0.16);
+  /* The thin line through struck words. */
+  --strike: rgb(var(--text-rgb) / 0.55);
 
-  /* Sizes grow from the phone value at 390px wide to the laptop value at 1440px wide. */
-  --fs-label: 0.875rem; /* 14px: plate corner labels, coordinates, clocks, small labels */
-  --fs-small: 0.9375rem; /* 15px: captions, notes, meta lines */
-  --fs-body: clamp(1.0625rem, 1.016rem + 0.19vw, 1.1875rem); /* 17 to 19px */
-  --fs-lead: clamp(1.1875rem, 1.07rem + 0.48vw, 1.5rem); /* 19 to 24px: section intros, hero line */
-  --fs-row: 2rem; /* 32px: Build / Apply / Reflect */
-  --fs-project: clamp(1.875rem, 1.55rem + 1.333vw, 2.75rem); /* 30 to 44px: project names */
-  --fs-h2: clamp(1.875rem, 1.271rem + 2.476vw, 3.5rem); /* 30 to 56px: section titles */
-  --fs-question: clamp(1.625rem, 1.207rem + 1.714vw, 2.75rem); /* 26 to 44px: the question */
-  --fs-name: clamp(3.25rem, 1.857rem + 5.714vw, 7rem); /* 52 to 112px: the name */
-  --lh-tight: 1.05;
-  --lh-head: 1.15;
-  --lh-question: 1.38; /* 1.25 on laptops, below */
+  /* Focus: a window-colored ring with a dark halo, so it reads on light and dark footage. */
+  --focus: var(--window);
+  --focus-halo: var(--night);
+
+  /* ---- Type ---- */
+  /* Families come from Astro's font API (astro.config.mjs), with metric-matched fallbacks. */
+  --font-display: var(--font-unbounded), sans-serif;
+  --font-body: var(--font-geist), sans-serif;
+
+  --fs-name: clamp(52px, 9vw, 168px);
+  --fs-h2: clamp(40px, 6vw, 112px);
+  --fs-project: clamp(32px, 4vw, 72px);
+  --fs-lead: clamp(20px, 0.25vw + 18.5px, 22px);
+  --fs-body: clamp(17px, 0.15vw + 16.4px, 18px);
+  --fs-small: clamp(13px, 0.1vw + 12.6px, 14px);
+  /* The question itself, inside the glass panel. */
+  --fs-question: clamp(22px, 1.4vw + 16px, 36px);
+  /* The email: the largest link on the page. */
+  --fs-email: clamp(28px, 3.6vw + 14px, 64px);
+
+  --lh-display: 0.95;
   --lh-body: 1.55;
+  --lh-snug: 1.3;
+  --track-display: -0.02em;
+
+  --fw-display: 700; /* Unbounded runs 600 to 800 */
+  --fw-display-heavy: 800;
   --fw-regular: 400;
-  --fw-semibold: 600;
-  --fw-display: 500;
+  --fw-medium: 500;
 
-  /* ---- Space ------------------------------------------------------------------------------- */
-  --space-1: 4px;
+  /* Line length: 60 characters or fewer. Geist's average character is 0.446em wide (its "0",
+     which `ch` measures, is 0.663em), so 60 characters is about 27em on average; 25em keeps
+     real lines (some letters are wider) at 60 or under. */
+  --measure: 25em;
+
+  /* ---- Space: an 8px base ---- */
+  --space-1: 4px; /* half step, for hairline gaps only */
   --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
-  --space-9: 96px;
-  --space-section: clamp(72px, 9vw, 144px); /* above and below each section */
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --space-8: 96px;
+  --space-9: 128px;
 
-  /* ---- Grid ---------------------------------------------------------------------------------
-     Phones: one column, 16px margins. Laptops (1024px and up): 12 columns, 80px margins (from
-     1200px), 24px gutters. Never size anything with vh: the site lives inside an iframe. */
-  --margin: 16px;
-  --gutter: 16px;
+  --gutter: clamp(16px, 5vw, 80px);
   --max-page: 1440px;
-  --max-text: 40rem;
-  --header-h: 48px; /* the bar itself; on phones the clocks add a second small line */
-  --tick: 6px; /* plate edge ticks */
-  --neat: 1px; /* plate neatline width */
+  --header-h: 64px;
+  --tap: 44px;
+  --radius-frame: 14px;
+  --radius-control: 999px;
 
-  /* ---- Layers: higher numbers cover lower ones --------------------------------------------- */
-  --z-plate: 0;
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.215, 0.61, 0.355, 1); /* power3.out: reveals */
+  --ease-in-out: cubic-bezier(0.455, 0.03, 0.515, 0.955); /* power2.inOut: camera, morphs, height */
+  --dur-reveal: 600ms;
+  --dur-fade: 600ms;
+  --dur-quick: 200ms;
+  --dur-height: 420ms;
+
+  /* ---- Layers ---- */
+  --z-fallback: -2; /* the still or gradient behind the canvas */
+  --z-world: -1; /* the three.js canvas */
   --z-content: 1;
-  --z-header: 50;
-  --z-sheet: 60;
-  --z-skip: 100;
-
-  /* ---- Motion -------------------------------------------------------------------------------
-     Three curves (the motion list is in README.md). CSS animates only transform, opacity and
-     clip-path. */
-  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1); /* arriving */
-  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1); /* lines drawing, strikes */
-  --ease-quick: cubic-bezier(0.2, 0, 0, 1); /* small state changes */
-  --dur-link: 120ms; /* M12 link underline color */
-  --dur-quick: 180ms;
-  --dur-out: 160ms; /* M6 view switch, out */
-  --dur-in: 200ms; /* M6 view switch, in */
-  --dur-sheet: 240ms; /* M11 Index sheet open */
-  --dur-fade: 240ms; /* M4 figure fallback cross-fade */
-  --dur-locator: 280ms; /* M8 */
-  --dur-draw: 900ms; /* M10 progress lines */
-}
-
-@media (min-width: 768px) {
-  :root {
-    --margin: 32px;
-  }
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --gutter: 24px;
-    --header-h: 56px;
-    --lh-question: 1.25;
-  }
-}
-
-@media (min-width: 1200px) {
-  :root {
-    --margin: 80px;
-  }
-}
-
-/* ---- Snapshot mode ----------------------------------------------------------------------------
-   For poster screenshots: white ground, darker text, plates keep their neatlines, the footer
-   turns white. On with ?snapshot in the address, the footer's Snapshot view toggle, and always
-   when printing. Ratios are on white. */
-html[data-snapshot] {
-  --bg: #ffffff;
-  --plate: #ffffff;
-  --text: #0b1620; /* 18.26:1 */
-  --text-2: #36434d; /* 10.16:1 */
-  --ins: #8e370c; /* 7.77:1 */
-  --mark: #b4470f; /* 5.46:1 */
-  --del: #36434d; /* 10.16:1 */
-  --neatline: #36434d;
-  --rule: rgb(54 67 77 / 0.6);
-  --focus: #0b1620;
-  --focus-halo: #ffffff;
-  --footer-bg: #ffffff;
-  --footer-text: #0b1620; /* 18.26:1 */
-  --footer-text-2: #36434d; /* 10.16:1 */
-  --footer-focus: #0b1620;
-  --figure-point: #0b1620;
-  --figure-origin-b: #0b1620;
-  --figure-alpha-floor: 0.8;
-  --figure-point-scale: 1.25;
-}
-
-@media print {
-  :root {
-    --bg: #ffffff;
-    --plate: #ffffff;
-    --text: #0b1620;
-    --text-2: #36434d;
-    --ins: #8e370c;
-    --mark: #b4470f;
-    --del: #36434d;
-    --neatline: #36434d;
-    --rule: rgb(54 67 77 / 0.6);
-    --footer-bg: #ffffff;
-    --footer-text: #0b1620;
-    --footer-text-2: #36434d;
-    --figure-point: #0b1620;
-    --figure-origin-b: #0b1620;
-    --figure-alpha-floor: 0.8;
-    --figure-point-scale: 1.25;
-  }
+  --z-header: 10;
+  --z-menu: 100;
+  --z-skip: 1000;
 }

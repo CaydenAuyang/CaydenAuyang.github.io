@@ -1,0 +1,10 @@
+---
+// WorldBoot.astro: starts the night scene after the first paint (the home page only).
+// src/world/main.ts is the lead's: it starts the scroll timeline, then the world and the signal
+// if WebGL works. Anything failing there leaves the HTML and the still in place.
+---
+
+<script>
+  const start = () => import('../world/main').catch(() => {});
+  requestAnimationFrame(() => requestAnimationFrame(start));
+</script>

@@ -5,11 +5,10 @@
 //
 // Fonts: Astro downloads these from Fontsource while it builds, stores them with the site's own
 // files (no requests to other servers), and writes the CSS. Both are free under the SIL Open
-// Font License. A browser only downloads the faces a page actually uses.
-//   - Newsreader: roman 500 for the name, titles, the question and project names; italic 400
-//     for the inserted words in the question.
-//   - Atkinson Hyperlegible Next: 400 and 600 for everything else.
-// The last fallback is a generic family, so Astro adjusts the stand-in font's size to match
+// Font License. A browser only downloads the faces a page actually uses. Latin subset only.
+//   - Unbounded, variable, 600 to 800: the name, section headlines and project names.
+//   - Geist 400 and 500: everything else.
+// The last fallback is a generic family, so Astro adjusts the stand-in font's metrics to match
 // and the text doesn't jump when the real font arrives.
 import { defineConfig, fontProviders } from 'astro/config';
 
@@ -20,21 +19,21 @@ export default defineConfig({
   fonts: [
     {
       provider: fontProviders.fontsource(),
-      name: 'Newsreader',
-      cssVariable: '--font-newsreader',
-      weights: [400, 500],
-      styles: ['normal', 'italic'],
+      name: 'Unbounded',
+      cssVariable: '--font-unbounded',
+      weights: ['600 800'],
+      styles: ['normal'],
       subsets: ['latin'],
-      fallbacks: ['Georgia', 'serif'],
+      fallbacks: ['sans-serif'],
     },
     {
       provider: fontProviders.fontsource(),
-      name: 'Atkinson Hyperlegible Next',
-      cssVariable: '--font-atkinson',
-      weights: [400, 600],
+      name: 'Geist',
+      cssVariable: '--font-geist',
+      weights: [400, 500],
       styles: ['normal'],
       subsets: ['latin'],
-      fallbacks: ['Arial', 'sans-serif'],
+      fallbacks: ['sans-serif'],
     },
   ],
 });

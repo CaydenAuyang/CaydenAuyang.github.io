@@ -8,18 +8,21 @@
 //
 // For every page, at a laptop size (1440 x 900) and a phone size (390 x 844), each with motion on
 // and with the device asking for reduced motion, it:
-//   1. opens the page and runs axe with the WCAG 2.2 A and AA rules at the top of the page,
-//   2. scrolls to the bottom, so every reveal has played and all text is in its final place, and
-//      runs axe again (axe checks what is on screen, including color contrast),
-//   3. lists every problem. "Serious" and "critical" ones end the script with exit code 1;
-//      "moderate" and "minor" ones are listed as warnings.
+//   1. opens the page, waits for the hero intro to finish (it reveals by 2.5 s at the latest),
+//      and runs axe with the WCAG 2.2 A and AA rules at the top of the page,
+//   2. scrolls to the bottom a screen at a time, so every pin and scene has played and all text
+//      is in its final place, and runs axe again (axe checks what is on screen, including color
+//      contrast; text over the night gradient or the canvas comes back as "needs review", which
+//      the measured ratios in src/styles/tokens.css cover),
+//   3. lists every problem. "Serious" and "critical" ones end the script with exit code 1 (they
+//      block the deploy); "moderate" and "minor" ones are listed as warnings.
 // Another address can be checked with:  BASE=http://localhost:4411 npm run check:a11y
 
 import { chromium } from 'playwright-core';
 import { AxeBuilder } from '@axe-core/playwright';
 
 const BASE = process.env.BASE || 'http://localhost:4321';
-// '/?snapshot' checks snapshot mode (white ground, no motion, no buttons).
+// '/?snapshot' checks snapshot mode (motion off, every section in full, no buttons).
 const PAGES = ['/', '/?snapshot', '/404'];
 
 const setups = [
@@ -29,12 +32,12 @@ const setups = [
   { name: 'phone, reduced motion', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' },
 ];
 
-// Scroll to the bottom a screen at a time, then wait, so every reveal has played.
+// Scroll to the bottom a screen at a time, then wait, so every pin and scene has played.
 async function scrollThrough(page) {
   let last = -1;
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 400; i++) {
     await page.evaluate(() => window.scrollBy(0, Math.round(window.innerHeight * 0.7)));
-    await page.waitForTimeout(80);
+    await page.waitForTimeout(60);
     const y = await page.evaluate(() => window.scrollY);
     if (Math.abs(y - last) < 1) break;
     last = y;
@@ -63,9 +66,10 @@ for (const setup of setups) {
   const context = await browser.newContext(options);
   for (const path of PAGES) {
     const page = await context.newPage();
+    page.on('pageerror', (error) => console.log(`page error [${name}] ${path}: ${error.message}`));
     // The 404 address answers with status 404 on purpose; only a failed load is an error.
     await page.goto(new URL(path, BASE).href, { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(3000);
     for (const where of ['top', 'bottom']) {
       if (where === 'bottom') await scrollThrough(page);
       const results = await check(page);

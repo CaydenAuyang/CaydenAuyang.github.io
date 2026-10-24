@@ -1,47 +1,40 @@
 ---
-// LoopVideo.astro: a short, muted project preview inside a Datum video plate.
+// LoopVideo.astro: a short, muted project preview in a glass frame.
 //
-// The plate: Vellum, a 1px Slate neatline, and crop-mark ticks pointing at the picture's
-// corners. The picture is 16:10 (the recording's own size when it has one). The caption sits
-// under it as "Fig. n  {caption}".
+// The frame: 16:10, a 14px radius, a glass border (1px window at 18%) and a soft outer glow in
+// window at 8%. The 16:10 box is reserved before anything loads, so nothing shifts. The caption
+// sits below it.
 //
-// How it behaves (src/scripts/datum/loop-video.ts):
-//   - muted, playsinline, loop, preload="none", no autoplay attribute: the script starts it when
-//     60% of it is on screen and pauses it below 20% (M9). Nothing downloads before that.
-//   - The poster shows until the first frame, then fades out over 200ms.
-//   - A 44px Ink Pause / Play button sits bottom right, always visible, labelled with the
-//     project's name. A pause the visitor makes sticks for the session.
-//   - Reduced motion or Motion: Off: the poster and a Play button; it plays only if asked.
-//   - Snapshot mode: the poster only, no button (data-snapshot-hide).
-//   - If the browser refuses to play (Low Power Mode, data saver) the poster stays and the
-//     button says Play.
-//   - Without JavaScript: the poster only.
-// With no recording (src missing) it shows an empty plate that says the recording is to come.
+// How it behaves (src/scripts/loop-video.ts):
+//   - muted, playsinline, loop, no autoplay attribute. preload="none" until the video is within
+//     one viewport of the screen; then it may start loading.
+//   - Plays while at least half of it is visible, pauses otherwise.
+//   - A visible 44px Pause / Play button, labelled with the project's name. A pause the visitor
+//     makes sticks until they press Play.
+//   - Reduced motion: the poster and a Play button; it plays only if asked.
+//   - Snapshot mode: the poster only, no button.
+//   - If the browser refuses to play (Low Power Mode, data saver) the poster stays and the button
+//     says Play. Without JavaScript: the poster only.
 import { ui } from '../../data/site';
-import type { Clip } from '../datum/previews';
+import type { Clip } from './previews';
 
 interface Props {
   // Used in the button's label: "Pause OurCityHealth preview".
   name: string;
-  // A stable id for this preview (the project id). Keys the session-long pause.
-  id: string;
   caption: string;
-  // "Fig. 2" and so on.
-  fig?: string;
   src?: Clip;
+  class?: string;
 }
 
-const { name, id, caption, fig, src } = Astro.props;
+const { name, caption, src, class: className } = Astro.props;
 const label = ui.previewOf(name);
 const width = src?.width ?? 1280;
 const height = src?.height ?? 800;
-// Design label for a project without a recording yet.
-const pendingLabel = 'Recording to come';
 ---
 
-<figure class="vf" data-vf={src ? id : undefined} data-state="paused">
-  <div class="vf__plate plate">
-    <div class="vf__media" style={`aspect-ratio: ${width} / ${height}`}>
+<figure class:list={['vf', className]} data-vf={src ? '' : undefined} data-state="paused">
+  <div class="vf__frame">
+    <div class="vf__media">
       {
         src ? (
           <>
@@ -61,124 +54,99 @@ const pendingLabel = 'Recording to come';
               {src.webm && <source src={src.webm} type="video/webm" />}
               <source src={src.mp4} type="video/mp4" />
             </video>
-            <img class="vf__poster" src={src.poster} alt="" width={width} height={height} decoding="async" />
             <button
               type="button"
               class="vf__btn"
               data-vf-btn
+              data-needs-js
               data-snapshot-hide
               data-label={label}
               aria-label={`${ui.play} ${label}`}
             >
-              <svg class="vf__icon vf__icon--play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                <path d="M4 2.5v11l9-5.5z" fill="currentColor" />
+              <svg class="vf__icon vf__icon--play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M4.5 2.75v10.5l8.5-5.25z" fill="currentColor" />
               </svg>
-              <svg class="vf__icon vf__icon--pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                <path d="M3.5 2.5h3v11h-3zM9.5 2.5h3v11h-3z" fill="currentColor" />
+              <svg class="vf__icon vf__icon--pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                <path d="M4 2.75h2.75v10.5H4zM9.25 2.75H12v10.5H9.25z" fill="currentColor" />
               </svg>
             </button>
           </>
         ) : (
-          <p class="vf__empty">{pendingLabel}</p>
+          <p class="vf__empty">{ui.previewPending}</p>
         )
       }
     </div>
   </div>
-  <figcaption class="vf__cap">
-    {fig && <span class="vf__fig">{fig}</span>}
-    {caption}
-  </figcaption>
+  <figcaption class="vf__cap">{caption}</figcaption>
 </figure>
 
 <script>
-  import '../../scripts/datum/loop-video';
+  import '../../scripts/loop-video';
 </script>
 
 <style>
   .vf {
+    position: relative;
+    z-index: 1; /* above neighbouring text scrims */
     display: grid;
     gap: var(--space-3);
+    min-width: 0;
   }
 
-  /* The plate, with crop-mark ticks in the margin pointing at the picture's corners. */
-  .vf__plate {
-    --mat: 12px;
-    --tick-at: calc(var(--mat) - var(--tick) - 2px);
-    --edge: calc(var(--mat) - 1px);
-    padding: var(--mat);
-  }
-  .vf__plate::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    --t: linear-gradient(var(--neatline), var(--neatline));
-    background:
-      var(--t) left var(--tick-at) top var(--edge) / var(--tick) 1px no-repeat,
-      var(--t) left var(--edge) top var(--tick-at) / 1px var(--tick) no-repeat,
-      var(--t) right var(--tick-at) top var(--edge) / var(--tick) 1px no-repeat,
-      var(--t) right var(--edge) top var(--tick-at) / 1px var(--tick) no-repeat,
-      var(--t) left var(--tick-at) bottom var(--edge) / var(--tick) 1px no-repeat,
-      var(--t) left var(--edge) bottom var(--tick-at) / 1px var(--tick) no-repeat,
-      var(--t) right var(--tick-at) bottom var(--edge) / var(--tick) 1px no-repeat,
-      var(--t) right var(--edge) bottom var(--tick-at) / 1px var(--tick) no-repeat;
-  }
-  @media (min-width: 1024px) {
-    .vf__plate {
-      --mat: 16px;
-    }
+  .vf__frame {
+    padding: 6px;
+    border-radius: var(--radius-frame);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--glow-soft);
   }
 
   .vf__media {
     position: relative;
+    aspect-ratio: 16 / 10;
     overflow: hidden;
-    background: var(--plate);
-    /* A hairline so a white web page doesn't melt into the vellum. */
-    box-shadow: 0 0 0 1px var(--rule);
+    border-radius: calc(var(--radius-frame) - 6px);
+    background: var(--night);
   }
-  .vf__video,
-  .vf__poster {
+  .vf__video {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
-  /* The poster covers the video until its first frame, then fades out (M9, 200ms). */
-  .vf__poster {
-    transition: opacity 200ms var(--ease-quick);
-  }
-  .vf.is-live .vf__poster {
-    opacity: 0;
-  }
 
   .vf__btn {
     position: absolute;
-    right: var(--space-2);
-    bottom: var(--space-2);
+    right: var(--space-3);
+    bottom: var(--space-3);
     display: grid;
     place-items: center;
-    width: 44px;
-    height: 44px;
-    background: var(--text);
-    color: var(--plate);
-    /* A faint light edge so the button reads on dark footage too. */
-    box-shadow: 0 0 0 1px rgb(244 247 247 / 0.5);
+    width: var(--tap);
+    height: var(--tap);
+    border-radius: 50%;
+    background: rgb(var(--night-rgb) / 0.72);
+    color: var(--text);
+    box-shadow:
+      0 0 0 1px rgb(var(--text-rgb) / 0.22),
+      0 4px 16px rgb(var(--night-rgb) / 0.4);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    transition:
+      background var(--dur-quick) var(--ease-out),
+      color var(--dur-quick) var(--ease-out);
   }
   .vf__btn:hover {
-    background: color-mix(in srgb, var(--text) 85%, var(--plate));
+    background: rgb(var(--night-rgb) / 0.9);
+    color: var(--window);
   }
   .vf__btn:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 6px var(--focus-halo);
+    border-radius: 50%;
   }
   .vf[data-state='playing'] .vf__icon--play,
   .vf:not([data-state='playing']) .vf__icon--pause {
-    display: none;
-  }
-  /* Without JavaScript the button can't do anything, so it isn't shown. */
-  :global(html:not(.js)) .vf__btn {
     display: none;
   }
 
@@ -187,21 +155,17 @@ const pendingLabel = 'Recording to come';
     inset: var(--space-3);
     display: grid;
     place-items: center;
-    border: 1px dashed var(--neatline);
-    color: var(--text-2);
+    border: 1px dashed var(--glass-border);
+    border-radius: 6px;
+    color: var(--dim);
     font-size: var(--fs-small);
     text-align: center;
   }
 
   .vf__cap {
     font-size: var(--fs-small);
-    line-height: 1.45;
-    color: var(--text-2);
-  }
-  .vf__fig {
-    margin-right: 0.75em;
-    font-weight: var(--fw-semibold);
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
+    line-height: 1.5;
+    color: var(--dim);
+    text-shadow: var(--halo);
   }
 </style>

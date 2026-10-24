@@ -1,26 +1,34 @@
 ---
-// Question.astro: section 01. The May question edited in place into the October question,
-// with a note beside each edit saying what caused it (see ui/TrackedQuestion.astro).
+// Question.astro: section 2. The headline, the lead, and the May / Edits / October panel with
+// its four notes (QuestionPanel.astro).
+import QuestionPanel from '../ui/QuestionPanel.astro';
 import { question } from '../../data/content';
-import Say from '../ui/Say.astro';
-import TrackedQuestion from '../ui/TrackedQuestion.astro';
 ---
 
-<section id="question" class="section" aria-labelledby="question-title">
+<section id="question" class="scene question" data-scene="question" aria-labelledby="question-title">
   <div class="wrap">
-    <div class="section__head">
-      <h2 id="question-title" class="section__title">
-        <span class="section__num" aria-hidden="true">01</span>{question.heading}
-      </h2>
-      <p class="t-lead"><Say line={question.intro} /></p>
+    <div class="question__head stack scrim">
+      <h2 id="question-title" class="h2">{question.heading}</h2>
+      <p class="t-lead t-dim">{question.lead.text}</p>
     </div>
-    <TrackedQuestion
-      mayLabel={question.mayLabel}
+    <QuestionPanel
+      views={question.views}
       may={question.may}
-      octoberLabel={question.octoberLabel}
       october={question.october}
       edits={question.edits}
       notes={question.notes}
     />
   </div>
 </section>
+
+<style>
+  .question {
+    --scene-h: 120vh;
+  }
+  .question__head {
+    margin-bottom: var(--space-6);
+  }
+  .question__head .t-lead {
+    color: var(--text);
+  }
+</style>

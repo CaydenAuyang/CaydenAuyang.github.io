@@ -1,0 +1,271 @@
+---
+// QuestionPanel.astro: the May question, edited in place into the October question, on a glass
+// panel, with the four notes that say what caused each edit.
+//
+// A May / Edits / October switch shows the clean May text, the marked version, or the clean
+// October text. Default: Edits. It is a real radio group that works with CSS alone (:has), so it
+// needs no JavaScript; browsers without :has hide the switch and show Edits.
+//
+// The marked version:
+//   - struck words are a real <del>, dimmed with a thin line through, plus a hidden "deleted";
+//   - inserted words are a real <ins> in window, plus a hidden "inserted", followed by a small
+//     superscript note number.
+// The notes sit beside the panel on desktop and below it on phones.
+//
+// At build time it checks that the edits turn the May text into the October text exactly; if
+// not, the build stops with an error, so a typo can't ship.
+import type { Edit, Line } from '../../data/content';
+import { ui } from '../../data/site';
+
+interface Props {
+  views: { may: string; edits: string; october: string };
+  may: Line;
+  october: Line;
+  edits: Edit[];
+  notes: Line[];
+}
+
+const { views, may, october, edits, notes } = Astro.props;
+
+const fail = (message: string): never => {
+  throw new Error(`QuestionPanel: ${message}`);
+};
+
+type Piece = { kind: 'keep'; text: string } | { kind: 'edit'; del?: string; ins?: string; note?: number };
+
+// Turn the May text plus the edits into kept text and edits.
+const pieces: Piece[] = [];
+let cursor = 0;
+const find = (needle: string) => {
+  const at = may.text.indexOf(needle, cursor);
+  if (at === -1) fail(`"${needle}" is not in the May text after position ${cursor}.`);
+  return at;
+};
+for (const edit of edits) {
+  if (edit.note !== undefined && !notes[edit.note - 1]) fail(`an edit points at note ${edit.note}, which doesn't exist.`);
+  if (edit.type === 'del' || edit.type === 'replace') {
+    if (edit.type === 'replace' && !edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
+    const at = find(edit.text);
+    if (at > cursor) pieces.push({ kind: 'keep', text: may.text.slice(cursor, at) });
+    cursor = at + edit.text.length;
+    pieces.push({ kind: 'edit', del: edit.text, ins: edit.insertText, note: edit.note });
+  } else {
+    const end = edit.after ? find(edit.after) + edit.after.length : cursor;
+    if (edit.after === undefined) fail(`the insert "${edit.text}" needs an "after" ('' for right after the last edit).`);
+    if (end > cursor) pieces.push({ kind: 'keep', text: may.text.slice(cursor, end) });
+    cursor = end;
+    pieces.push({ kind: 'edit', ins: edit.text, note: edit.note });
+  }
+}
+if (cursor < may.text.length) pieces.push({ kind: 'keep', text: may.text.slice(cursor) });
+
+// The edits must produce the October text exactly. A struck word leaves a double space behind
+// it ("to  hear"); that collapses, and nothing else is forgiven.
+const produced = pieces
+  .map((p) => (p.kind === 'keep' ? p.text : (p.ins ?? '')))
+  .join('')
+  .replace(/ {2,}/g, ' ');
+if (produced !== october.text) fail(`the edits produce\n  "${produced}"\nwhich is not the October text\n  "${october.text}".`);
+
+// The marked sentence is one HTML string: line breaks between tags would put stray spaces
+// around words. Every piece of text is escaped.
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// A word joiner keeps a note number on the same line as the word before it.
+const WJ = '⁠';
+const marked = pieces
+  .map((p) => {
+    if (p.kind === 'keep') return esc(p.text);
+    let out = '';
+    if (p.del) out += `<del class="qp__del"><span class="sr-only">${ui.deleted}: </span>${esc(p.del)}</del>`;
+    if (p.del && p.ins && !p.ins.startsWith(',')) out += ' ';
+    if (p.ins) out += `<ins class="qp__ins"><span class="sr-only">${ui.inserted}: </span>${esc(p.ins)}</ins>`;
+    if (p.note) out += `${WJ}<sup class="qp__n"><span class="sr-only">${ui.note} </span>${p.note}</sup>`;
+    return out;
+  })
+  .join('');
+---
+
+<div class="qp">
+  <div class="qp__panel">
+    <fieldset class="qp__switch" data-snapshot-hide>
+      <legend class="sr-only">{ui.viewLegend}</legend>
+      <input class="sr-only" type="radio" name="qp-view" id="qp-may" value="may" />
+      <label for="qp-may">{views.may}</label>
+      <input class="sr-only" type="radio" name="qp-view" id="qp-edits" value="edits" checked />
+      <label for="qp-edits">{views.edits}</label>
+      <input class="sr-only" type="radio" name="qp-view" id="qp-october" value="october" />
+      <label for="qp-october">{views.october}</label>
+    </fieldset>
+
+    <div class="qp__views" aria-live="polite">
+      <p class="qp__text qp__view qp__view--may">{may.text}</p>
+      <p class="qp__text qp__view qp__view--edits" set:html={marked} />
+      <p class="qp__text qp__view qp__view--october">{october.text}</p>
+    </div>
+  </div>
+
+  <ol class="qp__notes scrim" aria-label={ui.notesLabel}>
+    {
+      notes.map((note, i) => (
+        <li class="qp__note">
+          <span class="qp__note-n" aria-hidden="true">
+            {i + 1}
+          </span>
+          <span class="sr-only">{`${ui.note} ${i + 1}: `}</span>
+          <span>{note.text}</span>
+        </li>
+      ))
+    }
+  </ol>
+</div>
+
+<style>
+  .qp {
+    display: grid;
+    gap: var(--space-5);
+  }
+  @media (min-width: 1024px) {
+    .qp {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
+      column-gap: var(--space-6);
+      align-items: center;
+    }
+  }
+
+  /* Glass: one of only two places it appears (the other is the video frames). */
+  .qp__panel {
+    padding: var(--space-4);
+    border-radius: var(--radius-frame);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--glow-soft);
+  }
+  @media (min-width: 768px) {
+    .qp__panel {
+      padding: var(--space-6);
+    }
+  }
+
+  /* The switch: three segments, each a 44px target. */
+  .qp__switch {
+    display: inline-flex;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    margin-bottom: var(--space-5);
+    border-radius: var(--radius-control);
+    border: 1px solid var(--rule);
+    background: rgb(var(--night-rgb) / 0.5);
+  }
+  .qp__switch label {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius-control);
+    font-size: 15px;
+    font-weight: var(--fw-medium);
+    color: var(--dim);
+    cursor: pointer;
+    transition:
+      color var(--dur-quick) var(--ease-out),
+      background var(--dur-quick) var(--ease-out);
+  }
+  @media (min-width: 768px) {
+    .qp__switch label {
+      padding: 0 var(--space-4);
+    }
+  }
+  .qp__switch label:hover {
+    color: var(--text);
+  }
+  .qp__switch input:checked + label {
+    background: var(--text);
+    color: var(--night);
+  }
+  .qp__switch input:focus-visible + label {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 6px var(--focus-halo);
+  }
+
+  .qp__text {
+    font-size: var(--fs-question);
+    line-height: 1.4;
+    max-width: 34ch;
+    text-wrap: pretty;
+  }
+
+  /* Edits is the default and the only view without :has. */
+  .qp__view--may,
+  .qp__view--october {
+    display: none;
+  }
+  .qp:has(#qp-may:checked) .qp__view--may,
+  .qp:has(#qp-october:checked) .qp__view--october {
+    display: block;
+  }
+  .qp:has(#qp-may:checked) .qp__view--edits,
+  .qp:has(#qp-october:checked) .qp__view--edits {
+    display: none;
+  }
+  @supports not selector(:has(*)) {
+    .qp__switch {
+      display: none;
+    }
+  }
+  /* Snapshot: the marked version only. */
+  :global(html[data-snapshot]) .qp__view--edits {
+    display: block !important;
+  }
+  :global(html[data-snapshot]) .qp__view--may,
+  :global(html[data-snapshot]) .qp__view--october {
+    display: none !important;
+  }
+
+  .qp__text :global(.qp__del) {
+    color: var(--dim);
+    text-decoration-line: line-through;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--strike);
+  }
+  .qp__text :global(.qp__ins) {
+    color: var(--window);
+    text-decoration: none;
+  }
+  .qp__text :global(.qp__n) {
+    font-size: 0.5em;
+    font-weight: var(--fw-medium);
+    line-height: 0;
+    vertical-align: super;
+    margin-left: 0.15em;
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .qp__notes {
+    display: grid;
+    gap: var(--space-4);
+    max-width: var(--measure);
+  }
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .qp__notes {
+      grid-template-columns: 1fr 1fr;
+      max-width: none;
+    }
+  }
+  .qp__note {
+    display: grid;
+    grid-template-columns: var(--space-5) minmax(0, 1fr);
+    align-items: baseline;
+    font-size: var(--fs-body);
+    line-height: 1.5;
+  }
+  .qp__note-n {
+    font-size: 18px;
+    font-weight: var(--fw-medium);
+    color: var(--window);
+    font-variant-numeric: tabular-nums;
+  }
+</style>

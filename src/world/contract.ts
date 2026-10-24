@@ -73,6 +73,15 @@ export const HERO_FRAMING = {
 /** Phones use the phone anchors and framing below this width (CSS px). */
 export const PHONE_MAX_WIDTH = 767;
 
+/**
+ * Whether a viewport uses the phone anchors and framing: phones, and portrait screens under
+ * 1024px wide (portrait tablets), where the desktop layout would put the figure under the name.
+ * CSS twin: @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait).
+ */
+export function usePhoneLayout(width: number, height: number): boolean {
+  return width <= PHONE_MAX_WIDTH || (width < 1024 && height > width);
+}
+
 /** The two lights (target E) at the contact key. Pomfret is west, so it sits on the left. */
 export const LIGHT_ANCHORS = {
   pomfret: { x: 0.14, y: 0.3 },

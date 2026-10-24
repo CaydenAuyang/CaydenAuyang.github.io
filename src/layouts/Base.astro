@@ -2,27 +2,29 @@
 // Base.astro: the frame every page is built inside.
 //
 // It writes the parts visitors don't see directly (title, description, share image, tab icon)
-// and the parts every page shares: the skip link, the header, <main id="main"> (where each
-// page's content goes) and the footer.
+// and the parts every page shares: the skip link, the world's two layers (a still or gradient,
+// and the fixed three.js canvas above it), the header, <main id="main"> and the footer slot.
 //
 // Two scripts run:
-//   1. A tiny one at the very top, before anything is drawn, that decides whether motion is
-//      allowed. Doing it first means nothing flickers.
-//   2. The site's small modules at the bottom (motion.ts; the Motion switch and the preview
-//      videos bring their own).
+//   1. A tiny one at the very top, before anything is drawn, that sets the page's modes on
+//      <html> (js, data-motion, data-snapshot, js-intro). Doing it first means nothing flickers.
+//   2. After the first paint, the night scene (src/world/main.ts, the lead's), which starts the
+//      scroll timeline and then, if WebGL works, the world and the signal.
 //
-// This site is embedded in the certificate program's Google Site, inside a sandboxed frame.
+// The site is embedded in the certificate program's Google Site, inside a sandboxed frame.
 // Nothing here may stop that: no X-Frame-Options and no frame-ancestors rule, and every link to
 // another site opens in a new tab (ExternalLink.astro).
 //
-// Pages use it like:  <Base title="..." description="...">...page content...</Base>
+// Pages use it like:  <Base>...sections...<Contact slot="footer" /></Base>
 import '../styles/tokens.css';
 import '../styles/base.css';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { Font } from 'astro:assets';
 import { meta } from '../data/content';
 import { site, ui } from '../data/site';
-import SiteHeader from '../components/ui/SiteHeader.astro';
-import Contact from '../components/sections/Contact.astro';
+import Header from '../components/Header.astro';
+import WorldBoot from '../components/WorldBoot.astro';
 
 interface Props {
   // The full page title for the browser tab. Defaults to the site's name.
@@ -30,29 +32,36 @@ interface Props {
   description?: string;
   // Keep this page out of search engines.
   noindex?: boolean;
-  // Show the section links in the header (the home page only).
-  nav?: boolean;
+  // Show the Menu (the home page only).
+  menu?: boolean;
+  // Start the night scene (the home page only).
+  world?: boolean;
 }
 
-const { title = meta.title, description = meta.description.text, noindex = false, nav = false } = Astro.props;
+const { title = meta.title, description = meta.description.text, noindex = false, menu = false, world = false } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, Astro.site);
 // The "page not found" page shows at whatever wrong address someone typed, so it has no
 // permanent address of its own: no canonical link and no og:url.
 const isNotFound = /^\/404(\.html|\/)?$/.test(Astro.url.pathname);
 const imageUrl = new URL(site.ogImage, Astro.site);
+
+// The still render of the hero scene, if the lead has generated it. Until then the CSS gradient.
+const STILL = '/world/fallback-hero.webp';
+const hasStill = existsSync(join(process.cwd(), 'public', STILL));
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{title}</title>
     <meta name="description" content={description} />
     {!noindex && !isNotFound && <link rel="canonical" href={canonical} />}
     {(noindex || isNotFound) && <meta name="robots" content="noindex" />}
     <meta name="theme-color" content={site.themeColor} />
+    <meta name="color-scheme" content="dark" />
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
@@ -74,56 +83,48 @@ const imageUrl = new URL(site.ogImage, Astro.site);
     <meta name="twitter:image" content={imageUrl} />
 
     <!-- Fonts: the two faces the first screen needs are preloaded. -->
-    <Font cssVariable="--font-newsreader" preload={[{ weight: 500, style: 'normal' }]} />
-    <Font cssVariable="--font-atkinson" preload={[{ weight: 400, style: 'normal' }]} />
+    <Font cssVariable="--font-unbounded" preload={[{ weight: 700, style: 'normal' }]} />
+    <Font cssVariable="--font-geist" preload={[{ weight: 400, style: 'normal' }]} />
 
     <!--
-      Runs before the page is drawn:
-      - Add "js", so the page knows JavaScript works (the Motion switch and video buttons need it).
-      - If the visitor switched Motion off before, remember it (data-motion="off"). Storage can be
-        blocked (private windows, the Google Sites frame), so the read is wrapped in try/catch.
-      - If motion is allowed (no reduced-motion setting, not switched off), add "js-motion", which
-        lets elements start hidden and animate in.
-      - Snapshot mode (poster screenshots): on when the address has ?snapshot (any value) or the
-        footer's Snapshot view toggle was left on. Sets data-snapshot, which swaps the colors
-        (tokens.css) and counts as motion off.
-      - Safety net: if the motion code hasn't started 3.5 seconds later (a script failed to load),
-        remove "js-motion" so nothing stays hidden.
+      Runs before the page is drawn. Sets on <html>:
+        js                  JavaScript works (menus, toggles and video buttons need it).
+        data-motion="off"   the device asks for reduced motion.
+        data-snapshot       the address has ?snapshot (any value): poster screenshots.
+        js-intro            motion on and not snapshot: the hero text starts masked and the
+                            timeline wipes it in. A CSS safety net reveals it after 2.5 s anyway.
     -->
-    <script is:inline define:vars={{ key: site.motionKey, snapKey: site.snapshotKey }}>
+    <script is:inline>
       (function () {
         var html = document.documentElement;
         html.classList.add('js');
-        var off = false;
-        try {
-          off = localStorage.getItem(key) === 'off';
-        } catch (e) {}
-        if (off) html.setAttribute('data-motion', 'off');
-        var snap = /[?&]snapshot(=|&|$)/.test(location.search);
-        try {
-          if (localStorage.getItem(snapKey) === 'on') snap = true;
-        } catch (e) {}
-        if (snap) html.setAttribute('data-snapshot', '');
         var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!reduce && !off && !snap) {
-          html.classList.add('js-motion');
-          setTimeout(function () {
-            if (!html.classList.contains('motion-ready')) html.classList.remove('js-motion');
-          }, 3500);
-        }
+        if (reduce) html.setAttribute('data-motion', 'off');
+        var snap = /[?&]snapshot(=|&|$)/.test(location.search);
+        if (snap) html.setAttribute('data-snapshot', '');
+        if (!reduce && !snap) html.classList.add('js-intro');
       })();
     </script>
   </head>
   <body>
     <a class="skip-link" href="#main">{ui.skip}</a>
-    <SiteHeader nav={nav} />
+
+    <div
+      class="world-fallback"
+      data-world-fallback
+      data-still={hasStill ? '' : undefined}
+      style={hasStill ? `--still: url('${STILL}')` : undefined}
+      aria-hidden="true"
+    >
+    </div>
+    {world && <canvas class="world-canvas" data-world aria-hidden="true"></canvas>}
+
+    <Header menu={menu} />
     <main id="main" tabindex="-1">
       <slot />
     </main>
-    <Contact />
+    <slot name="footer" />
 
-    <script>
-      import '../components/ui/motion.ts';
-    </script>
+    {world && <WorldBoot />}
   </body>
 </html>
