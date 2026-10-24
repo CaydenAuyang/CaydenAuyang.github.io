@@ -169,7 +169,8 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     const st = triggers[index];
     if (!st) return { index: 0, p: 0 };
     const next = triggers[index + 1];
-    const end = next ? next.start : st.end;
+    // The last scene (Contact) runs to the bottom of the page, so its morph can complete.
+    const end = next ? next.start : Math.max(st.start + 1, ScrollTrigger.maxScroll(window));
     return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)) };
   }
 

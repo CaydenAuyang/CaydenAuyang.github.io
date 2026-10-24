@@ -75,11 +75,12 @@ export const PHONE_MAX_WIDTH = 767;
 
 /**
  * Whether a viewport uses the phone anchors and framing: phones, and portrait screens under
- * 1024px wide (portrait tablets), where the desktop layout would put the figure under the name.
+ * 1024px wide (portrait tablets, square counting as portrait, as in CSS), where the desktop
+ * layout would put the figure under the name.
  * CSS twin: @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait).
  */
 export function usePhoneLayout(width: number, height: number): boolean {
-  return width <= PHONE_MAX_WIDTH || (width < 1024 && height > width);
+  return width <= PHONE_MAX_WIDTH || (width < 1024 && height >= width);
 }
 
 /** The two lights (target E) at the contact key. Pomfret is west, so it sits on the left. */

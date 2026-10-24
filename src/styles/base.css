@@ -179,7 +179,7 @@ html:not(.js) [data-needs-js] {
   z-index: var(--z-fallback);
   pointer-events: none;
   /* Night at the top, the sky toward the horizon, haze along it, dark water below. */
-  background:
+  --night-gradient:
     radial-gradient(120% 40% at 40% 84%, rgb(43 33 64 / 0.85) 0%, rgb(43 33 64 / 0) 70%),
     linear-gradient(
       to bottom,
@@ -191,12 +191,35 @@ html:not(.js) [data-needs-js] {
       #0b0c17 88%,
       var(--night) 100%
     );
+  background: var(--night-gradient);
 }
-/* The lead's still render of the hero scene, when it exists (Base.astro checks at build time). */
+/*
+  The lead's still render of the hero scene, when it exists (Base.astro checks at build time and
+  sets --still-desktop and --still-phone). The phone still follows usePhoneLayout(). It shows
+  until the canvas is ready, and for good where WebGL is missing (html.no-webgl).
+*/
 .world-fallback[data-still] {
-  background-image: var(--still);
+  background-image: var(--still-desktop), var(--night-gradient);
   background-size: cover;
   background-position: 50% 50%;
+  background-repeat: no-repeat;
+}
+@media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+  .world-fallback[data-still] {
+    background-image: var(--still-phone), var(--night-gradient);
+  }
+}
+/*
+  With motion on, the intro grows the scene out of a dark sky, so a finished still behind it would
+  flash and then dissolve. Show the plain gradient instead, unless WebGL turns out to be missing.
+*/
+html.js-intro:not(.no-webgl) .world-fallback[data-still] {
+  background-image: var(--night-gradient);
+}
+/* Once the canvas has faded in over it (600 ms), the still steps aside. */
+html.is-ready:not(.no-webgl) .world-fallback {
+  visibility: hidden;
+  transition: visibility 0s linear 700ms;
 }
 
 .world-canvas {
@@ -437,6 +460,21 @@ main,
 }
 .action-link:hover .arrow {
   transform: translate(2px, -2px);
+}
+
+/*
+  Snapshot (?snapshot): poster captures. The timeline freezes the world at each section's best
+  frame; here every section is one 1440 x 900 screen where its words fit, so one capture per
+  section (per project stop inside Work) works. The header is interface, so it goes.
+*/
+html[data-snapshot] .site-header {
+  display: none;
+}
+@media (min-width: 1024px) {
+  html[data-snapshot] .scene {
+    min-height: 100vh;
+    padding-block: var(--space-6);
+  }
 }
 
 /* Reduced motion and snapshot: nothing slides or fades. */

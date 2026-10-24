@@ -56,9 +56,10 @@ import { since } from '../../data/content';
     gap: var(--space-5);
   }
   @media (min-width: 1024px) {
+    /* Three equal columns with the grid's 32px gap line up with columns 1, 5 and 9. */
     .strands {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-6);
+      gap: var(--space-5);
     }
   }
   .strand {
@@ -94,7 +95,7 @@ import { since } from '../../data/content';
   @media (min-width: 1024px) {
     .since :global(.since__more .more__inner) {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: var(--space-6);
+      gap: var(--space-5);
     }
   }
   .since :global(.since__more .more__inner > * + *) {

@@ -5,7 +5,9 @@
 // The signal gathers into two lights at the contact key (LIGHT_ANCHORS in the world contract,
 // as viewport fractions): Pomfret on the left, Hong Kong on the right. This section is at least
 // one viewport tall and ends the page, so when it fills the screen the two small labels sit
-// right under those lights.
+// right under those lights. The labels fade in only once the section (nearly) fills the screen,
+// so they never float in the sky before the lights have gathered. Without JavaScript, under
+// snapshot, they simply show.
 import ExternalLink from '../ui/ExternalLink.astro';
 import { LIGHT_ANCHORS } from '../../world/contract';
 import { contact } from '../../data/content';
@@ -59,7 +61,11 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
   }
 
   /* Under each light: centered on its x, a little below its y. */
+  :global(html.js:not([data-snapshot])) .contact:not(.is-home) .contact__light {
+    opacity: 0;
+  }
   .contact__light {
+    transition: opacity var(--dur-fade) var(--ease-out);
     position: absolute;
     left: calc(var(--lx) * 100%);
     top: calc(var(--ly) * 100vh + var(--space-5));
@@ -67,7 +73,8 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     transform: translateX(-50%);
     font-size: var(--fs-small);
     font-weight: var(--fw-medium);
-    color: var(--dim);
+    /* Text color: each label sits right under a bright light. */
+    color: var(--text);
     white-space: nowrap;
     text-shadow: var(--halo);
   }
@@ -82,12 +89,14 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     margin-top: var(--space-3);
   }
   .contact__email-wrap {
-    margin-top: var(--space-5) !important;
+    margin-top: var(--space-3) !important;
     max-width: 100%;
   }
   .contact__email {
     display: inline-block;
     max-width: 100%;
+    /* At least a 44px target on phones (32px of text plus 8px above and below). */
+    padding-block: var(--space-2);
     font-size: var(--fs-email);
     font-weight: var(--fw-medium);
     line-height: 1.15;
@@ -111,3 +120,15 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     margin-top: var(--space-6) !important;
   }
 </style>
+
+<script>
+  // Show the light labels once the contact section (nearly) fills the screen.
+  const section = document.querySelector<HTMLElement>('.contact');
+  if (section && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([entry]) => section.classList.toggle('is-home', entry.intersectionRatio >= 0.85), {
+      threshold: [0, 0.85, 1],
+    }).observe(section);
+  } else {
+    section?.classList.add('is-home');
+  }
+</script>

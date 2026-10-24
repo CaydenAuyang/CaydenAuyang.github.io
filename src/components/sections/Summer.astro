@@ -11,7 +11,7 @@ import { summer } from '../../data/content';
       <h2 id="summer-title" class="h2">{summer.heading}</h2>
       <div class="summer__where">
         <p class="t-sub">{summer.subhead}</p>
-        <p class="t-small t-dim">{summer.meta.text}</p>
+        <p class="t-small">{summer.meta.text}</p>
       </div>
       <p class="t-lead">{summer.lead.text}</p>
       <ul class="facts">
@@ -57,10 +57,41 @@ import { summer } from '../../data/content';
   .summer .facts {
     margin-top: var(--space-4);
   }
-  /* Desktop: the right half, clear of the archive rising over Central (left of center). */
+  /* Snapshot: one screen. The short copy on the left, the long copy beside it in two columns. */
+  @media (min-width: 1024px) {
+    :global(html[data-snapshot]) .summer__block {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--space-5);
+      align-items: start;
+    }
+    :global(html[data-snapshot]) .summer__block > * {
+      grid-column: 1 / span 5;
+    }
+    :global(html[data-snapshot]) .summer__block > :global(.more) {
+      grid-column: 7 / span 6;
+      grid-row: 1 / span 5;
+      margin-top: 0;
+    }
+    :global(html[data-snapshot]) .summer :global(.more__inner) {
+      columns: 2;
+      column-gap: var(--space-5);
+      padding-top: 0;
+    }
+    :global(html[data-snapshot]) .summer :global(.more__inner p:has(+ ul)) {
+      break-after: avoid;
+    }
+    :global(html[data-snapshot]) .summer :global(.more__inner li) {
+      break-inside: avoid;
+    }
+  }
+
+  /* Desktop: the right column (the same edge as the work text), clear of the archive rising
+     over Central, left of center. */
   @media (min-width: 1024px) {
     .summer__block {
-      grid-column: 7 / span 6;
+      grid-column: 8 / span 5;
     }
   }
 </style>

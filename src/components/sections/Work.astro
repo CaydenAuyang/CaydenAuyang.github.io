@@ -29,7 +29,7 @@ import { ui } from '../../data/site';
             <h3 id={`${project.stop}-name`} class="t-project">
               {project.name}
             </h3>
-            <p class="t-small t-dim stop__role">{project.role.text}</p>
+            <p class="t-small stop__role">{project.role.text}</p>
             <p class="t-lead">{project.lead.text}</p>
             <ul class="facts">
               {project.facts.map((fact) => (
@@ -176,6 +176,34 @@ import { ui } from '../../data/site';
     }
   }
 
+  /* Snapshot: every stop is one screen; "Selected work" rides at the top of the first one. */
+  @media (min-width: 1024px) {
+    :global(html[data-snapshot]) .work {
+      padding-block: 0;
+    }
+    :global(html[data-snapshot]) .work__head {
+      position: absolute;
+      top: var(--space-6);
+      left: 0;
+      right: 0;
+      margin: 0;
+    }
+    :global(html[data-snapshot]) .stop {
+      height: 100vh;
+      min-height: 0;
+      padding-block: var(--space-6);
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] {
+      padding-top: calc(var(--space-6) + var(--fs-h2) * 0.95 + var(--space-5));
+    }
+    :global(html[data-snapshot]) .more-work {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+  }
+
   /* ---- More work ---- */
   .more-work {
     position: relative;
@@ -217,7 +245,8 @@ import { ui } from '../../data/site';
     max-width: 40ch;
     font-size: var(--fs-body);
     line-height: 1.5;
-    color: var(--dim);
+    /* Text color, not dim: the cards can scroll over the skyline. */
+    color: var(--text);
     flex: 1;
   }
   .card__link {

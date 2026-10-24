@@ -5,7 +5,7 @@
 // draw calls, leaving plenty of the 40-call budget for the signal.
 
 import { PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
-import { PHONE_MAX_WIDTH, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
+import { usePhoneLayout, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
 import { applyPose, buildCameraPath, FOV, poseToCameraPose, type CameraPath, type KeyPose } from './camera-path';
 import { generateCity } from './city';
 import { buildHarbour } from './harbour';
@@ -66,7 +66,8 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     height = Math.max(1, canvas.clientHeight || window.innerHeight);
   };
   measure();
-  const isPhoneFrame = () => width <= PHONE_MAX_WIDTH;
+  // Phones and portrait tablets get the phone framing (the same rule the page's CSS uses).
+  const isPhoneFrame = () => usePhoneLayout(width, height);
   path = buildCameraPath(city, width / height, isPhoneFrame());
 
   const wins = litFrontWindows(city);

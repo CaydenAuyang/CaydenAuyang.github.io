@@ -18,7 +18,7 @@
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Signal, SignalOptions, Target, World } from './contract';
-import { FIGURE_ANCHOR, LIGHT_ANCHORS, PHONE_MAX_WIDTH } from './contract';
+import { FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
 
@@ -317,7 +317,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const W = world.renderer.domElement.clientWidth || window.innerWidth;
     const H = world.renderer.domElement.clientHeight || window.innerHeight;
     const aspect = W / Math.max(1, H);
-    const phone = window.innerWidth <= PHONE_MAX_WIDTH;
+    const phone = usePhoneLayout(W, H);
     info.phone = phone;
     const keys = world.cameraKeys;
     const hero = frameOf(world.getCameraPose(keys.hero), aspect);

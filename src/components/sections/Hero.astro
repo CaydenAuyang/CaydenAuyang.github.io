@@ -2,9 +2,12 @@
 // Hero.astro: the name, one line, one small line, and the scroll cue, over the dark sky.
 //
 // The layout follows the world contract (src/world/contract.ts), so the text never sits on the
-// figure of light or the skyline:
-//   - desktop (768px and up): the figure sits right of center (FIGURE_ANCHOR.desktop), so the
-//     text sits to its left, in the left 45% of the width, ending above the tower tops
+// figure of light or the skyline. The phone layout is usePhoneLayout(): phones, plus portrait
+// screens under 1024px wide (portrait tablets). Its CSS twin, used below and in base.css:
+//   phone:    @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait)
+//   desktop:  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape)
+//   - desktop: the figure sits right of center (FIGURE_ANCHOR.desktop), so the text sits to its
+//     left, in the left ~45% of the width, ending above the tower tops
 //     (HERO_FRAMING.desktop.skylineTop).
 //   - phone: the figure sits high in the middle (FIGURE_ANCHOR.phone), so the text sits below
 //     it and above the tower tops (HERO_FRAMING.phone.skylineTop).
@@ -14,13 +17,23 @@
 // adds .is-in; revealed after 2.5 s regardless), data-scroll-cue (the timeline adds .is-gone on
 // the first scroll). The figure's description is a role="img" box at the figure's place, shown
 // to assistive tech only once the world (or its still) is drawn.
-import { FIGURE_ANCHOR, HERO_FRAMING, PHONE_MAX_WIDTH } from '../../world/contract';
+import { FIGURE_ANCHOR, HERO_FRAMING, PHONE_MAX_WIDTH, usePhoneLayout } from '../../world/contract';
 import { hero, meta } from '../../data/content';
 
-// The CSS below switches layouts at 768px. If the contract's phone width moves, stop the build
-// so the breakpoint gets updated with it.
-if (PHONE_MAX_WIDTH !== 767) {
-  throw new Error(`Hero.astro: PHONE_MAX_WIDTH is now ${PHONE_MAX_WIDTH}; update the 768px media queries in the Pages CSS.`);
+// The CSS mirrors usePhoneLayout() with media queries. If the contract's rule moves, stop the
+// build so the queries get updated with it.
+const layoutCases: [number, number, boolean][] = [
+  [390, 844, true],
+  [767, 500, true],
+  [768, 1024, true],
+  [1023, 1366, true],
+  [1023, 700, false],
+  [768, 600, false],
+  [1024, 1366, false],
+  [1440, 900, false],
+];
+if (PHONE_MAX_WIDTH !== 767 || layoutCases.some(([w, h, phone]) => usePhoneLayout(w, h) !== phone)) {
+  throw new Error('Hero.astro: usePhoneLayout() in contract.ts changed; update the phone/desktop media queries in the Pages CSS.');
 }
 
 const d = FIGURE_ANCHOR.desktop;
@@ -115,7 +128,7 @@ const vars = [
   }
 
   /* Desktop: left of the figure, ending above the tower tops. */
-  @media (min-width: 768px) {
+  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape) {
     .hero__figure {
       left: calc(var(--fig-x-d) * 100%);
       top: calc(var(--fig-y-d) * 100%);

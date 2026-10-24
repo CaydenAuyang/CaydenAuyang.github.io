@@ -124,11 +124,19 @@ const marked = pieces
     display: grid;
     gap: var(--space-5);
   }
+  /* Desktop: the page's 12 columns. The panel takes 1 to 7, the notes start on column 8, the
+     same edge as the Summer, work and People text. */
   @media (min-width: 1024px) {
     .qp {
-      grid-template-columns: minmax(0, 7fr) minmax(0, 4fr);
-      column-gap: var(--space-6);
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--space-5);
       align-items: center;
+    }
+    .qp__panel {
+      grid-column: 1 / span 7;
+    }
+    .qp__notes {
+      grid-column: 8 / span 5;
     }
   }
 
@@ -266,6 +274,7 @@ const marked = pieces
     font-size: 18px;
     font-weight: var(--fw-medium);
     color: var(--window);
+    text-shadow: var(--halo-strong);
     font-variant-numeric: tabular-nums;
   }
 </style>

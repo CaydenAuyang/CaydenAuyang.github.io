@@ -125,6 +125,12 @@ const { menu = false } = Astro.props;
   .site-header__btn:hover {
     color: var(--window);
   }
+  /* Menu and Close sit flush with the screen's right edge on phones, so their ring is drawn
+     inside the button, where the edge can't clip it. */
+  .site-header__btn:focus-visible {
+    outline-offset: -2px;
+    box-shadow: inset 0 0 0 6px var(--focus-halo);
+  }
 
   /* The overlay: the whole screen, the world dimmed behind it. No glass here. */
   .menu {
