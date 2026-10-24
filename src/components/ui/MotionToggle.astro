@@ -7,8 +7,8 @@
 // and read by the first script in Base.astro on every visit. Storage can be blocked (private
 // windows, the Google Sites frame), so every read and write is wrapped in try/catch; then the
 // choice lasts until the page closes.
-// When the switch changes, it sends a "ca:motion" event that motion.ts, the preview videos and
-// the point figure listen for.
+// When the switch changes data-motion, motion.ts sends the "ca:motion" event that the preview
+// videos, the figure and every other animation listen for.
 import { site, ui } from '../../data/site';
 ---
 
@@ -57,7 +57,7 @@ import { site, ui } from '../../data/site';
     else root.setAttribute('data-motion', 'off');
     save(enabled ? 'on' : 'off');
     render();
-    document.dispatchEvent(new CustomEvent('ca:motion', { detail: { enabled } }));
+    // motion.ts watches data-motion and sends the "ca:motion" event to every component.
   }
 
   document.querySelectorAll('[data-motion-toggle]').forEach((button) => {

@@ -1,16 +1,17 @@
 /*
-  base.css: the ground rules every page shares.
+  base.css: the ground rules every page shares. Direction: Datum.
 
   In order:
     1. a reset, so every browser starts equal,
-    2. page defaults (font, colors, sizes),
-    3. shared layout helpers and small text styles,
+    2. page defaults (fonts, colors, sizes) and links,
+    3. shared layout helpers: the page wrap, the 12-column grid, sections, plates,
     4. keyboard focus, the skip link, screen-reader-only text,
     5. the "To come" placeholder chip,
-    6. motion: starting positions apply ONLY under html.js-motion, which the first script in
-       Base.astro adds when JavaScript runs and motion is allowed. If JavaScript is off or fails,
-       nothing is ever hidden.
+    6. motion and snapshot rules,
+    7. print.
 
+  Components style themselves in their own <style> blocks. This file only sets defaults and
+  the few helpers several components share, so it never has to fight a component's rules.
   Loaded once by src/layouts/Base.astro, after tokens.css.
 */
 
@@ -32,7 +33,8 @@ blockquote,
 dl,
 dd,
 ul,
-ol {
+ol,
+fieldset {
   margin: 0;
 }
 ul[class],
@@ -51,13 +53,21 @@ img,
 video {
   height: auto;
 }
-button {
+button,
+input {
   font: inherit;
   color: inherit;
+}
+button {
   background: none;
   border: 0;
   padding: 0;
   cursor: pointer;
+}
+fieldset {
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
 }
 [hidden] {
   display: none !important;
@@ -73,9 +83,10 @@ html {
   text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Jumps to a section land below the sticky header. */
+  scroll-padding-top: calc(var(--header-h) + 32px);
 }
 body {
-  min-height: 100svh;
   background: var(--bg);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
@@ -86,43 +97,99 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  font-weight: var(--fw-bold);
-  line-height: var(--lh-tight);
+  font-weight: var(--fw-display);
+  line-height: var(--lh-head);
   text-wrap: balance;
 }
 p,
 li,
-dd {
+dd,
+figcaption {
   text-wrap: pretty;
 }
-a {
-  color: var(--accent);
-  text-underline-offset: 0.18em;
-  text-decoration-thickness: 1px;
-}
-a:hover {
-  text-decoration-thickness: 2px;
+strong {
+  font-weight: var(--fw-semibold);
 }
 
-/* ---- 3. Layout helpers and text styles ---------------------------------------------------- */
+/* Links: ink text with an orange underline that turns ink on hover or focus (M12). */
+a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--mark);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--dur-link) linear;
+}
+a:hover,
+a:focus-visible {
+  text-decoration-color: currentColor;
+}
+
+/* Small text styles. */
+.t-label {
+  font-size: var(--fs-label);
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.t-small {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+}
+.t-meta {
+  font-size: var(--fs-small);
+  color: var(--text-2);
+}
+.t-lead {
+  font-size: var(--fs-lead);
+  line-height: 1.45;
+}
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 3. Layout helpers -------------------------------------------------------------------- */
 .wrap {
   width: 100%;
   max-width: var(--max-page);
   margin-inline: auto;
-  padding-inline: var(--gutter);
+  padding-inline: var(--margin);
+}
+/* One column on phones; 12 columns from 1024px. Place children with grid-column. */
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--gutter);
+}
+@media (min-width: 1024px) {
+  .grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
 }
 .section {
   padding-block: var(--space-section);
   border-top: 1px solid var(--rule);
 }
+/* Section heading: a small number ("01") then the title. The number is a design label and is
+   hidden from screen readers, so the heading reads as its title. */
 .section__head {
   display: grid;
   gap: var(--space-4);
+  max-width: 48rem;
   margin-bottom: var(--space-7);
-  max-width: var(--max-text);
 }
 .section__title {
   font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+}
+.section__num {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-regular);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text-2);
 }
 .prose {
   max-width: var(--max-text);
@@ -130,26 +197,20 @@ a:hover {
 .prose > * + * {
   margin-top: var(--space-4);
 }
-.t-lead {
-  font-size: var(--fs-lead);
-  line-height: 1.4;
-}
-.t-label {
-  font-family: var(--font-label);
-  font-size: var(--fs-label);
-  letter-spacing: 0.02em;
-  line-height: 1.3;
-}
-.t-meta {
-  font-size: var(--fs-small);
-  color: var(--text-2);
+/* A plate: vellum, a 1px neatline, square corners, no shadow. Ticks and labels belong to each
+   component. */
+.plate {
+  position: relative;
+  background: var(--plate);
+  border: var(--neat) solid var(--neatline);
 }
 
 /* ---- 4. Focus, skip link, screen-reader text ---------------------------------------------- */
+/* 2px ink outline, 2px offset, with a vellum halo on both sides so it shows on footage. */
 :focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: 3px;
-  border-radius: 2px;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--focus-halo);
 }
 /* Focus moved by the skip link lands on <main>; it needs no ring of its own. */
 main:focus {
@@ -160,10 +221,10 @@ main:focus {
   top: var(--space-2);
   left: var(--space-2);
   z-index: var(--z-skip);
-  padding: var(--space-2) var(--space-4);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-weight: var(--fw-bold);
+  padding: var(--space-3) var(--space-4);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: var(--fw-semibold);
   text-decoration: none;
   transform: translateY(-200%);
 }
@@ -183,47 +244,22 @@ main:focus {
 }
 
 /* ---- 5. "To come" chip -------------------------------------------------------------------- */
-/* Anything only Cayden can supply shows as this dashed chip until he does, so nobody mistakes
-   it for finished copy. The words come from content.ts (items with pending: true). */
+/* Anything only Cayden can supply shows as this dashed chip until he does (pending: true in
+   content.ts), so nobody mistakes it for finished copy. */
 .pending {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   padding: 2px var(--space-2);
-  border: 1.5px dashed var(--pending);
-  border-radius: var(--radius);
-  color: var(--pending);
-  font-family: var(--font-label);
+  border: 1.5px dashed var(--text-2);
+  color: var(--text-2);
   font-size: var(--fs-label);
   line-height: 1.4;
-  font-style: normal;
-  vertical-align: baseline;
 }
 
-/* ---- 6. Motion ---------------------------------------------------------------------------- */
-/* Elements marked data-reveal fade and rise into place once, when they scroll into view
-   (src/components/ui/motion.ts). Only under js-motion, so without JavaScript they just show. */
-html.js-motion [data-reveal] {
-  opacity: 0;
-  transform: translateY(16px);
-  transition:
-    opacity var(--dur-slow) var(--ease-out),
-    transform var(--dur-slow) var(--ease-out);
-}
-html.js-motion [data-reveal].is-in {
-  opacity: 1;
-  transform: none;
-}
-
-/* Smooth jumps to sections, unless the visitor wants less motion. */
-@media (prefers-reduced-motion: no-preference) {
-  html:not([data-motion='off']) {
-    scroll-behavior: smooth;
-  }
-}
-
-/* Reduced motion (the device setting) or Motion: Off (the footer switch): stop every
-   transition and animation, whatever a component asked for. */
+/* ---- 6. Motion and snapshot --------------------------------------------------------------- */
+/* Reduced motion (device setting), Motion: Off (footer switch) and snapshot mode all show every
+   animation's end state. Components gate their starting positions on html.js-motion, which the
+   first script in Base.astro only adds when motion is allowed; this is the backstop. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -236,8 +272,40 @@ html.js-motion [data-reveal].is-in {
 }
 html[data-motion='off'] *,
 html[data-motion='off'] *::before,
-html[data-motion='off'] *::after {
+html[data-motion='off'] *::after,
+html[data-snapshot] *,
+html[data-snapshot] *::before,
+html[data-snapshot] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+}
+
+/* Interface that has no place in a screenshot or on paper (video buttons, Replay, the Motion
+   switch, the Index button, "Open the full site", the clocks). Mark it data-snapshot-hide. */
+html[data-snapshot] [data-snapshot-hide] {
+  display: none !important;
+}
+
+/* ---- 7. Print ----------------------------------------------------------------------------- */
+@media print {
+  [data-snapshot-hide] {
+    display: none !important;
+  }
+  .plate,
+  figure,
+  li {
+    break-inside: avoid;
+  }
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  /* External links print their address, small, after the text. */
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.75em;
+    color: var(--text-2);
+    word-break: break-all;
+  }
 }

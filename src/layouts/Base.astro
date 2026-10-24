@@ -18,6 +18,7 @@
 // Pages use it like:  <Base title="..." description="...">...page content...</Base>
 import '../styles/tokens.css';
 import '../styles/base.css';
+import { Font } from 'astro:assets';
 import { meta } from '../data/content';
 import { site, ui } from '../data/site';
 import SiteHeader from '../components/ui/SiteHeader.astro';
@@ -72,6 +73,10 @@ const imageUrl = new URL(site.ogImage, Astro.site);
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={imageUrl} />
 
+    <!-- Fonts: the two faces the first screen needs are preloaded. -->
+    <Font cssVariable="--font-newsreader" preload={[{ weight: 500, style: 'normal' }]} />
+    <Font cssVariable="--font-atkinson" preload={[{ weight: 400, style: 'normal' }]} />
+
     <!--
       Runs before the page is drawn:
       - Add "js", so the page knows JavaScript works (the Motion switch and video buttons need it).
@@ -79,10 +84,13 @@ const imageUrl = new URL(site.ogImage, Astro.site);
         blocked (private windows, the Google Sites frame), so the read is wrapped in try/catch.
       - If motion is allowed (no reduced-motion setting, not switched off), add "js-motion", which
         lets elements start hidden and animate in.
+      - Snapshot mode (poster screenshots): on when the address has ?snapshot (any value) or the
+        footer's Snapshot view toggle was left on. Sets data-snapshot, which swaps the colors
+        (tokens.css) and counts as motion off.
       - Safety net: if the motion code hasn't started 3.5 seconds later (a script failed to load),
         remove "js-motion" so nothing stays hidden.
     -->
-    <script is:inline define:vars={{ key: site.motionKey }}>
+    <script is:inline define:vars={{ key: site.motionKey, snapKey: site.snapshotKey }}>
       (function () {
         var html = document.documentElement;
         html.classList.add('js');
@@ -91,8 +99,13 @@ const imageUrl = new URL(site.ogImage, Astro.site);
           off = localStorage.getItem(key) === 'off';
         } catch (e) {}
         if (off) html.setAttribute('data-motion', 'off');
+        var snap = /[?&]snapshot(=|&|$)/.test(location.search);
+        try {
+          if (localStorage.getItem(snapKey) === 'on') snap = true;
+        } catch (e) {}
+        if (snap) html.setAttribute('data-snapshot', '');
         var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!reduce && !off) {
+        if (!reduce && !off && !snap) {
           html.classList.add('js-motion');
           setTimeout(function () {
             if (!html.classList.contains('motion-ready')) html.classList.remove('js-motion');

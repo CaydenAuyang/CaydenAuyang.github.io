@@ -5,13 +5,15 @@
 export const site = {
   name: 'Cayden Auyang',
   url: 'https://caydenauyang.github.io',
-  // The browser bar color on phones. Keep it equal to --bg in src/styles/tokens.css.
-  themeColor: '#ffffff',
+  // The browser bar color on phones. Keep it equal to --chart in src/styles/tokens.css.
+  themeColor: '#e2e8e9',
   // The share image (1200 x 630) in public/.
   ogImage: '/og.png',
   ogImageAlt: 'Cayden Auyang, certificate portfolio.',
   // The key the Motion On/Off choice is saved under in the visitor's browser.
   motionKey: 'ca:motion',
+  // The key the Snapshot view choice is saved under.
+  snapshotKey: 'ca:snapshot',
 };
 
 export const ui = {

@@ -1,59 +1,76 @@
 /*
-  tokens.css: the site's design decisions, written down once.
+  tokens.css: the site's design decisions, written down once. Direction: Datum.
 
-  Tokens are named values (a color, a size, a timing) that every other file uses instead of a
-  raw value. Change one here and the whole site follows.
+  The idea: a surveyor's chart. Pale chart ground, vellum plates with thin neatlines, ink text,
+  and one orange used only for marks. Tokens are named values that every other file uses
+  instead of a raw value. Components use the SEMANTIC names (second block), never raw hex.
 
-  STATUS: neutral placeholders. The palette and type are chosen by Cayden tonight; when they
-  arrive, replace the values below and re-measure every contrast ratio in the comments.
-  Ratios are WCAG 2.2 contrast ratios, measured against the background each color is used on.
-  Body text needs 4.5:1, large text and UI parts (focus rings, borders that carry meaning) 3:1.
+  Contrast ratios are WCAG 2.2 ratios, measured against the ground each color is used on.
+  Body text needs 4.5:1; large text and UI parts (focus rings, control borders) need 3:1.
 
-  Used by: base.css and every component's <style> block.
+  Snapshot mode (html[data-snapshot], and always when printing) swaps the semantic colors for
+  white ground and darker text, for poster screenshots. See the bottom of this file.
 */
 
 :root {
-  /* ---- Color ------------------------------------------------------------------------------ */
-  --bg: #ffffff; /* the page */
-  --bg-2: #f2f2f2; /* raised or alternate surfaces (cards, the notes list) */
-  --text: #1a1a1a; /* main text: 17.4:1 on --bg, 15.6:1 on --bg-2 */
-  --text-2: #595959; /* secondary text (meta lines, captions): 7.0:1 on --bg, 6.3:1 on --bg-2 */
-  --accent: #2b4acb; /* links and the one highlighted element: 7.1:1 on --bg, 6.4:1 on --bg-2 */
-  --accent-2: #3d3d3d; /* second accent (inserted words, status marks): 10.9:1 on --bg */
-  --on-accent: #ffffff; /* text on an --accent fill: 7.1:1 */
-  --rule: #d0d0d0; /* hairlines between blocks; decorative only, so no ratio is required (1.5:1) */
-  --focus: #2b4acb; /* focus ring: 7.1:1 on --bg, 6.4:1 on --bg-2 (needs 3:1) */
-  --pending: #595959; /* "To come" placeholder chips: text and dashed outline, 7.0:1 on --bg */
+  /* ---- Raw colors -------------------------------------------------------------------------- */
+  --chart: #e2e8e9; /* page ground */
+  --vellum: #f4f7f7; /* plates: figure frame, video frames, charts, archive */
+  --ink: #13212d; /* text, figure points, footer ground. 13.21:1 on chart, 15.19:1 on vellum */
+  --slate: #4a5965; /* secondary text, struck words, neatlines, control borders. 5.83:1 on chart, 6.70:1 on vellum */
+  --orange: #cc5216; /* MARKS ONLY, never text: 3.54:1 on chart, 4.07:1 on vellum, 3.73:1 on ink */
+  --orange-text: #a84210; /* orange TEXT on light grounds (inserted words). 4.91:1 on chart, 5.65:1 on vellum */
+  --mist: #9aabb4; /* secondary text on the ink footer. 6.90:1 on ink */
 
-  /* The point figure in the hero. The figure agent reads these. */
-  --figure-point: #1a1a1a;
-  --figure-glow: rgb(43 74 203 / 0.35);
+  /* ---- Semantic colors (use these) --------------------------------------------------------- */
+  --bg: var(--chart);
+  --plate: var(--vellum);
+  --text: var(--ink); /* 13.21:1 on --bg, 15.19:1 on --plate */
+  --text-2: var(--slate); /* 5.83:1 on --bg, 6.70:1 on --plate */
+  --mark: var(--orange); /* triangles, delivered dots, link underlines, active locator box (graphics, 3.54:1) */
+  --ins: var(--orange-text); /* inserted words in the question: 4.91:1 on --bg */
+  --del: var(--slate); /* struck words, kept readable: 5.83:1 on --bg */
+  --neatline: var(--slate); /* 1px plate borders and ticks, control borders: 5.83:1 on --bg */
+  --rule: rgb(74 89 101 / 0.4); /* hairlines (slate at 40%), decorative only */
+  --focus: var(--ink); /* focus outline: 13.21:1 on --bg, 15.19:1 on --plate */
+  --focus-halo: var(--vellum); /* 2px halo around the outline so it shows on dark footage */
+  --footer-bg: var(--ink);
+  --footer-text: var(--chart); /* 13.21:1 on ink */
+  --footer-text-2: var(--mist); /* 6.90:1 on ink */
+  --footer-focus: var(--chart); /* focus outline on the footer: 13.21:1 on ink */
+  --figure-point: var(--ink); /* the figure's settled points and the Pomfret stream */
+  --figure-origin-b: var(--orange); /* the Hong Kong stream, and the 3% orange speckle */
+  /* The figure's points never get lighter than this alpha (snapshot raises it). */
+  --figure-alpha-floor: 0.55;
+  --figure-point-scale: 1;
 
-  /* Tracked changes in the question. Struck words keep --text-2 so they stay readable. */
-  --del: #595959; /* struck words: 7.0:1 on --bg */
-  --ins: #2b4acb; /* inserted words: 7.1:1 on --bg */
+  /* ---- Type ---------------------------------------------------------------------------------
+     Newsreader (roman 500, italic 400): the name, section titles, the question, project names,
+     big numerals. Atkinson Hyperlegible Next (400, 600): everything else. Labels are sentence
+     case, never all caps. Both load through Astro's font API (astro.config.mjs), which creates
+     --font-newsreader and --font-atkinson and metric-matches the fallbacks. */
+  --font-display: var(--font-newsreader), Georgia, serif;
+  --font-body: var(--font-atkinson), Arial, sans-serif;
 
-  /* ---- Type -------------------------------------------------------------------------------
-     Placeholder stacks until the typefaces are chosen. When they are, load them with Astro's
-     font API (astro.config.mjs) and point these at the variables it creates. */
-  --font-display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-label: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-
-  /* A small scale, phone sizes first, growing to the laptop size by about 1440px wide. */
-  --fs-label: 0.8125rem; /* 13px: labels, captions, buttons */
-  --fs-small: 0.875rem; /* 14px: meta lines, notes */
-  --fs-body: clamp(1rem, 0.95rem + 0.25vw, 1.125rem); /* 16 to 18px */
-  --fs-lead: clamp(1.125rem, 1rem + 0.6vw, 1.5rem); /* 18 to 24px: intros, the question */
-  --fs-h3: clamp(1.25rem, 1.1rem + 0.8vw, 1.75rem); /* 20 to 28px: project names */
-  --fs-h2: clamp(1.75rem, 1.3rem + 2vw, 3rem); /* 28 to 48px: section headings */
-  --fs-h1: clamp(2.5rem, 1.6rem + 4.5vw, 5.5rem); /* 40 to 88px: the name */
-  --lh-tight: 1.1;
+  /* Sizes grow from the phone value at 390px wide to the laptop value at 1440px wide. */
+  --fs-label: 0.875rem; /* 14px: plate corner labels, coordinates, clocks, small labels */
+  --fs-small: 0.9375rem; /* 15px: captions, notes, meta lines */
+  --fs-body: clamp(1.0625rem, 1.016rem + 0.19vw, 1.1875rem); /* 17 to 19px */
+  --fs-lead: clamp(1.1875rem, 1.07rem + 0.48vw, 1.5rem); /* 19 to 24px: section intros, hero line */
+  --fs-row: 2rem; /* 32px: Build / Apply / Reflect */
+  --fs-project: clamp(1.875rem, 1.55rem + 1.333vw, 2.75rem); /* 30 to 44px: project names */
+  --fs-h2: clamp(1.875rem, 1.271rem + 2.476vw, 3.5rem); /* 30 to 56px: section titles */
+  --fs-question: clamp(1.625rem, 1.207rem + 1.714vw, 2.75rem); /* 26 to 44px: the question */
+  --fs-name: clamp(3.25rem, 1.857rem + 5.714vw, 7rem); /* 52 to 112px: the name */
+  --lh-tight: 1.05;
+  --lh-head: 1.15;
+  --lh-question: 1.38; /* 1.25 on laptops, below */
   --lh-body: 1.55;
   --fw-regular: 400;
-  --fw-bold: 650;
+  --fw-semibold: 600;
+  --fw-display: 500;
 
-  /* ---- Space ------------------------------------------------------------------------------ */
+  /* ---- Space ------------------------------------------------------------------------------- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -62,42 +79,106 @@
   --space-6: 32px;
   --space-7: 48px;
   --space-8: 64px;
-  --space-section: clamp(64px, 10vw, 144px); /* above and below each section */
+  --space-9: 96px;
+  --space-section: clamp(72px, 9vw, 144px); /* above and below each section */
 
-  /* ---- Grid -------------------------------------------------------------------------------
-     Phone first: one column with 16px side gutters. Wider screens get more room. */
+  /* ---- Grid ---------------------------------------------------------------------------------
+     Phones: one column, 16px margins. Laptops (1024px and up): 12 columns, 80px margins (from
+     1200px), 24px gutters. Never size anything with vh: the site lives inside an iframe. */
+  --margin: 16px;
   --gutter: 16px;
-  --max-text: 40rem; /* the longest comfortable line of body text (about 70 characters) */
-  --max-page: 80rem; /* the widest the content gets */
-  --radius: 4px;
+  --max-page: 1440px;
+  --max-text: 40rem;
+  --header-h: 48px; /* the bar itself; on phones the clocks add a second small line */
+  --tick: 6px; /* plate edge ticks */
+  --neat: 1px; /* plate neatline width */
 
-  /* ---- Layers: higher numbers cover lower ones -------------------------------------------- */
-  --z-figure: 0;
+  /* ---- Layers: higher numbers cover lower ones --------------------------------------------- */
+  --z-plate: 0;
   --z-content: 1;
   --z-header: 50;
+  --z-sheet: 60;
   --z-skip: 100;
 
-  /* ---- Motion -----------------------------------------------------------------------------
-     Two curves only:
-       ease-out: fast start, soft stop (things arriving).
-       ease-in-out: slow start and end (things changing state). */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --dur-fast: 150ms; /* hovers, button states */
-  --dur-base: 400ms; /* small reveals */
-  --dur-slow: 900ms; /* section reveals */
+  /* ---- Motion -------------------------------------------------------------------------------
+     Three curves (the motion list is in README.md). CSS animates only transform, opacity and
+     clip-path. */
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1); /* arriving */
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1); /* lines drawing, strikes */
+  --ease-quick: cubic-bezier(0.2, 0, 0, 1); /* small state changes */
+  --dur-link: 120ms; /* M12 link underline color */
+  --dur-quick: 180ms;
+  --dur-out: 160ms; /* M6 view switch, out */
+  --dur-in: 200ms; /* M6 view switch, in */
+  --dur-sheet: 240ms; /* M11 Index sheet open */
+  --dur-fade: 240ms; /* M4 figure fallback cross-fade */
+  --dur-locator: 280ms; /* M8 */
+  --dur-draw: 900ms; /* M10 progress lines */
 }
 
-/* Tablets and up: wider gutters. */
 @media (min-width: 768px) {
   :root {
-    --gutter: 32px;
+    --margin: 32px;
   }
 }
 
-/* Laptops and up. */
+@media (min-width: 1024px) {
+  :root {
+    --gutter: 24px;
+    --header-h: 56px;
+    --lh-question: 1.25;
+  }
+}
+
 @media (min-width: 1200px) {
   :root {
-    --gutter: 48px;
+    --margin: 80px;
+  }
+}
+
+/* ---- Snapshot mode ----------------------------------------------------------------------------
+   For poster screenshots: white ground, darker text, plates keep their neatlines, the footer
+   turns white. On with ?snapshot in the address, the footer's Snapshot view toggle, and always
+   when printing. Ratios are on white. */
+html[data-snapshot] {
+  --bg: #ffffff;
+  --plate: #ffffff;
+  --text: #0b1620; /* 18.26:1 */
+  --text-2: #36434d; /* 10.16:1 */
+  --ins: #8e370c; /* 7.77:1 */
+  --mark: #b4470f; /* 5.46:1 */
+  --del: #36434d; /* 10.16:1 */
+  --neatline: #36434d;
+  --rule: rgb(54 67 77 / 0.6);
+  --focus: #0b1620;
+  --focus-halo: #ffffff;
+  --footer-bg: #ffffff;
+  --footer-text: #0b1620; /* 18.26:1 */
+  --footer-text-2: #36434d; /* 10.16:1 */
+  --footer-focus: #0b1620;
+  --figure-point: #0b1620;
+  --figure-origin-b: #0b1620;
+  --figure-alpha-floor: 0.8;
+  --figure-point-scale: 1.25;
+}
+
+@media print {
+  :root {
+    --bg: #ffffff;
+    --plate: #ffffff;
+    --text: #0b1620;
+    --text-2: #36434d;
+    --ins: #8e370c;
+    --mark: #b4470f;
+    --del: #36434d;
+    --neatline: #36434d;
+    --rule: rgb(54 67 77 / 0.6);
+    --footer-bg: #ffffff;
+    --footer-text: #0b1620;
+    --footer-text-2: #36434d;
+    --figure-point: #0b1620;
+    --figure-origin-b: #0b1620;
+    --figure-alpha-floor: 0.8;
+    --figure-point-scale: 1.25;
   }
 }
