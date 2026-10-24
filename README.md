@@ -39,14 +39,14 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 | `src/world/timeline.ts`, `main.ts` | Scroll drives the scene; `main.ts` boots it after first paint. |
 | `src/world/interact.ts` | Every pointer, tap, drag and key the scene answers. It decides which presses belong to the world (never text or controls), and runs the figure's spring, drag and idle sway. |
 | `src/world/shaders/` | GLSL for every material. |
-| `public/figure/` | The figure of light, built from Cayden's turntable video: `figure-hi`, `figure-lo` and `figure-phone` (`.bin` with a `.json` describing it), exactly 60,000, 30,000 and 16,000 points, one per particle on each tier. Loaded as is, never resampled. |
+| `public/figure/` | The figure of light, built from Cayden's turntable video: `figure-hi`, `figure-lo` and `figure-phone` (`.bin` with a `.json` describing it), exactly 60,000, 30,000 and 16,000 dots, one per particle on each tier. Each dot is 10 bytes (position, normal, brightness). Loaded as is, never resampled. |
 | `public/world/` | The fallback stills of the hero scene. |
 | `public/media/previews/` | The three project preview loops, MP4 and WebM, with posters (`src/data/previews.json`). |
 | `tools/previews/` | Records the preview loops with Playwright. |
 
 ## Modes
 
-- **Reduced motion** (the device setting): no intro, no smooth scrolling, no pins; the camera and the signal cut to each section's view instead of moving; stars hold still; videos wait for Play.
+- **Reduced motion** (the device setting): no intro, no smooth scrolling, no pins; the camera and the signal cut to each section's view instead of moving, both at the middle of the section's morph; stars hold still; videos wait for Play.
 - **Snapshot** (`?snapshot`, for poster screenshots): motion off, the intro skipped, pins off, every More panel open, interface controls hidden, and the world frozen at each section's best frame. At 1440 x 900 each section is one screen, except Experience, which is four (Civic Exchange with the chart, its open More text, Wisers 2024 with the shoe, Wisers 2025 with the screen agent): scroll a section's top to the top of the window (for Experience's later screens, 900 px further each time; Contact: scroll to the bottom). The dark background is kept for print.
 - **No WebGL**: a still of the hero scene sits behind the page; every word is still there.
 
@@ -59,20 +59,20 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Sky and stars fade in from black | on load | 0 to 700 ms | `timeline.ts` (intro), `sky.ts` |
 | Windows switch on in a wave, left to right | on load | 300 to 1,900 ms | `timeline.ts`, `skyline.ts` |
 | Hero name, line and small line wipe in | on load | at 600, 950 and 1,150 ms, 600 ms each | `timeline.ts`, `Hero.astro` |
-| A tenth of the lit windows stream up into the figure, which locks in ring by ring from the crown down; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
+| A tenth of the lit windows stream up into the figure, which fills in as a scan from the crown down; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
 | The intro jumps to its end | the first scroll, touch or key | at once | `timeline.ts` |
 | The canvas fades in over the page background | when the scene is ready | 600 ms | `base.css` |
 | The camera moves along the skyline | scroll, every section | eased into each section's view, once (the long turns into Since May and Work are not eased twice); headings use capped tangents, so the camera never swings past a stop; People holds Since May's view; Wisers holds near Experience's, drifting slightly | `timeline.ts`, `camera-path.ts` |
 | Figure to current, current to columns, columns to the Wisers feed, feed to shoe, shoe to screen agent, screen agent to city, city to star field, field to two lights | scroll: Mission, Experience, Wisers (held for about 160vh), the top of Work, Since May, Contact | per point, a delay of up to 30%, curved paths, curl noise peaking mid-flight | `signal.ts` |
 | Project highlights: a brightness wave (OurCityHealth), three small clusters (AI Simply), one low-rise block (Civic AI Club) | scroll, each project | fades in and out across the stop | `skyline.ts` |
 | Each project pins while you read it | scroll, desktop | about 120vh | `timeline.ts` |
-| The hero text fades as it scrolls up toward the figure | scroll, phones | until it would reach the shoulders | `timeline.ts` |
+| The hero text fades as it scrolls up toward the figure | scroll, phones | gone before it reaches the figure's bottom edge | `timeline.ts` |
 | Smooth scrolling | always | Lenis | `timeline.ts` |
 | Stars twinkle and drift: each swings between 40% and 100% of its brightness on its own 1.5 to 4 s rhythm, and 6% flash briefly every few seconds | always | flash: a 60 ms rise and a fast fall | `sky.ts`, `stars.vert.glsl` |
 | A rare window flickers; aviation lights blink; the water ripples; a ferry crosses | always | aviation 1 s; ferry about 90 s | `skyline.ts`, `peak.ts`, `harbour.ts` |
 | The current flows, the columns rise, the field drifts | while shown | slow | `signal.ts` |
 | The view tilts slightly toward the pointer | mouse or trackpad | ±1.5° yaw, ±0.8° pitch, about 600 ms lag | `renderer.ts` |
-| The figure turns toward the pointer: its x to ±30° of yaw (the head fully, the shoulders 0.85 as far, the neck between), its y to ±5° of pitch; the hair, eyes and skin follow the video's own views, and points turning away fade | mouse or trackpad, in the hero | a spring that settles in about 600 ms with a slight overshoot | `interact.ts`, `signal.ts` |
+| The figure turns toward the pointer: its x to ±30° of yaw (the head fully, the shoulders 0.85 as far, the neck between), its y to ±5° of pitch; every dot is one colour (#EEE9E1), shaded by its own brightness and a soft key light, and dots turning away fade | mouse or trackpad, in the hero | a spring that settles in about 600 ms with a slight overshoot | `interact.ts`, `signal.ts` |
 | Dragging on the figure turns it (on phones it springs back to center on release) | drag | follows the finger; one figure width covers the whole range | `interact.ts` |
 | The figure sways 8° each way | after 3 s without input | a 6 s cycle | `interact.ts` |
 | Windows near the mouse brighten (up to 60%) and warm, like a soft spotlight | mouse or trackpad | fades over 800 ms behind the pointer | `pulse.ts`, `tower.frag.glsl` |
@@ -83,7 +83,7 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A playing project video tints the windows nearest it and the harbour reflections with its average color, up to 20% | while a video plays | sampled about 4 times a second off the main thread, eased over about 250 ms | `loop-video.ts`, `spill-worker.ts`, `spill.ts` |
 | Under the mission, a slider runs from Previously to Now and applies the three edits one by one: each old phrase is struck, its new phrase lights, its note number glows; Previously, Edits and Now move the handle (Now is the default) | drag, tap, arrow keys | short wipes as the handle passes each edit | `MissionPanel.astro`, `mission.ts` |
 | The Wisers feed drifts upward; the screen agent loops: five boxes draw around its interface, a dotted path joins them, a small cursor travels it and clicks each | while shown | the feed slowly; the agent every 6 s | `signal.ts`, `shapes/` |
-| The summer being drawn is highlighted (2024, then 2025) | scroll, Wisers | at the halfway point | `timeline.ts`, `Experience.astro` |
+| The summer being drawn is highlighted (2024, then 2025) | scroll, Wisers | 2025 from the middle of the shoe-to-screen morph | `timeline.ts`, `Experience.astro` |
 | A searchlight on the tallest Central roof sweeps the sky in a lazy figure-eight, dimming while it passes behind text; stars brighten slightly inside it | after the intro, wherever the sky shows | 14 s a loop | `lightshow.ts`, `sky.ts` |
 | A laser-pointer dot with a short tapering tail replaces the cursor; a ring over links and buttons, the normal text cursor over text | mouse or trackpad | drawn from the latest pointer event every frame; tail 180 ms | `laser.ts` |
 | A slim floor display on the right edge, like a Hong Kong lift's (G, 1 to 5, R), lights the current section; a floor is a link there | scroll, 1024px and wider | follows the section under the middle of the window | `Lift.astro`, `lift.ts` |

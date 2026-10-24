@@ -5,6 +5,8 @@
 // the world and the signal and hands them to the timeline. The world and signal modules are
 // loaded through import.meta.glob so the site still builds while they are being written.
 
+import { wisersBox, type ScreenBox, type Signal, type World } from './contract';
+
 const worldModules = import.meta.glob('./renderer.ts');
 const signalModules = import.meta.glob('./signal.ts');
 const timelineModules = import.meta.glob('./timeline.ts');
@@ -22,6 +24,26 @@ function webglAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 4.7: the searchlight never lights or slices the figure or the Wisers pictures. Every frame the
+ * world gets the figure's box while it shows and the Wisers box while Wisers is on screen.
+ */
+function keepBeamsOff(world: World, signal: Signal | null) {
+  const wisers = document.querySelector('[data-scene="wisers"]');
+  let wisersOn = false;
+  if (wisers) new IntersectionObserver(([entry]) => (wisersOn = entry.isIntersecting)).observe(wisers);
+  let wisersAt = wisersBox(window.innerWidth, window.innerHeight);
+  window.addEventListener('resize', () => (wisersAt = wisersBox(window.innerWidth, window.innerHeight)));
+  const boxes: ScreenBox[] = [];
+  world.onFrame(() => {
+    boxes.length = 0;
+    const figure = signal?.figureBox();
+    if (figure) boxes.push(figure);
+    if (wisersOn) boxes.push(wisersAt);
+    world.setBeamKeepOut?.(boxes);
+  });
 }
 
 async function boot() {
@@ -49,6 +71,7 @@ async function boot() {
         })
       : null;
     tl?.attach(world, signal);
+    keepBeamsOff(world, signal);
     html.classList.add('is-ready');
     // Pointer, tap, drag and key interactions (never in snapshot, which is a still poster).
     const loadInteract = interactModules['./interact.ts'];

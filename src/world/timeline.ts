@@ -249,14 +249,18 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   // A More toggle changes a section's height: rebuild the triggers from scratch.
   window.addEventListener('world:layout', build);
 
-  // Wisers: which summer's line is highlighted, 2024 for the first half of the section and 2025
-  // for the second, in step with the pictures (the page styles [data-beat]). Runs without WebGL.
+  // Wisers: which summer's line is highlighted, in step with the pictures (the page styles
+  // [data-beat]): 2025 from the middle of the shoe-to-screen morph, where the picture becomes the
+  // screen agent (snapshot: from its second screen). Runs without WebGL.
   const wisersIndex = scenes.findIndex((sc) => sc.key === 'wisers');
   const wisersEl = wisersIndex >= 0 ? scenes[wisersIndex].el : null;
+  const wisersMorph = BEATS.wisers.morph;
+  const lastStep = 'steps' in wisersMorph ? wisersMorph.steps[wisersMorph.steps.length - 1] : null;
+  const wisers2025 = snapshot || !lastStep ? 0.5 : (lastStep.over[0] + lastStep.over[1]) / 2;
   const markWisers = () => {
     if (!wisersEl) return;
     const { index, p } = current();
-    const beat = index < wisersIndex || (index === wisersIndex && p < 0.5) ? '2024' : '2025';
+    const beat = index < wisersIndex || (index === wisersIndex && p < wisers2025) ? '2024' : '2025';
     if (wisersEl.dataset.beat !== beat) wisersEl.dataset.beat = beat;
   };
   if (wisersEl) {
@@ -275,23 +279,34 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   }
 
   // On phones (and portrait tablets) the hero text sits under the figure, so it fades out as it
-  // scrolls up into it, and is gone before it reaches the figure's shoulders. Not in snapshot.
+  // scrolls up toward it, gone by the time the top of the text's box reaches the drawn figure's
+  // bottom edge (the glyphs start lower still, so they never touch it while visible). Snapshot
+  // too, between its poster frames.
   const heroText = document.querySelector<HTMLElement>('.hero__text');
   const heroFigure = document.querySelector<HTMLElement>('.hero__figure');
   const heroSection = document.querySelector<HTMLElement>('[data-scene="hero"]');
-  if (heroText && heroFigure && heroSection && !snapshot) {
-    const fadeDistance = () => {
-      const gap = heroText.getBoundingClientRect().top + window.scrollY - (heroFigure.getBoundingClientRect().bottom + window.scrollY);
-      return Math.max(120, gap);
+  /** The drawn figure's bottom edge in viewport px, once the signal is attached (null: not showing). */
+  let figureBottom: (() => number | null) | null = null;
+  if (heroText && heroFigure && heroSection) {
+    let textTop = 0;
+    let boxBottom = 0;
+    const measure = () => {
+      textTop = heroText.getBoundingClientRect().top + window.scrollY;
+      boxBottom = heroFigure.getBoundingClientRect().bottom + window.scrollY;
     };
+    measure();
     ScrollTrigger.create({
       trigger: heroSection,
       start: 'top top',
-      end: () => `+=${fadeDistance()}`,
-      invalidateOnRefresh: true,
+      end: '+=400',
+      onRefresh: measure,
       onUpdate: (self) => {
-        const phone = usePhoneLayout(window.innerWidth, window.innerHeight);
-        heroText.style.opacity = phone ? String(1 - self.progress) : '';
+        if (!usePhoneLayout(window.innerWidth, window.innerHeight)) {
+          heroText.style.opacity = '';
+          return;
+        }
+        const distance = Math.max(24, textTop - (figureBottom?.() ?? boxBottom));
+        heroText.style.opacity = String((1 - clamp01((self.scroll() - self.start) / distance)) ** 2);
       },
     });
   }
@@ -318,6 +333,10 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   // ---- World half ----
   function attach(world: World, signal: Signal | null) {
+    figureBottom = () => {
+      const box = signal?.figureBox();
+      return box ? box.y1 * window.innerHeight : null;
+    };
     const keys = world.cameraKeys;
     const cutting = !motion; // reduced motion and snapshot cut to keys
 
@@ -366,7 +385,13 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
       // Camera: arrive at this scene's key over the first part of the scene.
       let a = beat.arrive > 0 ? span(p, 0, beat.arrive) : 1;
-      if (cutting) a = snapshot || a >= 0.5 ? 1 : 0;
+      if (cutting) {
+        // Cut the camera with the picture: at the morph's midpoint, where the signal cuts, so
+        // there's never a stretch with neither picture in frame.
+        const first = 'over' in beat.morph ? beat.morph : 'steps' in beat.morph ? beat.morph.steps[0] : null;
+        const cutAt = first ? (first.over[0] + first.over[1]) / 2 : beat.arrive / 2;
+        a = snapshot || p >= cutAt ? 1 : 0;
+      }
       world.setCameraProgress(lerp(keys[prevKey], keys[beat.key], easeInOut(a)));
 
       // Highlight for the project stops.

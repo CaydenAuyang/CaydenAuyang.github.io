@@ -17,14 +17,13 @@ in vec4 position;
 in vec4 aTo;
 in vec4 aRand; // x delay key, y size, z path, w phase (and D strays: w < uStray)
 in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest), w archive column 1 to 12 (0: a stray)
-// The figure (B), point i of the video-built set (site-handoff/figure-video): its position in
-// figure heights (y up from the crop line, the yaw axis at x = z = 0, z toward the viewer), its
-// horizontal surface normal, and the video's brightness at head yaw -30 to +30 in 10 degree steps.
+// The figure (B), dot i of the video-built set (site-handoff/figure-video): its position in figure
+// heights (y up from the bust's bottom edge, the yaw axis at x = z = 0, z toward the viewer), its
+// surface normal and its own brightness.
 in vec4 aShape; // the screen agent's loop (G): role (0 still, 1 box, 2 path, 3 cursor, 4 ripple) and its parameters
 in vec3 aFigPos;
-in vec2 aFigN;
-in vec4 aFigViewA;
-in vec3 aFigViewB;
+in vec3 aFigN;
+in float aFigB;
 
 uniform int uFrom;
 uniform int uTo;
@@ -62,8 +61,8 @@ uniform float uLightR;
 // Figure (B): its frame in the world (the base centre, and the axes scaled to its height), the
 // turn (setFigureTurn: yaw, positive turning the face to screen right; pitch, positive up), the
 // heights where the neck blends the head's turn into the shoulders', how far the shoulders turn
-// against the head, its point size (CSS px), its brightness, and the scan (1 into the figure,
-// crown first; -1 out of it, chest first; 0 neither).
+// against the head, its dot size (CSS px), brightness and colour, and the scan (1 into the
+// figure, crown first; -1 out of it, shoulders first; 0 neither).
 uniform vec3 uFigOrigin;
 uniform mat3 uFigBasis;
 uniform float uFigYaw;
@@ -73,7 +72,7 @@ uniform float uFigYNeckBase;
 uniform float uFigTorsoRatio;
 uniform float uFigDot;
 uniform float uFigGain;
-uniform float uFigCore; // the figure's white core, low so its skin stays amber and its T-shirt dark
+uniform vec3 uFigColor;
 uniform float uScan;
 // The Wisers pictures (F1, F2, G): the box's centre and its axes in the world (one box height
 // each), the point size of each picture (CSS px), their brightness, the feed's loop (its lowest v,
@@ -99,10 +98,10 @@ out float vAlpha;
 out float vCore;
 out float vDot; // 1 for the figure's points (a crisp, even disc), 0 for the rest
 
-const vec3 FIG_WINDOW = vec3(1.0, 0.714, 0.361); // #FFB65C
-const vec3 FIG_COOL = vec3(0.812, 0.890, 1.0); // #CFE3FF
-const float SCAN = 0.35;
-const float SCAN_JITTER = 0.04;
+const float SCAN = 0.3;
+const float SCAN_JITTER = 0.1;
+// The figure's soft key light, from the upper left (figure-video/figure-loader.ts).
+const vec3 FIG_KEY = vec3(-0.3392, 0.4361, 0.8338);
 
 // ---- Simplex noise with its gradient (Stefan Gustavson and Ian McEwan, webgl-noise, MIT) -------
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -212,31 +211,26 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out ve
     return b.xyz;
   }
   if (k == 1) {
-    // Figure (figure-video/README.md). The head turns fully, the shoulders at uFigTorsoRatio of
-    // it, and the neck blends between them; then the pitch, about (y 0.5, z 0). No jitter and one
-    // size for every point: the even lattice of rings is the look.
+    // Figure (figure-video/README.md and figure-loader.ts). The head turns fully, the shoulders at
+    // uFigTorsoRatio of it, and the neck blends between them; then the pitch, about (y 0.5, z 0).
+    // One colour, each dot's own brightness under a soft key light, and dots turning away fade.
     float headT = smoothstep(uFigYNeckBase, uFigYChin, aFigPos.y);
     float a = uFigYaw * mix(uFigTorsoRatio, 1.0, headT);
     float c = cos(a);
     float s = sin(a);
     vec3 q = vec3(aFigPos.x * c + aFigPos.z * s, aFigPos.y, -aFigPos.x * s + aFigPos.z * c);
-    float facing = -aFigN.x * s + aFigN.y * c;
+    vec3 n = vec3(aFigN.x * c + aFigN.z * s, aFigN.y, -aFigN.x * s + aFigN.z * c);
     float cp = cos(uFigPitch);
     float sp = sin(uFigPitch);
     vec2 yz = vec2(q.y - 0.5, q.z);
     q.y = 0.5 + yz.x * cp - yz.y * sp;
     q.z = yz.x * sp + yz.y * cp;
-    // Brightness from the video at the 7 head angles, cross-faded as he turns.
-    float tv = clamp((degrees(uFigYaw) + 30.0) / 10.0, 0.0, 6.0);
-    float v = aFigViewA.x * max(0.0, 1.0 - abs(tv)) + aFigViewA.y * max(0.0, 1.0 - abs(tv - 1.0)) + aFigViewA.z * max(0.0, 1.0 - abs(tv - 2.0)) + aFigViewA.w * max(0.0, 1.0 - abs(tv - 3.0)) + aFigViewB.x * max(0.0, 1.0 - abs(tv - 4.0)) + aFigViewB.y * max(0.0, 1.0 - abs(tv - 5.0)) + aFigViewB.z * max(0.0, 1.0 - abs(tv - 6.0));
-    // Skin in window; the dark points are hair, brows and eyes on the head (cool) and the T-shirt
-    // below the neck (dim window).
-    float dark = 1.0 - smoothstep(0.28, 0.52, v);
-    float head = smoothstep(uFigYNeckBase - 0.02, uFigYNeckBase + 0.02, aFigPos.y);
-    vec3 skin = FIG_WINDOW * (0.78 + 0.22 * smoothstep(0.55, 0.85, v));
-    col = mix(skin, mix(FIG_WINDOW * 0.24, FIG_COOL * 0.55, head), dark);
-    // Points turning away fade out; points along the outline glow a little brighter.
-    alpha = smoothstep(-0.25, 0.15, facing) * (0.7 + 0.3 * (1.0 - clamp(facing, 0.0, 1.0))) * uFigGain * b.w;
+    vec2 nyz = n.yz;
+    n.y = nyz.x * cp - nyz.y * sp;
+    n.z = nyz.x * sp + nyz.y * cp;
+    float lam = clamp(dot(n, FIG_KEY), 0.0, 1.0);
+    col = uFigColor * aFigB * (0.35 + 0.65 * lam);
+    alpha = smoothstep(-0.2, 0.25, n.z) * uFigGain * b.w;
     return uFigOrigin + uFigBasis * q;
   }
   if (k == 2) {
@@ -281,17 +275,25 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out ve
     return p;
   }
   if (k >= 6) {
-    // The Wisers pictures: colour class and brightness from w.
-    float cls = floor(b.w + 1e-4);
+    // The Wisers pictures: w is 4 * (offset + 512) + the colour class + the brightness, where the
+    // offset (feed only) is the point's height above its card's centre in thousandths of the box.
+    float fw = floor(b.w + 1e-4);
+    float cls = mod(fw, 4.0);
     col = classColor(cls);
-    alpha = (b.w - cls) * uPicGain;
+    alpha = (b.w - fw) * uPicGain;
     vec3 p = b.xyz;
     if (k == 6) {
-      // F1, the feed: it scrolls up like a feed, looping, and fades at the box's top and bottom.
+      // F1, the feed: it scrolls up like a feed, looping. Each card fades in and out as a whole
+      // by where its centre is (so no stray edge of a card floats alone at the top or bottom),
+      // and nothing draws outside the box.
       float v = dot(b.xyz - uPicOrigin, uPicY) / dot(uPicY, uPicY);
-      float v2 = uFeed.x + mod(v + t * uFeed.z - uFeed.x, uFeed.y);
+      float dv = (floor(fw / 4.0) - 512.0) / 1000.0;
+      float vc = v - dv;
+      float vc2 = uFeed.x + mod(vc + t * uFeed.z - uFeed.x, uFeed.y);
+      float v2 = vc2 + dv;
       p = b.xyz + uPicY * (v2 - v);
-      fade = smoothstep(-0.5, -0.5 + uFeed.w, v2) * (1.0 - smoothstep(0.5 - uFeed.w, 0.5, v2));
+      float card = smoothstep(-0.5, -0.5 + uFeed.w, vc2) * (1.0 - smoothstep(0.5 - uFeed.w, 0.5, vc2));
+      fade = card * step(-0.5, v2) * step(v2, 0.5);
       alpha *= fade;
     } else if (k == 8) {
       // G, the screen agent's 6 s loop: five boxes draw in one after another (the screen being
@@ -337,8 +339,8 @@ float easeInOut(float p) {
 
 void main() {
   // Per-point progress: a delay of up to 30% of the transition, then 70% to travel. Into and out
-  // of the figure, a scan instead: its rings lock in from the crown down (and leave chest first)
-  // with only a whisper of randomness.
+  // of the figure, a scan instead: it gathers from the crown down and leaves from the shoulders
+  // up, with a little randomness.
   float key = mix(aRand.x, aInfo.y, uDelaySrc);
   key = mix(key, 1.0 - key, uDelayFlip);
   float p = clamp((uT - 0.3 * key) / 0.7, 0.0, 1.0);
@@ -391,14 +393,14 @@ void main() {
     flight = sin(3.14159265 * e);
     // Each point reads the noise a little off its neighbours' (aRand), so a long hold mid-flight
     // can't fold the cloud into a bright seam where the drifting field steepens.
-    // Low into and out of the figure (30%), so its rings land cleanly.
-    float curlK = (uFrom == 1 || uTo == 1) ? 0.3 : (uFrom >= 6 || uTo >= 6) ? 0.6 : 1.0;
+    // Low into and out of the figure (20% in, 30% out), so it lands cleanly.
+    float curlK = uTo == 1 ? 0.2 : uFrom == 1 ? 0.3 : (uFrom >= 6 || uTo >= 6) ? 0.6 : 1.0;
     pos += curl(pos * (2.2 / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7) + (aRand.zxw - 0.5) * 0.3) * min(L, uScale * 0.6) * 0.16 * flight * curlK;
   }
 
-  // Brightness through the flight. Leaving the city, a point brightens quickly as its window
-  // dims; arriving, it fades just before it lands.
-  float alpha = mix(aF, aT, e);
+  // Brightness through the flight. Leaving the figure, a point settles to its target's brightness
+  // early (so the current doesn't flare as the figure's light lands on its thin band).
+  float alpha = mix(aF, aT, uFrom == 1 && uTo != 1 ? smoothstep(0.0, 0.6, e) : e);
   // Leaving the city, a point carries its window's light up through the flight (it brightens
   // quickly as its window dims) and settles to the target's own brightness near the end, so the
   // city visibly gives its light to the sky even where the target is sparse (the field). Coming
@@ -429,11 +431,13 @@ void main() {
   vAlpha = alpha;
   // One core for every point in the figure; elsewhere each point's own.
   float core = 0.55 + 0.45 * aRand.y;
-  // The figure and the Wisers pictures are tidy lattices of crisp, even dots.
+  // The figure and the Wisers pictures are crisp, even dots: the figure in one colour with no
+  // white core, the pictures with a faint one.
   bool tidyF = uFrom == 1 || uFrom >= 6;
   bool tidyT = uTo == 1 || uTo >= 6;
-  vCore = mix(tidyF ? uFigCore : core, tidyT ? uFigCore : core, e);
+  vCore = mix(uFrom == 1 ? 0.0 : tidyF ? 0.3 : core, uTo == 1 ? 0.0 : tidyT ? 0.3 : core, e);
   vDot = mix(tidyF ? 1.0 : 0.0, tidyT ? 1.0 : 0.0, e);
+
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   if (alpha < 0.002) {
@@ -444,7 +448,7 @@ void main() {
   }
   gl_Position = projectionMatrix * mv;
   // 1.5 to 3.5 CSS px: bigger for brighter points and for nearer ones, a little bigger in flight.
-  // The figure's points are all one size (its rings' spacing on screen times FIGURE_DOT).
+  // The figure's dots are all one size.
   float px = mix(1.5, 3.1, clamp(0.35 * aRand.y + 0.65 * min(alpha / max(uGain, 1e-3), 1.0), 0.0, 1.0));
   px = clamp(px * clamp(uScale / max(-mv.z, 1.0), 0.75, 1.4) * (1.0 + 0.15 * flight), 1.5, 3.5);
   float pxF = uFrom == 1 ? uFigDot : uFrom >= 6 ? uPicDot[uFrom - 6] : px * sF;

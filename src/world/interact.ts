@@ -106,7 +106,8 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   const canTurn = typeof signal?.setFigureTurn === 'function';
 
   const applyTurn = () => {
-    if (canTurn) signal!.setFigureTurn(turn.yaw, turn.pitch);
+    // The spring overshoots a little; the figure itself never turns past +-30 or tilts past 5.
+    if (canTurn) signal!.setFigureTurn(clamp(turn.yaw, -MAX_YAW, MAX_YAW), clamp(turn.pitch, -MAX_PITCH, MAX_PITCH));
   };
 
   if (canTurn && motion) {
@@ -317,8 +318,18 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     const box = insideFigure(e.clientX, e.clientY);
     if (box) {
       drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: turn.yaw, pitch: turn.pitch, width: Math.max(80, (box.x1 - box.x0) * window.innerWidth) };
+      // A press on the figure clears any old selection, as a press on the page would (the drag
+      // itself cancels selectstart below, which would otherwise keep it).
+      document.getSelection()?.removeAllRanges();
     }
   });
+
+  // Turning the figure by dragging never selects the hero text it passes over (or autoscrolls).
+  const noSelect = (e: Event) => {
+    if (drag) e.preventDefault();
+  };
+  document.addEventListener('selectstart', noSelect);
+  off.push(() => document.removeEventListener('selectstart', noSelect));
 
   const endDrag = () => {
     if (!drag) return;

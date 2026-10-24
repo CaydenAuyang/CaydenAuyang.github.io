@@ -18,15 +18,14 @@
 //
 // The figure (target B, NIGHT-SIGNAL.md 5 B and 5.1) is built from Cayden's video:
 // public/figure/figure-{hi|lo|phone}.bin (format in its .json; see site-handoff/figure-video).
-// Each file has exactly as many points as its tier, so figure point i is particle i: no
-// resampling, jitter or re-weighting, because the even lattice of horizontal rings is the look.
-// The shader places, turns (setFigureTurn: the head fully, the shoulders at 0.85, the neck
-// blended) and shades it (facing, and the video's brightness at 7 head angles), and assembles it
-// as a scan from the crown down.
+// Each file has exactly as many dots as its tier, so figure dot i is particle i: no resampling,
+// jitter or re-weighting. The shader places, turns (setFigureTurn: the head fully, the shoulders
+// at 0.85, the neck blended) and lights it (one colour, each dot's own brightness and a soft key
+// light; dots turning away fade), and assembles it as a scan from the crown down.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, LinearSRGBColorSpace, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
-import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout, WISERS_ANCHOR } from './contract';
+import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, SHORT_PHONE_HEIGHT, usePhoneLayout, WISERS_ANCHOR } from './contract';
 import { AGENT, agentKnots, buildFeed, buildScreen, buildShoe, FEED, ROLE, type Picture } from './shapes/wisers';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
@@ -54,16 +53,19 @@ const MAX_YAW = (30 * Math.PI) / 180;
 const MAX_PITCH = (5 * Math.PI) / 180;
 /** Figure points sampled for figureBox (an even sample, so the box follows the outline). */
 const BOX_SAMPLES = 1500;
-/** The figure is never shorter than this on desktop (CSS px), or its rings moire. */
+/** The figure is never shorter than this on desktop (CSS px). */
 const FIGURE_MIN_PX = 350;
-/** Point size in the figure, as a share of the spacing between its rings on screen (about 1.6 px on a 450 px tall hi figure). */
-const FIGURE_DOT = 0.95;
-/** The figure's brightness and white core against the preview renders (figure-video/preview), tuned by measurement. */
-const FIGURE_GAIN = 1.25;
-const FIGURE_CORE = 0.3;
-/** Scan assembly: how much of a morph into or out of the figure its rings take to lock in, and the whisper of randomness. */
-const SCAN = 0.35;
-const SCAN_JITTER = 0.04;
+/**
+ * Every figure dot is one size. The reference renders use about 1.6 to 2 px on a 600 px tall
+ * figure, so the dot scales with the figure's height on the canvas to keep that density on
+ * high-density screens too (about 2.4 canvas px on a Retina laptop, up to 3.2 on a 5K screen).
+ */
+const FIGURE_DOT = { perHeight: 0.0031, min: 1.6, max: 3.2 };
+/** The figure's brightness against the reference renders (figure-video/preview). */
+const FIGURE_GAIN = 1;
+/** Scan assembly (figure-video/figure-loader.ts): how much of a morph into or out of the figure the scan takes, and its randomness. */
+const SCAN = 0.3;
+const SCAN_JITTER = 0.1;
 /** Screen row (from the top) of the current's center in the question view: open water, below the reflections. */
 const CURRENT_ROW = 0.8;
 /** Archive highlight (11b.3): how long a column takes to light or dim (the shader doubles a lit column and dims the rest to 38%). */
@@ -140,28 +142,27 @@ interface FigureMeta {
   yChin: number;
   yNeckBase: number;
   torsoYawRatio: number;
+  color: string;
 }
 
 interface FigureData {
   meta: FigureMeta;
   count: number;
-  position: Float32Array; // 3 a point: figure height 1, y up from the crop line, yaw axis at x = z = 0, z toward the viewer
-  normalXZ: Float32Array; // 2 a point: the horizontal surface normal
-  viewA: Uint8Array; // 4 a point: the video's brightness at head yaw -30, -20, -10, 0
-  viewB: Uint8Array; // 3 a point: at +10, +20, +30
-  ringStep: number; // the spacing between rings, in figure heights
+  position: Float32Array; // 3 a dot: figure height 1, y up from the bust's bottom edge, yaw axis at x = z = 0, z toward the viewer
+  normal: Float32Array; // 3 a dot
+  brightness: Uint8Array; // 1 a dot (0..255)
 }
 
 const FIGURE_FILES = { hi: 60000, lo: 30000, phone: 16000 } as const;
 type FigureTier = keyof typeof FIGURE_FILES;
 
 /**
- * Loads the video-built figure from a folder. The file is the one with exactly as many points as
- * the tier has particles (hi 60,000, lo 30,000, phone 16,000), falling back to the tier's name.
- * The old single-file path (anything ending in .bin or .json) means the default folder, /figure.
+ * Loads the video-built figure from a folder: the file with exactly as many dots as the tier has
+ * particles (hi 60,000, lo 30,000, phone 16,000), falling back to the tier's name. 10 bytes a
+ * dot: positions (Int16 x 3), normals (Int8 x 3), brightness (Uint8), block after block.
  */
 async function loadFigure(url: string, count: number, tier: string): Promise<FigureData> {
-  const base = /\.(bin|json)(\?|$)/.test(url) ? '/figure' : url.replace(/\/+$/, '');
+  const base = url.replace(/\/+$/, '');
   const byCount = (Object.keys(FIGURE_FILES) as FigureTier[]).find((k) => FIGURE_FILES[k] === count);
   const name: FigureTier = byCount ?? (tier === 'phone' ? 'phone' : tier === 'low' ? 'lo' : 'hi');
   const metaRes = await fetch(`${base}/figure-${name}.json`);
@@ -171,18 +172,14 @@ async function loadFigure(url: string, count: number, tier: string): Promise<Fig
   if (!binRes.ok) throw new Error(`signal: ${base}/${meta.file} answered ${binRes.status}`);
   const buf = await binRes.arrayBuffer();
   const n = meta.count;
-  if (buf.byteLength !== 16 * n) throw new Error(`signal: ${meta.file} should be ${16 * n} bytes, not ${buf.byteLength}`);
+  if (buf.byteLength !== 10 * n) throw new Error(`signal: ${meta.file} should be ${10 * n} bytes, not ${buf.byteLength}`);
   const p16 = new Int16Array(buf, 0, 3 * n);
   const position = new Float32Array(3 * n);
   for (let i = 0; i < 3 * n; i++) position[i] = p16[i] * meta.posScale;
-  const n8 = new Int8Array(buf, 6 * n, 2 * n);
-  const normalXZ = new Float32Array(2 * n);
-  for (let i = 0; i < 2 * n; i++) normalXZ[i] = n8[i] / 127;
-  // Ring spacing: the median step between the distinct heights of the rings.
-  const heights = Array.from(new Set(Array.from(p16.filter((_, k) => k % 3 === 1)))).sort((a, b) => b - a);
-  const steps = heights.slice(1).map((h, k) => (heights[k] - h) * meta.posScale).sort((a, b) => a - b);
-  const ringStep = steps.length ? steps[steps.length >> 1] : 1 / 200;
-  return { meta, count: n, position, normalXZ, viewA: new Uint8Array(buf, 8 * n, 4 * n), viewB: new Uint8Array(buf, 12 * n, 3 * n), ringStep };
+  const n8 = new Int8Array(buf, 6 * n, 3 * n);
+  const normal = new Float32Array(3 * n);
+  for (let i = 0; i < 3 * n; i++) normal[i] = n8[i] / 127;
+  return { meta, count: n, position, normal, brightness: new Uint8Array(buf, 9 * n, n) };
 }
 
 // ---- Small helpers -----------------------------------------------------------------------------
@@ -292,10 +289,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   let rMax = 0;
   for (let k = 0; k < used; k++) rMax = Math.max(rMax, wRank[byRank[k]]);
 
-  // ---- The figure: particle i is figure point i (its points are ordered ring by ring from the
-  // crown down). Windows are handed out in rank order, so the order the windows dim in follows the
-  // scan (crown first); within each of 48 slices of a few rings, windows on the left feed the left
-  // of the figure, so the light mostly rises instead of criss-crossing.
+  // ---- The figure: particle i is figure dot i (its dots are ordered from the top of the hair
+  // down). Windows are handed out in rank order, so the order the windows dim in follows the scan
+  // (crown first); within each of 48 slices, windows on the left feed the left of the figure, so
+  // the light mostly rises instead of criss-crossing.
   const F = fig.count;
   const figX = (i: number) => (i < F ? fig.position[i * 3] : 0);
   {
@@ -323,25 +320,23 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   }
 
   // The figure's own attributes. Particles beyond the figure's count (only if a tier and its file
-  // disagree) sit below the crop line, unlit.
+  // disagree) sit below the bust, unlit.
   const aFigPos = new Float32Array(N * 3);
-  const aFigN = new Float32Array(N * 2);
-  const aFigViewA = new Uint8Array(N * 4);
-  const aFigViewB = new Uint8Array(N * 3);
+  const aFigN = new Float32Array(N * 3);
+  const aFigB = new Uint8Array(N);
   for (let i = 0; i < N; i++) {
     if (i < F) {
       aFigPos.set(fig.position.subarray(i * 3, i * 3 + 3), i * 3);
-      aFigN.set(fig.normalXZ.subarray(i * 2, i * 2 + 2), i * 2);
-      aFigViewA.set(fig.viewA.subarray(i * 4, i * 4 + 4), i * 4);
-      aFigViewB.set(fig.viewB.subarray(i * 3, i * 3 + 3), i * 3);
+      aFigN.set(fig.normal.subarray(i * 3, i * 3 + 3), i * 3);
+      aFigB[i] = fig.brightness[i];
     } else {
       aFigPos[i * 3 + 1] = -10;
     }
   }
 
   // Window dimming that follows the scan: when each particle leaves for the figure (crown first)
-  // and lands back from it (chest first), and its window's rank, sorted by time. The scan delays
-  // match the shader's: SCAN * (1 - y) + SCAN_JITTER * aRand.x into the figure, SCAN * y + ... out.
+  // and lands back from it (shoulders first), and its window's rank, sorted by time. The scan
+  // delays match the shader's: SCAN * (1 - y) + SCAN_JITTER * aRand.x into the figure, SCAN * y + ... out.
   const travel = 1 - SCAN - SCAN_JITTER;
   const scanIn = { t: new Float32Array(N), rank: new Float32Array(N) };
   const scanOut = { t: new Float32Array(N), rank: new Float32Array(N) };
@@ -481,9 +476,11 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uFigYChin: { value: fig.meta.yChin },
     uFigYNeckBase: { value: fig.meta.yNeckBase },
     uFigTorsoRatio: { value: fig.meta.torsoYawRatio },
-    uFigDot: { value: 1.5 },
+    uFigDot: { value: FIGURE_DOT.min },
     uFigGain: { value: FIGURE_GAIN },
-    uFigCore: { value: FIGURE_CORE },
+    // #EEE9E1 exactly: the canvas has no output conversion, so the hex goes in as is (a plain
+    // Color would convert it to linear and show it darker and beige).
+    uFigColor: { value: new Color().setHex(parseInt((fig.meta.color || '#EEE9E1').slice(1), 16), LinearSRGBColorSpace) },
     uScan: { value: 0 },
     uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
     uCarryMix: { value: (world.tier.tier === 'phone' ? CARRY_MIX.phone : CARRY_MIX.desktop).slice() },
@@ -504,7 +501,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     turn.yaw = yaw;
     turn.pitch = pitch;
     uniforms.uFigYaw.value = yaw;
-    uniforms.uFigPitch.value = pitch;
+    // The contract's positive pitch tilts the face up; figure-loader.ts's uFigPitch tilts it down.
+    uniforms.uFigPitch.value = -pitch;
   }
 
   const info: SignalInfo = { windows: used, liftRank: rMax, pointsPerWindow: N / used, figurePoints: F, phone: false, scale: 1 };
@@ -549,21 +547,55 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
 
     // ---- B: the figure at FIGURE_ANCHOR through the hero pose, facing the camera, at its true
     // depth, never under FIGURE_MIN_PX tall on desktop. Only its frame is set here; the shader
-    // places each point from its own attributes. tB holds the unturned positions (for reference).
+    // places each dot from its own attributes. tB holds the unturned positions (for reference).
+    // Perspective makes the parts nearer the camera (the shirt, the face) a little larger, so the
+    // frame is fitted until the figure's outline on screen, facing front, spans the anchor exactly.
     {
       const anchor = phone ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
       const D = S;
       const heightPx = phone ? anchor.height * H : Math.max(anchor.height * H, FIGURE_MIN_PX);
-      const center = unproject(hero, anchor.x, anchor.y, D);
-      const height = (heightPx / H) * 2 * D * hero.tanHalf;
-      const z = new Vector3().subVectors(hero.pos, center).normalize();
-      const x = new Vector3().crossVectors(hero.up, z).normalize();
-      const y = new Vector3().crossVectors(z, x);
+      const want = { top: anchor.y - (heightPx / H) / 2, bottom: anchor.y + (heightPx / H) / 2 };
+      let cy = anchor.y;
+      let hs = heightPx / H;
+      let center = new Vector3();
+      let height = 1;
+      const x = new Vector3();
+      const y = new Vector3();
+      const z = new Vector3();
+      for (let pass = 0; pass < 2; pass++) {
+        center = unproject(hero, anchor.x, cy, D);
+        height = hs * 2 * D * hero.tanHalf;
+        z.subVectors(hero.pos, center).normalize();
+        x.crossVectors(hero.up, z).normalize();
+        y.crossVectors(z, x);
+        // The outline's top and bottom on screen, from an even sample of the dots.
+        let top = Infinity;
+        let bottom = -Infinity;
+        for (const k of boxIdx) {
+          const fx = fig.position[k * 3];
+          const fy = fig.position[k * 3 + 1] - 0.5;
+          const fz = fig.position[k * 3 + 2];
+          _v.copy(center).addScaledVector(x, fx * height).addScaledVector(y, fy * height).addScaledVector(z, fz * height).sub(hero.pos);
+          const depth = _v.dot(hero.fwd);
+          const sy = 0.5 - (_v.dot(hero.up) / (depth * hero.tanHalf)) * 0.5;
+          top = Math.min(top, sy);
+          bottom = Math.max(bottom, sy);
+        }
+        hs *= (want.bottom - want.top) / Math.max(1e-6, bottom - top);
+        cy += (want.top + want.bottom) / 2 - (top + bottom) / 2;
+      }
+      center = unproject(hero, anchor.x, cy, D);
+      height = hs * 2 * D * hero.tanHalf;
+      z.subVectors(hero.pos, center).normalize();
+      x.crossVectors(hero.up, z).normalize();
+      y.crossVectors(z, x);
       // The anchor is the figure's centre; its base (y = 0) sits half a height below.
       figFrame.origin.copy(center).addScaledVector(y, -0.5 * height);
       figFrame.basis.set(x.x * height, y.x * height, z.x * height, x.y * height, y.y * height, z.y * height, x.z * height, y.z * height, z.z * height);
       figFrame.height = height;
-      uniforms.uFigDot.value = FIGURE_DOT * fig.ringStep * heightPx;
+      // uFigDot is in CSS px (the shader multiplies by the pixel ratio); the size is set in canvas px.
+      const ratio = world.renderer.getPixelRatio();
+      uniforms.uFigDot.value = clamp(FIGURE_DOT.perHeight * heightPx * ratio, FIGURE_DOT.min, FIGURE_DOT.max) / ratio;
       const t = T[1];
       const o = figFrame.origin;
       for (let i = 0; i < N; i++) {
@@ -665,13 +697,14 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- F1, F2, G: the Wisers pictures inside WISERS_ANCHOR through the wisers pose (the
-    // experience pose if the world has no wisers key), on a plane facing the camera in front of
-    // the towers.
+    // ---- F1, F2, G: the Wisers pictures inside WISERS_ANCHOR (phoneShort on short phones)
+    // through the wisers pose (the experience pose if the world has no wisers key), on a plane
+    // facing the camera in front of the towers.
     {
       const pose = world.getCameraPose(keys.wisers ?? keys.experience);
       const f = frameOf(pose, aspect);
-      const anchor = phone ? WISERS_ANCHOR.phone : WISERS_ANCHOR.desktop;
+      // Short phones give the held Wisers text more of the screen, so the pictures sit higher and smaller.
+      const anchor = !phone ? WISERS_ANCHOR.desktop : H < SHORT_PHONE_HEIGHT ? WISERS_ANCHOR.phoneShort : WISERS_ANCHOR.phone;
       const depth = Math.max(depthOf(f, cluster) * PICTURE_DEPTH, S * 0.1);
       const unit = 2 * f.tanHalf * depth * anchor.height; // world length of one box height
       const origin = unproject(f, anchor.x, anchor.y, depth);
@@ -709,8 +742,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
           t[i * 4] = origin.x + X.x * q.u + Y.x * q.v;
           t[i * 4 + 1] = origin.y + X.y * q.u + Y.y * q.v;
           t[i * 4 + 2] = origin.z + X.z * q.u + Y.z * q.v;
-          // w: the colour class plus the brightness (0 to 0.99).
-          t[i * 4 + 3] = q.cls + (own ? Math.min(0.99, q.alpha) : 0);
+          // w: 4 * (offset + 512) + the colour class + the brightness (0 to 0.99), where the offset
+          // (the feed only) is the point's height above its card's centre in thousandths of the box.
+          const offset = n === 0 ? clamp(Math.round(q.p1 * 1000), -500, 500) + 512 : 0;
+          t[i * 4 + 3] = 4 * offset + q.cls + (own ? Math.min(0.99, q.alpha) : 0);
           if (ID.F1 + n === ID.G) {
             aShape[i * 4] = own ? q.role : ROLE.still;
             aShape[i * 4 + 1] = q.p1;
@@ -808,9 +843,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   shapeAttr = new BufferAttribute(aShape, 4);
   geometry.setAttribute('aShape', shapeAttr);
   geometry.setAttribute('aFigPos', new BufferAttribute(aFigPos, 3));
-  geometry.setAttribute('aFigN', new BufferAttribute(aFigN, 2));
-  geometry.setAttribute('aFigViewA', new BufferAttribute(aFigViewA, 4, true));
-  geometry.setAttribute('aFigViewB', new BufferAttribute(aFigViewB, 3, true));
+  geometry.setAttribute('aFigN', new BufferAttribute(aFigN, 3));
+  geometry.setAttribute('aFigB', new BufferAttribute(aFigB, 1, true));
 
   const material = new RawShaderMaterial({
     glslVersion: GLSL3,
@@ -828,6 +862,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   points.renderOrder = 10;
   points.name = 'signal';
   world.scene.add(points);
+
   // Compile the program now so the first frame that shows the signal doesn't stall.
   world.scene.add(arc.mesh);
   arc.mesh.visible = true;
@@ -867,15 +902,12 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     } else if (pf || pt) {
       // A picture to the city or back: only the picture's particles move.
       amount = LIFT_AMOUNT;
+      // Their delays are random, so the windows follow the share that has landed (or left), in
+      // rank order.
       const toCity = to === 'A';
       if (!motion) maxRank = (toCity ? t < 0.5 : t >= 0.5) ? rPic : 0;
-      else if (toCity) {
-        const k = 1 - (t - (1 - DELAY) * (1 - LIFT_LAG)) / DELAY;
-        maxRank = k > 0 ? Math.min(rPic, k >= 1 ? full : rMax * k) : 0;
-      } else {
-        const k = (t - (1 - DELAY) * LIFT_LAG) / DELAY;
-        maxRank = k > 0 ? Math.min(rPic, k >= 1 ? full : rMax * k) : 0;
-      }
+      else if (toCity) maxRank = rPic * clamp(1 - (t - (1 - DELAY) * (1 - LIFT_LAG)) / DELAY, 0, 1);
+      else maxRank = rPic * clamp((t - (1 - DELAY) * LIFT_LAG) / DELAY, 0, 1);
       if (maxRank === 0) amount = 0;
     } else if (from !== 'A' && to !== 'A') {
       maxRank = full;
@@ -895,7 +927,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
         amount = LIFT_AMOUNT;
       }
     } else if (to === 'A' && from === 'B') {
-      // Back from the figure, chest first: windows stay dim while any of their particles is out.
+      // Back from the figure, shoulders first: windows stay dim while any of their particles is out.
       const k = after(scanOut.t, t);
       if (k < N) {
         maxRank = scanOut.rank[k] + 1e-5;
@@ -930,9 +962,14 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     u.uFrom.value = ID[from];
     u.uTo.value = ID[to];
     u.uT.value = t;
-    // Into the figure the rings lock in from the crown down; out of it, chest first.
+    // Into the figure the scan runs from the crown down; out of it, from the shoulders up.
     u.uScan.value = to === 'B' && from !== 'B' ? 1 : from === 'B' && to !== 'B' ? -1 : 0;
-    if (from === 'A' && to !== 'A') {
+    if ((from === 'A' && isPicture(to)) || (to === 'A' && isPicture(from))) {
+      // A picture to the city or back: the visible 30% random stagger, so the drawing breaks up
+      // (or gathers) gradually instead of all at once.
+      u.uDelaySrc.value = 0;
+      u.uDelayFlip.value = 0;
+    } else if (from === 'A' && to !== 'A') {
       u.uDelaySrc.value = 1;
       u.uDelayFlip.value = 0;
     } else if (to === 'A' && from !== 'A') {
@@ -1082,8 +1119,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       const e = figFrame.basis.elements; // column major
       const o = figFrame.origin;
       const { yChin, yNeckBase, torsoYawRatio } = fig.meta;
-      const cp = Math.cos(turn.pitch);
-      const sp = Math.sin(turn.pitch);
+      // The same tilt the shader draws (uFigPitch is the contract's pitch negated; setTurn).
+      const cp = Math.cos(-turn.pitch);
+      const sp = Math.sin(-turn.pitch);
       let x0 = Infinity;
       let y0 = Infinity;
       let x1 = -Infinity;

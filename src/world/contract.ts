@@ -105,6 +105,12 @@ export const WISERS_ANCHOR = {
 /** Below this window height (CSS px) phones use WISERS_ANCHOR.phoneShort. */
 export const SHORT_PHONE_HEIGHT = 800;
 
+/** The Wisers box for a window size, as a ScreenBox (viewport fractions). */
+export function wisersBox(width: number, height: number): ScreenBox {
+  const a = !usePhoneLayout(width, height) ? WISERS_ANCHOR.desktop : height < SHORT_PHONE_HEIGHT ? WISERS_ANCHOR.phoneShort : WISERS_ANCHOR.phone;
+  return { x0: a.x - a.width / 2, y0: a.y - a.height / 2, x1: a.x + a.width / 2, y1: a.y + a.height / 2 };
+}
+
 /** The two lights (target E) at the contact key. Pomfret is west, so it sits on the left. */
 export const LIGHT_ANCHORS = {
   pomfret: { x: 0.14, y: 0.3 },
@@ -208,6 +214,12 @@ export interface World {
   lightShow(on: boolean): void;
   /** Whether a light show is running (or still fading out). */
   readonly lightShowOn: boolean;
+  /**
+   * 4.7 Screen boxes (viewport fractions) the searchlight beams fade out inside, feathered, so the
+   * figure and the Wisers pictures are never lit or sliced by a beam. The lead sets them every
+   * frame: the figure's box while it shows, the Wisers box while Wisers is on screen. [] clears.
+   */
+  setBeamKeepOut(boxes: ScreenBox[]): void;
 
   /** Called every rendered frame before drawing. Returns an unsubscribe function. */
   onFrame(cb: (time: number, delta: number) => void): () => void;
