@@ -149,10 +149,11 @@ export const experience = {
     } satisfies Line,
     facts: [
       { text: '11 interviews before building anything', source: 'CEX §3a, UR, FD P2' },
-      { text: '12 searchable notebooks, about 2,350 documents', source: 'CEX §3b, ER §3.1' },
+      // The twelve notebooks (`archive` below) are listed under this fact for screen readers.
+      { text: '12 searchable notebooks, about 2,350 documents', source: 'CEX §3b, ER §3.1', archive: true },
       { text: '18 of 18 hand-checked citations correct', source: 'CEX §3b, ER §5.1' },
       { text: 'Handed over with a 39-page manual and a staff workshop', source: 'CEX §3g, FD P42; §3f, FD P38' },
-    ] satisfies Line[],
+    ] satisfies (Line & { archive?: boolean })[] as (Line & { archive?: boolean })[],
     // The full Summer section from the long copy (The problem, Listening first, What I built,
     // What I took away).
     more: [

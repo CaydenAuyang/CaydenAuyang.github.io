@@ -13,7 +13,7 @@ uniform mat4 projectionMatrix;
 in vec4 position;
 in vec4 aTo;
 in vec4 aRand; // x delay key, y size, z path, w phase (and D strays: w < uStray)
-in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest)
+in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest), w archive column 1 to 12 (0: a stray)
 in vec4 aNrm; // target B's surface normal in world space (xyz)
 
 uniform int uFrom;
@@ -45,6 +45,8 @@ uniform float uColBase;
 uniform float uColHeight;
 uniform float uRise; // rise per second, as a share of the tallest column
 uniform float uStray; // share of D points drifting loose
+uniform float uColAmt[12]; // each column's highlight, 0..1 (11b.3)
+uniform float uColDim; // how far the columns that aren't highlighted dim, 0..1
 // Two lights (E): their radius in world units.
 uniform float uLightR;
 // Figure (B): the turn, a rotation about the figure's own center (setFigureTurn).
@@ -166,10 +168,15 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size) {
     return p;
   }
   if (k == 3) {
+    // Highlight (11b.3): the hovered or tapped column brightens and the rest dim.
+    int col = int(aInfo.w + 0.5) - 1;
+    float hi = col >= 0 ? uColAmt[col] : 0.0;
+    float light = (1.0 - 0.62 * uColDim * (1.0 - hi)) * (1.0 + hi);
+    size = 1.0 + 0.2 * hi;
     if (aRand.w < uStray) {
       // Strays drift loose around the columns.
       vec3 p = b.xyz + curl(b.xyz * (3.0 / uScale) + vec3(t * 0.03)) * uScale * 0.05;
-      alpha = b.w;
+      alpha = b.w * light;
       return p;
     }
     // Columns: light rises slowly, at one speed in every column, and wraps at its own column's
@@ -179,7 +186,7 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size) {
     float h = mod((b.y - uColBase) / uColHeight + t * uRise, top);
     vec3 p = vec3(b.x, uColBase + h * uColHeight, b.z);
     fade = smoothstep(0.0, 0.012, h) * (1.0 - smoothstep(top - 0.006, top, h));
-    alpha = b.w * fade;
+    alpha = b.w * fade * light;
     return p;
   }
   if (k == 4) {

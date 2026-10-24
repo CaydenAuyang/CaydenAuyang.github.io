@@ -21,7 +21,7 @@
 // on the outline brighten at any angle.
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
-import type { CameraPose, LitWindowSamples, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
+import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
 import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
@@ -50,6 +50,11 @@ const BOX_SAMPLES = 1500;
 const FIGURE_GAIN = [0.42, 0.95, 0.5, 0.55];
 /** Screen row (from the top) of the current's center in the question view: open water, below the reflections. */
 const CURRENT_ROW = 0.8;
+/** Archive highlight (11b.3): how long a column takes to light or dim (the shader doubles a lit column and dims the rest to 38%). */
+const COL_EASE = 0.2;
+/** Archive hit areas: at least this wide on screen (CSS px), and this much taller than a column. */
+const COL_HIT_MIN = 24;
+const COL_HIT_PAD = { top: 18, foot: 10 };
 /** Field (F): the share of points that are clear lights, and of points lit at all (clear or faint). */
 const FIELD_CLEAR = 0.025;
 const FIELD_LIT = 0.12;
@@ -352,6 +357,13 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     }
   }
 
+  // The archive columns in the world (rebuilt with the targets): each one's foot and top, for
+  // hit tests and labels.
+  const colFeet = Array.from({ length: COLS }, () => new Vector3());
+  const colTops = Array.from({ length: COLS }, () => new Vector3());
+  // Highlight: each column's amount now and where it is heading, and the dim on the others.
+  const colHi = { target: -1, amt: new Float32Array(COLS), dim: 0 };
+
   // Target B's frame in the world (rebuilt with the targets) and its normals in world space, as
   // signed bytes. The turn rotates both about the frame's center in the shader.
   const figFrame = { center: new Vector3(), x: new Vector3(1, 0, 0), y: new Vector3(0, 1, 0), z: new Vector3(0, 0, 1), height: 1 };
@@ -388,6 +400,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uLightR: { value: 100 },
     uFigCenter: { value: new Vector3() },
     uFigRot: { value: new Matrix3() },
+    uColAmt: { value: new Float32Array(COLS) },
+    uColDim: { value: 0 },
   };
 
   // The turn as one matrix: R = Ry(yaw) Rx(pitch) in the figure's own frame (x right, y up, z
@@ -544,6 +558,11 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       uniforms.uColHeight.value = height;
       const row = horizontal(s.right);
       const depth = horizontal(s.fwd);
+      for (let c = 0; c < COLS; c++) {
+        const ox = (c - (COLS - 1) / 2) * spacing;
+        colFeet[c].set(cluster.x + row.x * ox, base, cluster.z + row.z * ox);
+        colTops[c].set(cluster.x + row.x * ox, base + COL_SHARE[c] * height, cluster.z + row.z * ox);
+      }
       const r = fixed[3];
       const t = T[3];
       for (let i = 0; i < N; i++) {
@@ -556,6 +575,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
           t[i * 4 + 2] = cluster.z + row.z * ox + depth.z * oz;
           t[i * 4 + 3] = 0.45 + 0.5 * r[i * 4 + 3];
           aInfo[i * 4 + 2] = 1;
+          aInfo[i * 4 + 3] = 0;
           continue;
         }
         const a = r[i * 4 + 1] * Math.PI * 2;
@@ -567,6 +587,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
         t[i * 4 + 2] = cluster.z + row.z * ox + depth.z * oz;
         t[i * 4 + 3] = 0.9 * (0.4 + 0.35 * fixed[0][i * 4]);
         aInfo[i * 4 + 2] = COL_SHARE[c];
+        aInfo[i * 4 + 3] = c + 1; // the column, 1 to 12 (0: a stray)
       }
     }
 
@@ -741,6 +762,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     last = now;
     if (motion) uniforms.uTime.value += dt;
     uniforms.uPixelRatio.value = world.renderer.getPixelRatio();
+    if (motion) easeColumns(dt);
   });
 
   // ---- Rebuild the view-dependent targets when the viewport changes shape ----
@@ -773,6 +795,55 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   }
   const _p = new Vector3();
   const _q = new Vector3();
+
+  // ---- The archive as data (11b.3) ----
+  // Whether the columns are what the points show: held, mostly arrived, or barely left.
+  function columnsShowing() {
+    if (!points.visible) return false;
+    const { from, to, t } = cur;
+    const cut = !motion;
+    if (from === 'D' && to === 'D') return true;
+    if (to === 'D') return cut ? t >= 0.5 : t >= 0.6;
+    if (from === 'D') return cut ? t < 0.5 : t <= 0.4;
+    return false;
+  }
+  // Each column's highlight moves toward 1 (lit) or 0 at a steady rate, and the dim on the rest
+  // follows whether any column is lit.
+  function easeColumns(dt: number) {
+    const step = dt / COL_EASE;
+    let changed = false;
+    for (let c = 0; c < COLS; c++) {
+      const goal = c === colHi.target ? 1 : 0;
+      const a = colHi.amt[c];
+      const next = goal > a ? Math.min(goal, a + step) : Math.max(goal, a - step);
+      if (next !== a) {
+        colHi.amt[c] = next;
+        changed = true;
+      }
+    }
+    const goalDim = colHi.target >= 0 ? 1 : 0;
+    const dim = goalDim > colHi.dim ? Math.min(goalDim, colHi.dim + step) : Math.max(goalDim, colHi.dim - step);
+    if (dim !== colHi.dim) {
+      colHi.dim = dim;
+      changed = true;
+    }
+    if (changed) {
+      const u = uniforms.uColAmt.value;
+      for (let c = 0; c < COLS; c++) u[c] = smooth01(colHi.amt[c]);
+      uniforms.uColDim.value = smooth01(colHi.dim);
+    }
+  }
+  const smooth01 = (x: number) => x * x * (3 - 2 * x);
+  // A world point on screen in CSS px (and whether it is in front of the camera).
+  function toScreen(v: Vector3, out: { x: number; y: number; ok: boolean }) {
+    _p.copy(v).project(world.camera);
+    out.x = ((_p.x + 1) / 2) * window.innerWidth;
+    out.y = ((1 - _p.y) / 2) * window.innerHeight;
+    out.ok = _p.z < 1;
+    return out;
+  }
+  const _foot = { x: 0, y: 0, ok: false };
+  const _top = { x: 0, y: 0, ok: false };
 
   let disposed = false;
   return {
@@ -815,15 +886,57 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (!(x1 > 0 && x0 < 1 && y1 > 0 && y0 < 1)) return null;
       return { x0, y0, x1, y1 };
     },
-    // 11b.3 and 11b.7 (the archive's columns as data, the arc between the two lights) come next;
-    // until then these report nothing to interact with.
-    columnAt() {
-      return -1;
+    columnAt(ndc: Ndc) {
+      if (disposed || !columnsShowing()) return -1;
+      world.camera.updateMatrixWorld();
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const x = ((ndc.x + 1) / 2) * W;
+      const y = ((1 - ndc.y) / 2) * H;
+      // Hit areas: a column's line on screen, widened to half the gap to its neighbours (at least
+      // COL_HIT_MIN px wide in all), and a little taller, so even the shortest column is easy to hit.
+      toScreen(colFeet[0], _foot);
+      toScreen(colFeet[COLS - 1], _top);
+      const gap = Math.abs(_top.x - _foot.x) / (COLS - 1);
+      const half = Math.max(COL_HIT_MIN / 2, gap * 0.45);
+      let best = -1;
+      let bestD = Infinity;
+      for (let c = 0; c < COLS; c++) {
+        toScreen(colFeet[c], _foot);
+        toScreen(colTops[c], _top);
+        if (!_foot.ok || !_top.ok) continue;
+        const y0 = Math.min(_top.y, _foot.y) - COL_HIT_PAD.top;
+        const y1 = Math.max(_top.y, _foot.y) + COL_HIT_PAD.foot;
+        if (y < y0 || y > y1) continue;
+        // The column's x at this height (it leans a little in perspective).
+        const f = Math.abs(_foot.y - _top.y) > 1e-3 ? clamp((y - _top.y) / (_foot.y - _top.y), 0, 1) : 0;
+        const d = Math.abs(x - (_top.x + (_foot.x - _top.x) * f));
+        if (d <= half && d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      return best;
     },
-    setColumnHighlight() {},
-    columnTop() {
-      return null;
+    setColumnHighlight(i: number) {
+      if (disposed) return;
+      const target = Number.isInteger(i) && i >= 0 && i < COLS ? i : -1;
+      if (target === colHi.target) return;
+      colHi.target = target;
+      if (!motion) {
+        // Motion off: an instant change, drawn at once (this is called from input handlers).
+        easeColumns(COL_EASE);
+        world.requestRender();
+      }
     },
+    columnTop(i: number) {
+      if (disposed || !columnsShowing() || !(i >= 0 && i < COLS)) return null;
+      world.camera.updateMatrixWorld();
+      toScreen(colTops[i], _top);
+      if (!_top.ok) return null;
+      return { x: _top.x / window.innerWidth, y: _top.y / window.innerHeight };
+    },
+    // 11b.7 (the arc between the two lights) comes next; until then this does nothing.
     sendArc() {},
     setMorph(from: Target, to: Target, t: number) {
       if (disposed) return;

@@ -2,9 +2,15 @@
 // Experience.astro: section 3. Civic Exchange first with the full block (place, meta, lead, four
 // facts, and the full summer section from the long copy behind More), then the two Wisers
 // summers, one line each with their meta.
+//
+// The archive (NIGHT-SIGNAL.md 11b.3): the twelve columns of light the signal raises over Central
+// are sized by the notebooks' real document counts. Screen readers get the same data as a
+// visually hidden list under the "12 searchable notebooks" fact. The small label the lead's
+// interact.ts shows over a hovered or tapped column is `[data-archive-label]`: it sets the text,
+// `hidden`, and left/top in viewport pixels (the column's top); the CSS centers it just above.
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
-import { experience } from '../../data/content';
+import { archive, experience } from '../../data/content';
 import { ignite } from '../ui/ignite';
 
 const { civic, roles } = experience;
@@ -23,7 +29,20 @@ const headline = ignite(experience.heading);
           </div>
           <p class="t-lead">{civic.lead.text}</p>
           <ul class="facts">
-            {civic.facts.map((fact) => <li>{fact.text}</li>)}
+            {
+              civic.facts.map((fact) => (
+                <li>
+                  {fact.text}
+                  {fact.archive && (
+                    <ul class="sr-only">
+                      {archive.columns.map((col) => (
+                        <li>{archive.label(col.topic, col.count)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))
+            }
           </ul>
         </div>
       </div>
@@ -74,6 +93,7 @@ const headline = ignite(experience.heading);
       </ul>
     </div>
   </div>
+  <p class="archive-label" data-archive-label aria-hidden="true" hidden></p>
 </section>
 
 <style>
@@ -115,6 +135,35 @@ const headline = ignite(experience.heading);
   }
   .xp__role .action-link {
     margin-top: calc(var(--space-2) * -1);
+  }
+
+  /* The column label: fixed to the window, centered just above the point interact.ts gives it (the
+     column's top), over everything in the page but under the header. Text color with the strong
+     halo and a small scrim of its own, since it sits right over the brightest light on screen. */
+  .archive-label {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    margin: 0;
+    transform: translate(-50%, calc(-100% - 8px));
+    pointer-events: none;
+    font-size: var(--fs-small);
+    font-weight: var(--fw-medium);
+    line-height: 1.5;
+    color: var(--c-body);
+    white-space: nowrap;
+    text-shadow: var(--halo-strong);
+  }
+  .archive-label[hidden] {
+    display: none;
+  }
+  .archive-label::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--space-2) * -1) calc(var(--space-4) * -1);
+    z-index: -1;
+    background: var(--scrim-hug);
   }
 
   /* Phones (and portrait tablets, the phone layout): the twelve columns fill the band from about
