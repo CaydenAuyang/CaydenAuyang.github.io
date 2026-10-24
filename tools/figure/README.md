@@ -101,6 +101,31 @@ only ever turns the figure about 6 degrees, so the front match matters most.
   motion on, reduced, off, snapshot mode, slow data and no WebGL.
 - `node tools/figure/render-fallback.mjs` redraws only the still image.
 
+## The night scene's figure (the signal)
+
+The Night Signal design draws the figure as target B of the particle system (`src/world/signal.ts`)
+instead of with `src/figure/`. It uses its own file, built from the same photo fit:
+
+    node tools/figure/signal.mjs                    rebuild from the photos (about 3 s once cached)
+    node tools/figure/signal.mjs --from-published   resample public/figure/figure-hi.bin instead
+
+It writes `public/world/figure-signal.bin` and `figure-signal.json`. The look (`SIGNAL_LOOK` in
+`signal.mjs`) puts 46% of the points on the outline, 27% on hair (mostly strands from the part),
+4% on a sparse face, quiets creases inside the outline (additive light turns them into bright
+lines) and dissolves the chest over the bottom third. One 60,000-point file serves every tier: the
+points are ordered so any first N keep each group's share and keep hair strands whole, so phones
+read only the first 16,000 (128 KB) and stop the download there. Format: the top of
+`lib/signal-format.mjs` ("CASG", 8 bytes a point).
+
+Other signal tools (a dev server must be running, `npx astro dev --port 4329`):
+
+- `node tools/figure/signal-shots.mjs --gpu` screenshots `/lab/signal` at 390x844 and 1440x900 for
+  every target and the midpoints of the morphs, with a contact sheet per size. `--film B,C` films
+  one morph at t = 0, 0.1, ... 1; `--bench` adds GPU frame times; `--world mock` uses the lab's mock
+  city. Output goes to `figure-work/signal-shots/`.
+- `node tools/figure/signal-still.mjs` renders `public/world/figure-still.webp`, the glowing
+  figure on transparent for the no-WebGL fallback, drawn from the points by the signal itself.
+
 ## The data format
 
 See the top of `lib/format.mjs`. In short: a 48-byte header (magic "CAFG", count, bounds), then

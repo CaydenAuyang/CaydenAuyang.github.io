@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "format": "CASG v1, see tools/figure/lib/signal-format.mjs",
+  "file": "figure-signal.bin",
+  "count": 60000,
+  "bytes": 480040,
+  "bytesPerPoint": 8,
+  "tiers": {
+    "high": 60000,
+    "low": 30000,
+    "phone": 16000
+  },
+  "note": "The first N points are an even sample of the whole figure; read a prefix for smaller tiers.",
+  "source": "photos (fit in figure-work, outside the repo)",
+  "builtAt": "2026-10-24T04:00:44.184Z",
+  "units": "figure heights; origin at the center of the bounding box; x right, y up, z toward the viewer",
+  "aspect": 0.9817,
+  "groups": {
+    "body": 11069,
+    "skin": 5123,
+    "hair": 16238,
+    "contour": 27570
+  },
+  "prefixShares": [
+    {
+      "first": 16000,
+      "contour": 0.46,
+      "hair": 0.271,
+      "body": 0.184,
+      "skin": 0.085
+    },
+    {
+      "first": 30000,
+      "contour": 0.46,
+      "hair": 0.271,
+      "body": 0.184,
+      "skin": 0.085
+    },
+    {
+      "first": 60000,
+      "contour": 0.46,
+      "hair": 0.271,
+      "body": 0.184,
+      "skin": 0.085
+    }
+  ],
+  "landmarks": {
+    "crown": 0.4999,
+    "eye": 0.2069,
+    "chin": -0.0371,
+    "shoulder": -0.3111,
+    "shoulderHalfWidth": 0.4909
+  }
+}

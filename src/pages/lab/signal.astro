@@ -1,0 +1,724 @@
+---
+// /lab/signal: a test page for the signal (the particle system). Not linked from the site and kept
+// out of search (noindex). It runs the signal against a small mock of the World interface (a fake
+// skyline whose lit windows really dim through setLift) with ?world=mock, or against the real
+// world (src/world/renderer.ts, the default once it exists).
+//
+// Query options, so screenshots can set any state:
+//   from, to (A to F), t (0..1), cam (auto | hero | question | summer | since | people | contact |
+//   a number 0..1 on the camera path), motion (0 or 1), tier (high | low | phone; mock world only,
+//   the real world picks its own), world (real | mock), hud (0 hides the panel), still (1: the
+//   figure alone on black, for figure-still.webp).
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Signal lab</title>
+  </head>
+  <body>
+    <canvas class="world" data-world aria-hidden="true"></canvas>
+    <aside class="hud" data-hud>
+      <h1>Signal lab</h1>
+      <div class="row">
+        <label>From <select data-from></select></label>
+        <label>To <select data-to></select></label>
+        <button type="button" data-swap aria-label="Swap from and to">Swap</button>
+      </div>
+      <label class="row">t <input type="range" min="0" max="1" step="0.001" value="1" data-t /> <output data-tout>1.000</output></label>
+      <div class="row">
+        <button type="button" data-play>Play</button>
+        <button type="button" data-loop aria-pressed="false">Loop</button>
+        <label>Seconds <input type="number" min="0.5" max="20" step="0.5" value="3" data-secs /></label>
+      </div>
+      <div class="row">
+        <label
+          >Camera
+          <select data-cam>
+            <option value="auto">auto (follows the morph)</option>
+            <option value="hero">hero</option>
+            <option value="question">question</option>
+            <option value="summer">summer</option>
+            <option value="och">och</option>
+            <option value="since">since</option>
+            <option value="people">people</option>
+            <option value="contact">contact</option>
+          </select>
+        </label>
+        <button type="button" data-motion aria-pressed="true">Motion: on</button>
+      </div>
+      <div class="row">
+        <label
+          >Tier
+          <select data-tier>
+            <option value="">auto</option>
+            <option value="high">high (60,000)</option>
+            <option value="low">low (30,000)</option>
+            <option value="phone">phone (16,000)</option>
+          </select>
+        </label>
+        <label
+          >World
+          <select data-worldsel>
+            <option value="real">real</option>
+            <option value="mock">mock</option>
+          </select>
+        </label>
+        <button type="button" data-bench>Bench</button>
+      </div>
+      <p class="stats" data-stats>Starting</p>
+    </aside>
+
+    <script>
+      import {
+        BoxGeometry,
+        BufferAttribute,
+        BufferGeometry,
+        Color,
+        InstancedMesh,
+        Matrix4,
+        Mesh,
+        MeshBasicMaterial,
+        PerspectiveCamera,
+        PlaneGeometry,
+        Points,
+        Quaternion,
+        Scene,
+        ShaderMaterial,
+        Vector3,
+        WebGLRenderer,
+      } from 'three';
+      import type { CameraPose, LitWindowSamples, SceneKey, Target, Tier, TierInfo, World } from '../../world/contract';
+      import { HERO_FRAMING, PHONE_MAX_WIDTH } from '../../world/contract';
+      import { createSignal, type SignalDebug } from '../../world/signal';
+
+      const realWorldModules = import.meta.glob('../../world/renderer.ts');
+
+      const q = new URLSearchParams(location.search);
+      const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
+      const still = q.get('still') === '1';
+      if (q.get('hud') === '0' || still) $('[data-hud]').hidden = true;
+
+      // ---- The mock world ----------------------------------------------------------------------
+
+      function rng(seed: number) {
+        let a = seed >>> 0;
+        return () => {
+          a = (a + 0x6d2b79f5) >>> 0;
+          let t = a;
+          t = Math.imul(t ^ (t >>> 15), t | 1);
+          t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function tierInfo(name: string | null): TierInfo {
+        const phone = window.innerWidth <= PHONE_MAX_WIDTH;
+        const tier: Tier = name === 'high' || name === 'low' || name === 'phone' ? name : phone ? 'phone' : 'high';
+        if (tier === 'phone') return { tier, dprCap: 1.5, stars: 1500, towers: 110, points: 16000 };
+        if (tier === 'low') return { tier, dprCap: 1.75, stars: 4000, towers: 260, points: 30000 };
+        return { tier, dprCap: 1.75, stars: 4000, towers: 260, points: 60000 };
+      }
+
+      const KEYS: Record<SceneKey, number> = { hero: 0, question: 0.1, summer: 0.2, och: 0.32, ais: 0.42, club: 0.52, more: 0.62, since: 0.76, people: 0.88, contact: 1 };
+
+      function createMockWorld(canvas: HTMLCanvasElement, tier: TierInfo, opts: { motion: boolean; still: boolean }): World {
+        const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, preserveDrawingBuffer: opts.still, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
+        const scene = new Scene();
+        scene.background = new Color(opts.still ? '#000000' : '#05070D');
+        const camera = new PerspectiveCamera(38, 1, 1, 40000);
+        const rand = rng(7);
+
+        // Towers: three rows, long-tailed heights, the tallest left of center.
+        const towers: { x: number; z: number; w: number; d: number; h: number }[] = [];
+        const rows = [
+          { z: 0, n: Math.round(tier.towers * 0.38) },
+          { z: -160, n: Math.round(tier.towers * 0.33) },
+          { z: -320, n: Math.round(tier.towers * 0.29) },
+        ];
+        const SPAN = 1500;
+        for (const row of rows) {
+          for (let i = 0; i < row.n; i++) {
+            const x = -SPAN + ((i + rand() * 0.8) / row.n) * SPAN * 2;
+            const central = Math.exp(-(((x + 320) / 260) ** 2));
+            let h = 60 + rand() * 120;
+            if (rand() < 0.08 + 0.5 * central) h = 200 + rand() * 280 * (0.4 + 0.6 * central);
+            towers.push({ x, z: row.z + (rand() - 0.5) * 50, w: 24 + rand() * 30, d: 24 + rand() * 24, h });
+          }
+        }
+        const skylineTop = Math.max(...towers.map((t) => t.h));
+        const box = new InstancedMesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial({ color: '#0B0F1D' }), towers.length);
+        const m4 = new Matrix4();
+        towers.forEach((t, i) => {
+          m4.makeScale(t.w, t.h, t.d).setPosition(t.x, t.h / 2, t.z);
+          box.setMatrixAt(i, m4);
+        });
+        scene.add(box);
+
+        // Lit windows on the front faces, about 38% lit, 80% warm.
+        const wp: number[] = [];
+        const wr: number[] = [];
+        const wa: number[] = [];
+        const ww: number[] = [];
+        const wb: number[] = [];
+        towers.forEach((t) => {
+          const cols = Math.floor((t.w - 2) / 3);
+          const floors = Math.floor((t.h - 6) / 3.5);
+          for (let f = 0; f < floors; f++) {
+            const floorRoll = rand();
+            const p = floorRoll < 0.1 ? 0 : floorRoll > 0.97 ? 0.95 : 0.38;
+            for (let c = 0; c < cols; c++) {
+              if (rand() >= p) continue;
+              const x = t.x - (cols * 3) / 2 + c * 3 + 1.5;
+              wp.push(x, 4 + f * 3.5 + 1.75, t.z + t.d / 2 + 0.3);
+              wr.push(rand());
+              wa.push((x + SPAN + 30) / (SPAN * 2 + 60));
+              ww.push(rand() < 0.8 ? 1 : 0);
+              wb.push(0.7 + 0.3 * rand());
+            }
+          }
+        });
+        const W = {
+          count: wr.length,
+          positions: new Float32Array(wp),
+          rank: new Float32Array(wr),
+          across: new Float32Array(wa),
+          warm: new Float32Array(ww),
+        };
+        const wg = new BufferGeometry();
+        wg.setAttribute('position', new BufferAttribute(W.positions, 3));
+        wg.setAttribute('aRank', new BufferAttribute(W.rank, 1));
+        wg.setAttribute('aWarm', new BufferAttribute(W.warm, 1));
+        wg.setAttribute('aBright', new BufferAttribute(new Float32Array(wb), 1));
+        const windowMat = new ShaderMaterial({
+          uniforms: { uLiftRank: { value: 0 }, uLiftAmount: { value: 0 }, uPx: { value: 1 } },
+          vertexShader: /* glsl */ `
+            attribute float aRank; attribute float aWarm; attribute float aBright;
+            uniform float uLiftRank; uniform float uLiftAmount; uniform float uPx;
+            varying vec3 vC;
+            void main() {
+              vec4 mv = modelViewMatrix * vec4(position, 1.0);
+              gl_Position = projectionMatrix * mv;
+              gl_PointSize = max(1.0, 2.4 * uPx / -mv.z);
+              float dim = aRank < uLiftRank ? 1.0 - uLiftAmount * 0.92 : 1.0;
+              vC = mix(vec3(0.81, 0.89, 1.0), vec3(1.0, 0.714, 0.36), aWarm) * aBright * dim;
+            }`,
+          fragmentShader: /* glsl */ `
+            varying vec3 vC;
+            void main() { gl_FragColor = vec4(vC, 1.0); }`,
+        });
+        const windows = new Points(wg, windowMat);
+        scene.add(windows);
+
+        // Water and stars.
+        const water = new Mesh(new PlaneGeometry(20000, 20000), new MeshBasicMaterial({ color: '#070A14' }));
+        water.rotation.x = -Math.PI / 2;
+        water.position.set(0, 0, 4000);
+        scene.add(water);
+        const sp: number[] = [];
+        for (let i = 0; i < tier.stars; i++) {
+          const a = rand() * Math.PI * 2;
+          const e = Math.asin(rand() * 0.98) * 0.95 + 0.02;
+          sp.push(Math.cos(e) * Math.sin(a) * 30000, Math.sin(e) * 30000, -Math.cos(e) * Math.cos(a) * 30000);
+        }
+        const sg = new BufferGeometry();
+        sg.setAttribute('position', new BufferAttribute(new Float32Array(sp), 3));
+        const stars = new Points(sg, new ShaderMaterial({
+          vertexShader: `void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_PointSize = 1.5; }`,
+          fragmentShader: `void main(){ gl_FragColor = vec4(0.55,0.6,0.75,1.0); }`,
+        }));
+        scene.add(stars);
+        if (opts.still) [box, windows, water, stars].forEach((o) => (o.visible = false));
+
+        // Camera poses. The hero pose hits HERO_FRAMING (tallest top and waterline) like the real one.
+        const tanHalf = Math.tan((38 * Math.PI) / 360);
+        function heroPose(): CameraPose {
+          const phone = window.innerWidth <= PHONE_MAX_WIDTH;
+          const fr = phone ? HERO_FRAMING.phone : HERO_FRAMING.desktop;
+          const camY = 12;
+          const yh = 1 - 2 * fr.horizon;
+          const yt = 1 - 2 * fr.skylineTop;
+          let lo = 300;
+          let hi = 20000;
+          let pitch = 0;
+          for (let k = 0; k < 50; k++) {
+            const D = (lo + hi) / 2;
+            pitch = -Math.atan(camY / D) - Math.atan(yh * tanHalf);
+            const top = Math.tan(Math.atan((skylineTop - camY) / D) - pitch) / tanHalf;
+            if (top > yt) lo = D;
+            else hi = D;
+          }
+          const D = (lo + hi) / 2;
+          return pose(new Vector3(0, camY, D), 0, pitch, 38);
+        }
+        function pose(position: Vector3, yaw: number, pitch: number, fov: number): CameraPose {
+          const quaternion = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch));
+          return { position, quaternion, fov };
+        }
+        const D0 = () => heroPose().position.z;
+        const deg = Math.PI / 180;
+        function keyPose(k: SceneKey): CameraPose {
+          const d = D0();
+          switch (k) {
+            case 'hero':
+              return heroPose();
+            case 'question':
+              return pose(new Vector3(0, 7, d * 0.62), 0, -1.5 * deg, 38);
+            case 'summer':
+              return pose(new Vector3(-120, 22, d * 0.72), 6 * deg, 9 * deg, 38);
+            case 'och':
+              return pose(new Vector3(260, 20, d * 0.64), 0, 6 * deg, 38);
+            case 'ais':
+              return pose(new Vector3(-100, 20, d * 0.62), 0, 6 * deg, 38);
+            case 'club':
+              return pose(new Vector3(-700, 20, d * 0.6), 4 * deg, 5 * deg, 38);
+            case 'more':
+              return pose(new Vector3(-400, 24, d * 0.7), 0, 8 * deg, 38);
+            case 'since':
+              return pose(new Vector3(0, 24, d * 0.8), 0, 40 * deg, 38);
+            case 'people':
+              return pose(new Vector3(0, 24, d * 0.8), 0, 44 * deg, 38);
+            case 'contact':
+              return pose(new Vector3(0, 24, d * 0.92), 0, 42 * deg, 40);
+          }
+        }
+        const order = Object.entries(KEYS).sort((a, b) => a[1] - b[1]) as [SceneKey, number][];
+        function getCameraPose(u: number): CameraPose {
+          u = Math.min(1, Math.max(0, u));
+          let i = 0;
+          while (i < order.length - 2 && u > order[i + 1][1]) i++;
+          const [ka, ua] = order[i];
+          const [kb, ub] = order[i + 1];
+          const t = Math.min(1, Math.max(0, (u - ua) / (ub - ua || 1)));
+          const a = keyPose(ka);
+          const b = keyPose(kb);
+          return { position: a.position.clone().lerp(b.position, t), quaternion: a.quaternion.clone().slerp(b.quaternion, t), fov: a.fov + (b.fov - a.fov) * t };
+        }
+
+        let camU = 0;
+        function setCameraProgress(u: number) {
+          camU = u;
+          const p = getCameraPose(u);
+          camera.position.copy(p.position);
+          camera.quaternion.copy(p.quaternion);
+          camera.fov = p.fov;
+          camera.updateProjectionMatrix();
+        }
+
+        function resize() {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier.dprCap));
+          renderer.setSize(w, h, false);
+          canvas.style.width = w + 'px';
+          canvas.style.height = h + 'px';
+          camera.aspect = w / h;
+          setCameraProgress(camU);
+          windowMat.uniforms.uPx.value = (h * renderer.getPixelRatio()) / (2 * tanHalf);
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        const subs = new Set<(time: number, delta: number) => void>();
+        let frozen = false;
+        let lastT = performance.now();
+        let raf = 0;
+        function frame() {
+          const now = performance.now();
+          const dt = (now - lastT) / 1000;
+          lastT = now;
+          subs.forEach((cb) => cb(now / 1000, dt));
+          renderer.render(scene, camera);
+        }
+        function loop() {
+          raf = requestAnimationFrame(loop);
+          if (!frozen) frame();
+        }
+        loop();
+
+        return {
+          renderer,
+          scene,
+          camera,
+          tier,
+          landmarks: {
+            centralCluster: new Vector3(-320, 0, -60),
+            lowBlockLeft: new Vector3(-1300, 0, 0),
+            smallClusters: [new Vector3(-500, 0, 0), new Vector3(200, 0, 0), new Vector3(800, 0, 0)],
+            skylineTop,
+            waterY: 0,
+          },
+          cameraKeys: KEYS,
+          setCameraProgress,
+          getCameraPose,
+          setIntro() {},
+          setLift(maxRank: number, amount: number) {
+            windowMat.uniforms.uLiftRank.value = maxRank;
+            windowMat.uniforms.uLiftAmount.value = amount;
+          },
+          setHighlight() {},
+          sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
+            const idx: number[] = [];
+            for (let i = 0; i < W.count; i++) if (W.rank[i] < maxRank) idx.push(i);
+            idx.sort((a, b) => W.rank[a] - W.rank[b]);
+            const n = Math.min(count, idx.length);
+            const out = { count: n, positions: new Float32Array(n * 3), rank: new Float32Array(n), across: new Float32Array(n), warm: new Float32Array(n) };
+            for (let k = 0; k < n; k++) {
+              const i = idx[k];
+              out.positions.set(W.positions.subarray(i * 3, i * 3 + 3), k * 3);
+              out.rank[k] = W.rank[i];
+              out.across[k] = W.across[i];
+              out.warm[k] = W.warm[i];
+            }
+            return out;
+          },
+          onFrame(cb) {
+            subs.add(cb);
+            return () => subs.delete(cb);
+          },
+          setMotion() {},
+          setFrozen(f: boolean) {
+            frozen = f;
+          },
+          requestRender() {
+            frame();
+          },
+          resize,
+          dispose() {
+            cancelAnimationFrame(raf);
+            renderer.dispose();
+          },
+        };
+      }
+
+      // ---- The lab -------------------------------------------------------------------------------
+
+      const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F'];
+      const NAMES: Record<Target, string> = { A: 'A city', B: 'B figure', C: 'C current', D: 'D archive', E: 'E two lights', F: 'F field' };
+      const HOME: Record<Target, SceneKey> = { A: 'more', B: 'hero', C: 'question', D: 'summer', E: 'contact', F: 'since' };
+
+      const fromSel = $<HTMLSelectElement>('[data-from]');
+      const toSel = $<HTMLSelectElement>('[data-to]');
+      for (const sel of [fromSel, toSel]) for (const k of TARGETS) sel.add(new Option(NAMES[k], k));
+      const tIn = $<HTMLInputElement>('[data-t]');
+      const camSel = $<HTMLSelectElement>('[data-cam]');
+      const state = {
+        from: (q.get('from') as Target) || 'A',
+        to: (q.get('to') as Target) || 'B',
+        t: q.has('t') ? Number(q.get('t')) : 1,
+        cam: q.get('cam') || 'auto',
+        motion: q.get('motion') !== '0' && !still,
+      };
+      fromSel.value = state.from;
+      toSel.value = state.to;
+      tIn.value = String(state.t);
+      if ([...camSel.options].some((o) => o.value === state.cam)) camSel.value = state.cam;
+      $<HTMLSelectElement>('[data-tier]').value = q.get('tier') || '';
+      $<HTMLSelectElement>('[data-worldsel]').value = q.get('world') === 'mock' || !realWorldModules['../../world/renderer.ts'] ? 'mock' : 'real';
+
+      const smooth = (x: number) => (x < 0.5 ? 2 * x * x : 1 - 2 * (1 - x) * (1 - x));
+
+      async function main() {
+        const canvas = $<HTMLCanvasElement>('[data-world]');
+        let world: World;
+        let worldName = 'mock';
+        const loadReal = realWorldModules['../../world/renderer.ts'];
+        if (q.get('world') !== 'mock' && loadReal) {
+          const mod = (await loadReal()) as { createWorld: (o: { canvas: HTMLCanvasElement; motion: boolean }) => Promise<World> };
+          world = await mod.createWorld({ canvas, motion: state.motion });
+          worldName = 'real';
+          if (still) world.scene.children.forEach((o) => (o.visible = false));
+        } else {
+          world = createMockWorld(canvas, tierInfo(q.get('tier')), { motion: state.motion, still });
+        }
+        const t0 = performance.now();
+        const signal = (await createSignal({ world, motion: state.motion, figureUrl: '/world/figure-signal.bin' })) as SignalDebug;
+        const buildMs = performance.now() - t0;
+        if (!state.motion) world.setMotion(false);
+
+        let playing: { start: number; dur: number } | null = null;
+        let loop = false;
+
+        function camU(): number {
+          const keys = world.cameraKeys;
+          if (state.cam === 'auto') {
+            // The city (A) is in every view, so a morph to or from A holds the other end's camera.
+            const a = state.from === 'A' && state.to !== 'A' ? state.to : state.from;
+            const b = state.to === 'A' && state.from !== 'A' ? state.from : state.to;
+            return keys[HOME[a]] + (keys[HOME[b]] - keys[HOME[a]]) * smooth(state.t);
+          }
+          if (state.cam in keys) return keys[state.cam as SceneKey];
+          const n = Number(state.cam);
+          return Number.isFinite(n) ? n : 0;
+        }
+
+        function apply() {
+          world.setCameraProgress(camU());
+          signal.setMorph(state.from, state.to, state.t);
+        }
+
+        // Frame times from the world's own frame loop.
+        const times: number[] = [];
+        let lastFrame = performance.now();
+        world.onFrame(() => {
+          const now = performance.now();
+          times.push(now - lastFrame);
+          if (times.length > 120) times.shift();
+          lastFrame = now;
+          if (playing) {
+            const k = Math.min(1, (now - playing.start) / playing.dur);
+            state.t = k;
+            tIn.value = String(k);
+            if (k >= 1) {
+              if (loop) {
+                [state.from, state.to] = [state.to, state.from];
+                fromSel.value = state.from;
+                toSel.value = state.to;
+                playing = { start: now + 600, dur: playing.dur };
+                state.t = 0;
+              } else playing = null;
+            }
+          }
+          apply();
+        });
+
+        const stats = () => {
+          const s = [...times].sort((a, b) => a - b);
+          const avg = s.reduce((a, b) => a + b, 0) / Math.max(1, s.length);
+          const p95 = s[Math.floor(s.length * 0.95)] ?? 0;
+          return { avgMs: +avg.toFixed(2), p95Ms: +p95.toFixed(2), fps: +(1000 / Math.max(1, avg)).toFixed(1) };
+        };
+
+        // Back-to-back renders with a sync at the end: what the GPU needs per frame, with and
+        // without the signal.
+        function bench(frames = 60) {
+          const gl = world.renderer.getContext();
+          const px = new Uint8Array(4);
+          const run = () => {
+            world.renderer.render(world.scene, world.camera);
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            const t = performance.now();
+            for (let i = 0; i < frames; i++) world.renderer.render(world.scene, world.camera);
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            return (performance.now() - t) / frames;
+          };
+          const was = signal.points.visible;
+          const withSignal = run();
+          signal.points.visible = false;
+          const without = run();
+          signal.points.visible = was;
+          return { frameMs: +withSignal.toFixed(3), withoutSignalMs: +without.toFixed(3), signalMs: +(withSignal - without).toFixed(3), frames };
+        }
+
+        const gl = world.renderer.getContext();
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        const gpu = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : 'unknown';
+
+        const lab = {
+          signal,
+          world,
+          worldName,
+          gpu,
+          buildMs,
+          set(p: Partial<typeof state>) {
+            Object.assign(state, p);
+            if (p.motion !== undefined) {
+              signal.setMotion(p.motion);
+              world.setMotion(p.motion);
+            }
+            fromSel.value = state.from;
+            toSel.value = state.to;
+            tIn.value = String(state.t);
+            apply();
+            world.requestRender();
+          },
+          play(dur = 3000) {
+            state.t = 0;
+            playing = { start: performance.now(), dur };
+          },
+          stats,
+          bench,
+          ready: true,
+        };
+        (window as any).__lab = lab;
+
+        fromSel.addEventListener('change', () => lab.set({ from: fromSel.value as Target }));
+        toSel.addEventListener('change', () => lab.set({ to: toSel.value as Target }));
+        tIn.addEventListener('input', () => {
+          playing = null;
+          lab.set({ t: Number(tIn.value) });
+        });
+        camSel.addEventListener('change', () => lab.set({ cam: camSel.value }));
+        $('[data-swap]').addEventListener('click', () => lab.set({ from: state.to, to: state.from, t: 1 - state.t }));
+        $('[data-play]').addEventListener('click', () => lab.play(Number($<HTMLInputElement>('[data-secs]').value) * 1000));
+        $('[data-loop]').addEventListener('click', (e) => {
+          loop = !loop;
+          (e.currentTarget as HTMLElement).setAttribute('aria-pressed', String(loop));
+          if (loop && !playing) lab.play(Number($<HTMLInputElement>('[data-secs]').value) * 1000);
+        });
+        $('[data-motion]').addEventListener('click', (e) => {
+          const b = e.currentTarget as HTMLElement;
+          lab.set({ motion: !state.motion });
+          b.textContent = `Motion: ${state.motion ? 'on' : 'off'}`;
+          b.setAttribute('aria-pressed', String(state.motion));
+        });
+        const reload = (k: string, v: string) => {
+          const u = new URL(location.href);
+          if (v) u.searchParams.set(k, v);
+          else u.searchParams.delete(k);
+          location.href = u.href;
+        };
+        $<HTMLSelectElement>('[data-tier]').addEventListener('change', (e) => reload('tier', (e.target as HTMLSelectElement).value));
+        $<HTMLSelectElement>('[data-worldsel]').addEventListener('change', (e) => reload('world', (e.target as HTMLSelectElement).value));
+        $('[data-bench]').addEventListener('click', () => {
+          const b = bench(60);
+          $('[data-stats]').dataset.bench = `bench ${b.frameMs} ms a frame (signal ${b.signalMs} ms)`;
+        });
+
+        // The still for the no-WebGL fallback: the figure alone, drawn by the signal on black, then
+        // turned into light on a transparent background (alpha = brightest channel, color divided
+        // by it), cropped to the figure with a small margin. Returns a PNG data URL.
+        (lab as any).still = (pad = 0.04) => {
+          world.renderer.setClearColor(0x000000, 1);
+          world.scene.background = null;
+          world.scene.children.forEach((o) => (o.visible = o === signal.points));
+          Object.assign(state, { from: 'B', to: 'B', t: 1, cam: 'hero' });
+          apply();
+          world.renderer.render(world.scene, world.camera);
+          const src = world.renderer.domElement;
+          const c = document.createElement('canvas');
+          c.width = src.width;
+          c.height = src.height;
+          const ctx = c.getContext('2d', { willReadFrequently: true })!;
+          ctx.drawImage(src, 0, 0);
+          const img = ctx.getImageData(0, 0, c.width, c.height);
+          const d = img.data;
+          let x0 = c.width, y0 = c.height, x1 = 0, y1 = 0;
+          for (let y = 0; y < c.height; y++) {
+            for (let x = 0; x < c.width; x++) {
+              const i = (y * c.width + x) * 4;
+              const a = Math.max(d[i], d[i + 1], d[i + 2]);
+              if (a > 3) {
+                if (x < x0) x0 = x;
+                if (x > x1) x1 = x;
+                if (y < y0) y0 = y;
+                if (y > y1) y1 = y;
+              }
+              if (a <= 1) {
+                d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0;
+              } else {
+                d[i] = Math.min(255, Math.round((d[i] * 255) / a));
+                d[i + 1] = Math.min(255, Math.round((d[i + 1] * 255) / a));
+                d[i + 2] = Math.min(255, Math.round((d[i + 2] * 255) / a));
+                d[i + 3] = a;
+              }
+            }
+          }
+          ctx.putImageData(img, 0, 0);
+          const m = Math.round((y1 - y0) * pad);
+          x0 = Math.max(0, x0 - m);
+          y0 = Math.max(0, y0 - m);
+          x1 = Math.min(c.width - 1, x1 + m);
+          y1 = Math.min(c.height - 1, y1 + m);
+          const out = document.createElement('canvas');
+          out.width = x1 - x0 + 1;
+          out.height = y1 - y0 + 1;
+          out.getContext('2d')!.drawImage(c, x0, y0, out.width, out.height, 0, 0, out.width, out.height);
+          return { dataUrl: out.toDataURL('image/png'), width: out.width, height: out.height, count: signal.count };
+        };
+
+        apply();
+        world.requestRender();
+        const statsEl = $('[data-stats]');
+        setInterval(() => {
+          const s = stats();
+          const i = signal.info;
+          statsEl.textContent = `${worldName} world, ${world.tier.tier}, ${signal.count.toLocaleString('en-US')} points from ${i.windows.toLocaleString('en-US')} windows (${i.pointsPerWindow.toFixed(1)} each, ranks below ${i.liftRank.toFixed(3)}). ${s.fps} fps, ${s.avgMs} ms avg, ${s.p95Ms} ms p95. Built in ${buildMs.toFixed(0)} ms. ${gpu}. ${statsEl.dataset.bench ?? ''}`;
+        }, 500);
+      }
+
+      main().catch((e) => {
+        console.error(e);
+        $('[data-stats]').textContent = `Failed: ${e?.message ?? e}`;
+        (window as any).__labError = String(e?.stack ?? e);
+      });
+    </script>
+
+    <style is:global>
+      html,
+      body {
+        margin: 0;
+        background: #05070d;
+        color: #eee9e1;
+        font: 13px/1.4 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      astro-dev-toolbar {
+        display: none !important;
+      }
+      .world {
+        position: fixed;
+        inset: 0;
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      .hud {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: min(360px, calc(100vw - 24px));
+        padding: 12px 14px;
+        background: rgba(5, 7, 13, 0.72);
+        border: 1px solid rgba(255, 182, 92, 0.18);
+        border-radius: 10px;
+        backdrop-filter: blur(12px);
+      }
+      .hud[hidden] {
+        display: none;
+      }
+      .hud h1 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin: 6px 0;
+      }
+      .row input[type='range'] {
+        flex: 1;
+      }
+      .hud button,
+      .hud select,
+      .hud input[type='number'] {
+        font: inherit;
+        color: inherit;
+        background: #121838;
+        border: 1px solid rgba(255, 182, 92, 0.3);
+        border-radius: 6px;
+        padding: 4px 8px;
+      }
+      .hud input[type='number'] {
+        width: 52px;
+      }
+      .hud button:focus-visible,
+      .hud select:focus-visible,
+      .hud input:focus-visible {
+        outline: 2px solid #ffb65c;
+        outline-offset: 2px;
+      }
+      .stats {
+        margin: 8px 0 0;
+        color: #8e95a8;
+      }
+    </style>
+  </body>
+</html>

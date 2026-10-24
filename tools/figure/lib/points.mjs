@@ -101,7 +101,7 @@ export function sampleSurface(mesh, model, total, rand, look = LOOK) {
     else if (k.cat === 'body') {
       // Creases inside the outline (the collar notch) get only a small lift, so they do not draw lines.
       const rimTerm = Math.pow(Math.min(1, rim / look.outlineRim), look.rimPower);
-      w = look.rimFloor + (1 - look.rimFloor) * (k.interior ? Math.min(rimTerm, 0.3) : rimTerm);
+      w = look.rimFloor + (1 - look.rimFloor) * (k.interior ? Math.min(rimTerm, look.interiorCap ?? 0.3) : rimTerm);
       if (n[2] < -0.25) w *= look.backFacing;
     } else if (k.cat === 'face') {
       // Sparse interior with a faint gather where the face folds (brow, nose edge, lip line).
