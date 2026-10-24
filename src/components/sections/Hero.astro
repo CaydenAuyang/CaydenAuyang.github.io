@@ -140,8 +140,10 @@ const vars = [
       right: auto;
       bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-6));
       /* The left ~45%: the name at the spec's size reaches about 48% of the width, which still
-         clears the figure's head (its widest part, the shoulders, sits lower). */
-      width: max-content;
+         clears the figure's head (its widest part, the shoulders, sits lower). The width comes
+         from the name's size, not the loaded font ("Auyang" in Unbounded is 4.84em wide), so
+         the block and its scrim don't change size when the font arrives. */
+      width: calc(min(var(--fs-name), 15.5vh) * 4.9);
       max-width: 52%;
     }
     /* The spec's scale, held down on short windows so the block clears the header. */

@@ -41,18 +41,30 @@ export interface HarbourUniforms {
 export const BAKE_SLOTS = 7;
 const PW = 2048;
 
+export interface WindowSet {
+  wins: FrontWindow[];
+  vis: Uint8Array;
+  normal: [number, number];
+}
+
 export interface Harbour {
   mesh: Mesh;
   hiRange: Vector4;
-  /** Bake slot from a camera position and which windows it can see. */
-  bake(slot: number, cam: Vector3, vis: Uint8Array): void;
+  /**
+   * Bake a slot from a camera position and sets of lit windows with what that camera can see of
+   * each. normal is the face direction (x, z) of the set; each window counts in proportion to how
+   * squarely it faces the camera, so faces seen edge-on add little.
+   */
+  bake(slot: number, cam: Vector3, sets: WindowSet[]): void;
   /** Copy one slot's profile into another (placeholder until the real bake runs). */
   copy(from: number, to: number): void;
+  /** Per-slot profile statistics, for the lab page. */
+  stats: { p50: number; p98: number; lift: number }[];
   /** Blend slots a and b by t for the current frame. */
   setBlend(a: number, b: number, t: number): void;
 }
 
-export function buildHarbour(city: CityLayout, wins: FrontWindow[], shared: HarbourUniforms): Harbour {
+export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour {
   const zp = city.zFront;
   const x0 = city.xMin - 400;
   const xSpan = city.width + 800;
@@ -99,7 +111,8 @@ export function buildHarbour(city: CityLayout, wins: FrontWindow[], shared: Harb
     return out;
   };
 
-  function bake(slot: number, cam: Vector3, vis: Uint8Array) {
+  const stats: { p50: number; p98: number; lift: number }[] = [];
+  function bake(slot: number, cam: Vector3, sets: WindowSet[]) {
     const project = (x: number, y: number, z: number) => {
       const k = (cam.z - zp) / (cam.z - z);
       return [cam.x + (x - cam.x) * k, cam.y + (y - cam.y) * k];
@@ -109,19 +122,26 @@ export function buildHarbour(city: CityLayout, wins: FrontWindow[], shared: Harb
     const count = new Float32Array(PW);
     const litTop = new Float32Array(PW);
     const roof = new Float32Array(PW);
-    for (let i = 0; i < wins.length; i++) {
-      if (!vis[i]) continue;
-      const w = wins[i];
-      const [px, py] = project(w.x, w.y, w.z);
-      const bx = Math.floor((px - x0) / binX);
-      if (bx < 0 || bx >= PW) continue;
-      const c = isWarm(w.wh, w.T) ? warm : cool;
-      const b = brightness(w.wh);
-      sum[bx * 3] += c[0] * b;
-      sum[bx * 3 + 1] += c[1] * b;
-      sum[bx * 3 + 2] += c[2] * b;
-      count[bx] += b;
-      litTop[bx] = Math.max(litTop[bx], py);
+    for (const set of sets) {
+      const [nx, nz] = set.normal;
+      for (let i = 0; i < set.wins.length; i++) {
+        if (!set.vis[i]) continue;
+        const w = set.wins[i];
+        const dx = cam.x - w.x;
+        const dz = cam.z - w.z;
+        const facing = (nx * dx + nz * dz) / Math.hypot(dx, cam.y - w.y, dz);
+        if (facing <= 0.05) continue;
+        const [px, py] = project(w.x, w.y, w.z);
+        const bx = Math.floor((px - x0) / binX);
+        if (bx < 0 || bx >= PW) continue;
+        const c = isWarm(w.wh, w.T) ? warm : cool;
+        const b = brightness(w.wh) * Math.min(1, facing * 1.25);
+        sum[bx * 3] += c[0] * b;
+        sum[bx * 3 + 1] += c[1] * b;
+        sum[bx * 3 + 2] += c[2] * b;
+        count[bx] += b;
+        litTop[bx] = Math.max(litTop[bx], py);
+      }
     }
     for (const t of city.towers) {
       for (const s of t.segs) {
@@ -134,15 +154,26 @@ export function buildHarbour(city: CityLayout, wins: FrontWindow[], shared: Harb
         for (let i = i0; i <= i1; i++) roof[i] = Math.max(roof[i], by);
       }
     }
-    // Light saturates with the number of stacked lights: a tall bright tower gives a strong
-    // streak, a dim low one a faint one.
+    // Light grows with the number of stacked lights in a column (per 2.5 m of width, so tiers
+    // with narrower columns get the same streaks). Then a stop whose brightest columns (98th
+    // percentile) fall short of 0.85, such as one facing low-rise buildings close up, is lifted
+    // so they reach it; a stop that already reaches it (the hero) is left as it is.
     const light = new Float32Array(PW * 3);
+    const strength = new Float32Array(PW);
     for (let i = 0; i < PW; i++) {
       if (count[i] <= 0) continue;
-      // per 2.5 m of width, so tiers with narrower columns (the phone city) get the same streaks
       const perWidth = (count[i] * 2.5) / binX;
-      const strength = Math.pow(1 - Math.exp(-perWidth / 14), 1.7);
-      for (let c = 0; c < 3; c++) light[i * 3 + c] = (sum[i * 3 + c] / count[i]) * strength;
+      strength[i] = Math.pow(1 - Math.exp(-perWidth / 14), 1.7);
+    }
+    const lit = Array.from(strength).filter((v) => v > 0).sort((a, b) => a - b);
+    const p98 = lit.length ? lit[Math.min(lit.length - 1, Math.floor(lit.length * 0.98))] : 1;
+    const p50 = lit.length ? lit[Math.floor(lit.length * 0.5)] : 1;
+    const lift = Math.max(1, 0.85 / Math.max(p98, 0.05));
+    stats[slot] = { p50: +p50.toFixed(3), p98: +p98.toFixed(3), lift: +lift.toFixed(2) };
+    for (let i = 0; i < PW; i++) {
+      if (count[i] <= 0) continue;
+      const k = Math.min(1, strength[i] * lift);
+      for (let c = 0; c < 3; c++) light[i * 3 + c] = (sum[i * 3 + c] / count[i]) * k;
     }
     const topS = smoothHeights(litTop);
     const roofS = smoothHeights(roof);
@@ -206,6 +237,7 @@ export function buildHarbour(city: CityLayout, wins: FrontWindow[], shared: Harb
   return {
     mesh,
     hiRange,
+    stats,
     bake,
     copy,
     setBlend(a: number, b: number, t: number) {

@@ -8,13 +8,13 @@ import { PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three
 import { SCENE_ORDER, usePhoneLayout, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
 import { applyPose, buildCameraPath, FOV, poseToCameraPose, type CameraPath, type KeyPose } from './camera-path';
 import { generateCity } from './city';
-import { BAKE_SLOTS, buildHarbour } from './harbour';
+import { BAKE_SLOTS, buildHarbour, type WindowSet } from './harbour';
 import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { buildSky } from './sky';
 import { buildSkyline } from './skyline';
 import { detectTier, readGpu } from './tier';
-import { litFrontWindows, sampleWindows, visibleFrom } from './windows';
+import { litFrontWindows, litSideWindows, sampleWindows, visibleFrom, type FrontWindow } from './windows';
 
 export const DEFAULT_SEED = 0x1997;
 const DEG = Math.PI / 180;
@@ -76,13 +76,18 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   const heroPos = path.poses.hero.pos.clone();
   let vis = visibleFrom(city, wins, heroPos.x, heroPos.y, heroPos.z);
   let visFor = heroPos.clone();
-  const harbour = buildHarbour(city, wins, U);
-  harbour.bake(0, heroPos, vis);
+  const harbour = buildHarbour(city, U);
+  const FRONT: [number, number] = [0, 1];
+  harbour.bake(0, heroPos, [{ wins, vis, normal: FRONT }]);
   for (let k = 1; k < BAKE_SLOTS; k++) harbour.copy(0, k);
-  // Reflection profiles per camera stop: the hero now, the others in idle time (about 15 ms
-  // each), so oblique stops reflect the towers they actually see.
+  // Reflection profiles per camera stop: the hero now, the others in idle time, a step at a
+  // time (front faces, then side faces, then the bake), so oblique stops reflect the towers and
+  // faces they actually see. Side faces only matter at the oblique stops.
   const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, summer: 2, och: 3, ais: 4, club: 5, more: 6, since: 6, people: 6, contact: 6 };
   const SLOT_KEYS: SceneKey[] = ['hero', 'question', 'summer', 'och', 'ais', 'club', 'more'];
+  const OBLIQUE = new Set([2, 3, 4, 5]);
+  let sideRight: FrontWindow[] | null = null;
+  let sideLeft: FrontWindow[] | null = null;
   let bakeGen = 0;
   let bakesDone = 1;
   const idle = (cb: () => void) => {
@@ -91,28 +96,51 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   };
   const scheduleBakes = () => {
     const gen = ++bakeGen;
-    const queue = SLOT_KEYS.map((_, i) => i);
-    const step = () => {
+    type Task = { slot: number; step: 'front' | 'sides' | 'bake' };
+    const tasks: Task[] = [];
+    for (let i = 0; i < SLOT_KEYS.length; i++) {
+      tasks.push({ slot: i, step: 'front' });
+      if (OBLIQUE.has(i)) tasks.push({ slot: i, step: 'sides' });
+      tasks.push({ slot: i, step: 'bake' });
+    }
+    const sets = new Map<number, WindowSet[]>();
+    const run = () => {
       if (gen !== bakeGen || disposed) return;
-      const i = queue.shift();
-      if (i === undefined) return;
-      const p = path.poses[SLOT_KEYS[i]].pos;
-      if (i === 0) {
-        if (p.distanceTo(visFor) > 1) {
-          vis = visibleFrom(city, wins, p.x, p.y, p.z);
-          visFor = p.clone();
-          harbour.bake(0, p, vis);
+      const task = tasks.shift();
+      if (!task) return;
+      const { slot } = task;
+      const p = path.poses[SLOT_KEYS[slot]].pos;
+      if (task.step === 'front') {
+        if (slot === 0) {
+          if (p.distanceTo(visFor) > 1) {
+            vis = visibleFrom(city, wins, p.x, p.y, p.z);
+            visFor = p.clone();
+            sets.set(0, [{ wins, vis, normal: FRONT }]);
+          }
+        } else {
+          sets.set(slot, [{ wins, vis: visibleFrom(city, wins, p.x, p.y, p.z), normal: FRONT }]);
         }
+      } else if (task.step === 'sides') {
+        sideRight ??= litSideWindows(city, 1);
+        sideLeft ??= litSideWindows(city, 3);
+        const right = sideRight.filter((w) => p.x > w.x);
+        const left = sideLeft.filter((w) => p.x < w.x);
+        sets.get(slot)?.push(
+          { wins: right, vis: visibleFrom(city, right, p.x, p.y, p.z), normal: [1, 0] },
+          { wins: left, vis: visibleFrom(city, left, p.x, p.y, p.z), normal: [-1, 0] },
+        );
       } else {
-        harbour.bake(i, p, visibleFrom(city, wins, p.x, p.y, p.z));
+        const s = sets.get(slot);
+        if (s) {
+          harbour.bake(slot, p, s);
+          bakesDone++;
+          if (frozen) requestRender();
+        }
       }
-      bakesDone++;
-      if (frozen) requestRender();
-      if (queue.length) idle(step);
+      if (tasks.length) idle(run);
     };
-    idle(step);
+    idle(run);
   };
-
   scene.add(sky, peak, skyline, harbour.mesh, lights.points);
 
   const landmarks: Landmarks = {
@@ -169,7 +197,8 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     const wave = motion ? ((time / 9) % 1) * 1.3 - 0.15 : 0.45;
     U.uHi.value.set(type, s, wave);
     const r = harbour.hiRange;
-    if (type === 1) r.set(city.xMin + (wave - 0.06) * city.width, city.xMin + (wave + 0.06) * city.width, s * 0.6, 0);
+    // och lifts every window a little, so it lifts every reflection a little too
+    if (type === 1) r.set(city.xMin + (wave - 0.06) * city.width, city.xMin + (wave + 0.06) * city.width, s * 0.6, s * 0.35);
     else if (type === 2) r.set(city.clusters[0].x0, city.clusters[city.clusters.length - 1].x1, s, 0);
     else if (type === 3) r.set(city.lowBlock.x0, city.lowBlock.x1, s, 0);
     else r.set(0, 0, 0, 0);
@@ -320,6 +349,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       litFrontWindows: wins.length,
       litShareFront: (wins.length / frontCells).toFixed(3),
       reflectionBakes: bakesDone,
+      reflectionStats: JSON.stringify(harbour.stats),
       visibleLitFront: vis.reduce((s, v) => s + v, 0),
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,

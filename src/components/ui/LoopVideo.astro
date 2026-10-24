@@ -163,12 +163,24 @@ const height = src?.height ?? 800;
     text-align: center;
   }
 
-  /* Text color, not dim, with the tight strong halo: the caption sits at the height of the
-     skyline and its reflections. (No scrim here: a wide one reached over the text column.) */
+  /* Text color, not dim, on a compact scrim of its own plus the tight halo: the caption sits at
+     the height of the skyline and its reflections. The caption shrinks to its words and the scrim
+     hugs them (16px above and below, 24px plus 12% of the caption's width to each side), so it
+     can't reach the text column beside the video. */
   .vf__cap {
+    position: relative;
+    justify-self: start;
     font-size: var(--fs-small);
     line-height: 1.5;
     color: var(--text);
     text-shadow: var(--halo-strong);
+  }
+  .vf__cap::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--space-3) * -1) calc(-12% - var(--space-4));
+    z-index: -1;
+    background: var(--scrim-hug);
+    pointer-events: none;
   }
 </style>

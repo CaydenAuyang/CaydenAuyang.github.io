@@ -30,7 +30,7 @@ export interface PeakUniforms {
 
 
 export function buildPeak(city: CityLayout, shared: PeakUniforms): Mesh {
-  const N = 900;
+  const N = 1400;
   const pos = new Float32Array((N + 1) * 2 * 3);
   const idx: number[] = [];
   for (let i = 0; i <= N; i++) {

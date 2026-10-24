@@ -11,6 +11,8 @@ const EASE = 'cubic-bezier(0.455, 0.03, 0.515, 0.955)';
 const DURATION = 420;
 
 const layoutChanged = () => window.dispatchEvent(new CustomEvent('world:layout'));
+// Snapshot mode shows every panel open (More.astro), so the buttons say so too.
+const snapshot = document.documentElement.hasAttribute('data-snapshot');
 
 document.querySelectorAll<HTMLElement>('[data-more]').forEach((root) => {
   const button = root.querySelector<HTMLButtonElement>('[data-more-btn]');
@@ -23,6 +25,10 @@ document.querySelectorAll<HTMLElement>('[data-more]').forEach((root) => {
     button.setAttribute('aria-expanded', String(open));
     if (text) text.textContent = open ? ui.less : ui.more;
   };
+  if (snapshot) {
+    panel.setAttribute('data-open', '');
+    set(true);
+  }
 
   button.addEventListener('click', () => {
     const opening = button.getAttribute('aria-expanded') !== 'true';

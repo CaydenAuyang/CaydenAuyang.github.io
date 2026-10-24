@@ -140,6 +140,38 @@ export function litFrontWindows(city: CityLayout): FrontWindow[] {
 }
 
 /**
+ * Every lit window on one side face of every segment (face 1 is +x, face 3 is -x), with the same
+ * rule the shader uses for that face. The harbour uses these for oblique camera stops, where the
+ * side faces carry much of the visible light.
+ */
+export function litSideWindows(city: CityLayout, face: 1 | 3): FrontWindow[] {
+  const out: FrontWindow[] = [];
+  for (const t of city.towers) {
+    const g = GLAZING[t.glazing];
+    const yIn = (g[1] + g[2]) / 2;
+    for (const s of t.segs) {
+      if (s.kind !== SEG_WINDOWS) continue;
+      const faceSeg = face + 8 * s.seg;
+      const x = face === 1 ? s.x + s.w / 2 + 0.25 : s.x - s.w / 2 - 0.25;
+      for (let f = 0; f < s.winFloors; f++) {
+        const floor = s.floorOffset + f;
+        const T = floorThreshold(t.seed, floor, s.L);
+        if (T === 0) continue;
+        const y = s.y0 + (f + yIn) * t.floorH;
+        for (let c = 0; c < s.colsS; c++) {
+          const wh = windowHash(t.seed, faceSeg, floor, c);
+          if (!isLit(wh, T)) continue;
+          const u01 = (c + 0.5) / s.colsS;
+          const z = face === 1 ? s.z + (0.5 - u01) * s.d : s.z + (u01 - 0.5) * s.d;
+          out.push({ x, y, z, wh, T, tower: t, seg: s });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Which windows a camera at (cx, cy, cz) can see, testing the ray to the camera against every
  * segment in front of the window. Uses an x-bucket grid so it stays fast (about 10 ms).
  */

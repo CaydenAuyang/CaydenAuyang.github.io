@@ -43,7 +43,8 @@ const BEATS: Record<SceneKey, Beat> = {
   more: { key: 'more', arrive: 0.6, morph: { hold: 'A' } },
   since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'F', over: [0.05, 0.7] } },
   people: { key: 'people', arrive: 0.6, morph: { hold: 'F' } },
-  contact: { key: 'contact', arrive: 0.5, morph: { from: 'F', to: 'E', over: [0, 0.6] } },
+  // The lights gather once People's text has scrolled away (Contact starts as it enters the window).
+  contact: { key: 'contact', arrive: 0.5, morph: { from: 'F', to: 'E', over: [0.35, 0.9] } },
 };
 
 /**
@@ -143,7 +144,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       introSkipped = true;
       // Skipping means the end state now: the text snaps open instead of finishing its wipe.
       introEls.forEach((el) => {
-        if (!el || el.classList.contains('is-in')) return;
+        if (!el) return;
         el.style.transition = 'none';
         el.style.animation = 'none';
       });
@@ -180,9 +181,16 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         if (pinning && fits) {
           return ScrollTrigger.create({ trigger: el, start: 'top top', end: '+=120%', pin: true, pinSpacing: true });
         }
-        return ScrollTrigger.create({ trigger: el, start: 'top top', end: 'bottom top' });
+        // Unpinned (phones, reduced motion, snapshot, or too tall): the first project takes over
+        // at the top of the window, giving the archive's dissolve its scroll; the next two take
+        // over a little earlier, so the city never shows the last project under the next video.
+        return ScrollTrigger.create({ trigger: el, start: key === 'och' ? 'top top' : 'top 35%', end: 'bottom top' });
       }
-      if (key === 'contact') return ScrollTrigger.create({ trigger: el, start: 'top bottom', end: 'bottom bottom' });
+      if (key === 'contact') {
+        // Snapshot freezes People on the star field and Contact on the two lights, so Contact
+        // starts at the middle of the window there; live, it starts as soon as it enters.
+        return ScrollTrigger.create({ trigger: el, start: snapshot ? 'top center' : 'top bottom', end: 'bottom bottom' });
+      }
       return ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center' });
     });
     ScrollTrigger.refresh();
@@ -219,7 +227,9 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
    * we are, measured from its start to the next scene's start (the last scene uses its own end).
    */
   function current(): { index: number; p: number } {
-    const y = window.scrollY;
+    // Lenis's animated position is fractional, so morphs glide smoothly to rest instead of
+    // stepping one whole pixel at a time at the end of a smooth scroll.
+    const y = lenis ? lenis.animatedScroll : window.scrollY;
     let index = 0;
     triggers.forEach((st, i) => {
       if (y >= st.start - 1) index = i;

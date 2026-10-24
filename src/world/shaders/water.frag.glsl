@@ -13,7 +13,7 @@ uniform float uTime;
 uniform float uMotion;
 uniform float uSkyFade;
 uniform float uWake;
-uniform vec4 uHiRange; // x0, x1, strength
+uniform vec4 uHiRange; // x0, x1, strength in that range, boost everywhere
 uniform vec2 uCityX;
 uniform vec3 uFog;
 varying vec3 vWorld;
@@ -55,7 +55,12 @@ void main() {
   float warp = vnoise(vec2(xs * 0.006, ym * 0.02 - t * 0.1));
   float wob = vnoise(vec2(xs * 0.02, sqrt(ym) * 0.8 - t * 0.3)) - 0.5;
   float zig = sin(ym * 0.21 + warp * 9.0 - t * 1.2) * (0.8 + ym * 0.008);
-  float xw = xs + wob * (2.0 + ym * 0.03) + zig;
+  // A finer wiggle on the streak edges, so close-up streaks never have straight sides; it fades
+  // where it would alias.
+  float wq2 = ym * 0.55 - t * 0.9;
+  float edgeAA = 1.0 - smoothstep(0.3, 0.7, fwidth(wq2));
+  float wob2 = (vnoise(vec2(xs * 0.06, wq2)) - 0.5) * 3.2 * edgeAA;
+  float xw = xs + wob * (2.0 + ym * 0.03) + zig + wob2;
   float u = (xw - uProfRange.x) / uProfRange.y;
   // The two camera stops either side of the camera, blended.
   float ra = uBake.x * 2.0;
@@ -67,21 +72,31 @@ void main() {
   // Each streak ends at its own ragged length, so no straight line forms where tall and low
   // towers meet.
   float rag = 0.75 + 0.5 * vnoise(vec2(xs * 0.045, 7.3));
-  float len = 1.0 - smoothstep(H.x * 0.35 * rag, H.x * 1.4 * rag + 12.0, ym);
+  // Rough water stretches reflections toward the viewer, so even low buildings throw streaks
+  // well out from the shore.
+  float len = 1.0 - smoothstep(H.x * 0.35 * rag + 20.0, (H.x * 1.4 + 85.0) * rag, ym);
   // Fade with distance from the shore.
   float fall = exp(-ym / 300.0);
   // Thin streaks: only part of each lit column catches the light. Where the pattern would
   // be smaller than a pixel, use its average instead.
   float sN = vnoise(vec2(xw * 0.16 + warp * 2.0, ym * 0.004));
   float sAA = smoothstep(0.25, 0.6, fx * 0.16);
-  float stri = mix(smoothstep(0.52, 0.88, sN), 0.34, sAA);
+  // Close up (the streak pattern spans many pixels) streaks get wider and brighter: a nearby
+  // waterfront throws more light on the water than a distant skyline. The hero is far enough
+  // that this stays off.
+  float near = 1.0 - smoothstep(0.06, 0.16, fx * 0.16);
+  float stri = mix(smoothstep(mix(0.52, 0.38, near), 0.88, sN), 0.34, sAA);
+  // a finer octave of striation where it resolves (close views), so streaks stay thin
+  float sN2 = vnoise(vec2(xw * 0.55 + 3.3, ym * 0.012));
+  float s2AA = smoothstep(0.25, 0.6, fx * 0.55);
+  stri *= mix(0.45 + 1.2 * smoothstep(0.35, 0.75, sN2), 1.0, s2AA);
   // Ripple breaks: thin and frequent near the shore, stretched near the camera.
   float ry = sqrt(ym + 4.0) * 2.6;
-  float dN = vnoise(vec2(xs * 0.05 + warp * 3.0, ry - t * 0.35));
-  float dN2 = vnoise(vec2(xs * 0.11 + 3.7, ry * 2.3 - t * 0.6));
+  float dN = vnoise(vec2(xs * 0.05 + warp * 3.0, ry - t * 0.5));
+  float dN2 = vnoise(vec2(xs * 0.11 + 3.7, ry * 2.3 - t * 0.9));
   float dAA = smoothstep(0.3, 0.7, fwidth(ry * 2.3));
-  float dash = smoothstep(0.38, 0.68, dN) * mix(smoothstep(0.25, 0.6, dN2), 0.8, dAA);
-  vec3 refl = L * uProfGain * len * fall * stri * dash * 2.0;
+  float dash = smoothstep(mix(0.38, 0.28, near), 0.68, dN) * mix(smoothstep(mix(0.25, 0.15, near), 0.6, dN2), 0.8, dAA);
+  vec3 refl = L * uProfGain * len * fall * stri * dash * mix(2.0, 2.8, near);
   // A very faint wash under the lit city, so streaks sit in a little haze of light.
   refl += L * uProfGain * len * fall * 0.025;
 
@@ -89,7 +104,7 @@ void main() {
   float wakeT = clamp(across, 0.0, 1.0) * 0.86 + 0.06;
   refl *= smoothstep(wakeT - 0.03, wakeT + 0.03, uWake * 1.06 - 0.02);
   float inHi = smoothstep(uHiRange.x - 40.0, uHiRange.x, xs) * (1.0 - smoothstep(uHiRange.y, uHiRange.y + 40.0, xs));
-  refl *= 1.0 + uHiRange.z * 1.4 * inHi;
+  refl *= (1.0 + uHiRange.w) * (1.0 + uHiRange.z * 0.8 * inHi);
 
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);

@@ -100,6 +100,19 @@ const { menu = false } = Astro.props;
     );
     pointer-events: none;
   }
+  /* Phones: text scrolls right under the name and Menu, so the top band is nearly opaque
+     (night at 92% through the header's 64px), then fades out over the next 48px. */
+  @media (max-width: 767px) {
+    .site-header::before {
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0.92) 0%,
+        rgb(var(--night-rgb) / 0.92) 57%,
+        rgb(var(--night-rgb) / 0.5) 78%,
+        rgb(var(--night-rgb) / 0) 100%
+      );
+    }
+  }
 
   .site-header__name,
   .site-header__btn {

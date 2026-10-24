@@ -61,6 +61,14 @@
     rgb(var(--night-rgb) / 0.3) 78%,
     rgb(var(--night-rgb) / 0) 100%
   );
+  /* A small scrim that hugs one short line (the video captions): night at 60% held to 70% of
+     the radius, then fading to 0. */
+  --scrim-hug: radial-gradient(
+    closest-side,
+    rgb(var(--night-rgb) / 0.6) 0%,
+    rgb(var(--night-rgb) / 0.6) 70%,
+    rgb(var(--night-rgb) / 0) 100%
+  );
   /* A dark halo around letters that sit over light. Inherited from .scrim. */
   --halo: 0 0 2px rgb(var(--night-rgb) / 0.5), 0 0 12px rgb(var(--night-rgb) / 0.85), 0 0 28px rgb(var(--night-rgb) / 0.55);
   /* A tighter, darker halo for small accent marks (the note numbers) that can sit on a bright

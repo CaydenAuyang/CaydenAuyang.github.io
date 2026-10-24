@@ -487,11 +487,17 @@ function makeTower(r: Rng, s: TowerSpec): Tower {
 
 /** The Peak's ridge stands this far behind the shoreline, and runs this far each side of Central. */
 export const PEAK_Z = -2700;
-export const PEAK_HALF = 9000;
+export const PEAK_HALF = 13000;
 
-/** z of the ridge at x: it bends gently toward the camera at its ends so pans never see past it. */
+/**
+ * z of the ridge at x. It bends gently toward the camera, and beyond about 7 km either side of
+ * Central it wraps round toward the camera's side of the harbour (hills ringing the water), so
+ * no framing ever sees past its end.
+ */
 export function ridgeZ(x: number, city: CityLayout): number {
-  return PEAK_Z + Math.pow(Math.abs(x - city.centralX) / PEAK_HALF, 2) * 1800;
+  const d = Math.abs(x - city.centralX);
+  const wrap = Math.max(0, d - 7000) / 6000;
+  return PEAK_Z + Math.pow(d / 9000, 2) * 1800 + 4200 * wrap * wrap;
 }
 
 /** The Peak's ridge height at x (meters above the water), shared by the Peak mesh and its lights. */
@@ -512,5 +518,8 @@ export function ridgeHeight(x: number, city: CityLayout): number {
   y += 70 * (ridged - 0.55);
   y += 26 * (fbm1(x / 110, seed ^ 0x3c, 3) - 0.5);
   y += 7 * (fbm1(x / 28, seed ^ 0x5e, 2) - 0.5);
-  return y;
+  // the far ends (behind every framing) slope down to the water instead of stopping
+  const d = Math.abs(x - c);
+  const t = Math.min(1, Math.max(0, (PEAK_HALF - d) / 2500));
+  return y * t * t * (3 - 2 * t);
 }
