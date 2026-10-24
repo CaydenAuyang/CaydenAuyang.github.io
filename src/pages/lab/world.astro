@@ -1,0 +1,289 @@
+---
+// /lab/world: a test page for the night world (sky, Peak, skyline, harbour, camera path). Not
+// linked from the site and kept out of search (noindex). Standalone: no site layout.
+//
+// URL options, for screenshots:
+//   ?key=hero        start at a scene key (or ?u=0.42 for any spline parameter)
+//   ?ui=0            hide the panel
+//   ?motion=0        motion off (static stars, no ripples, steady aviation lights)
+//   ?tier=phone      force a tier (high, low, phone)
+//   ?hi=och&hs=1     a project highlight and its strength
+//   ?sky=1&wake=1    intro values; ?intro=1 plays the intro once
+//   ?lift=0.1&la=1   dim windows with lift rank under 0.1 by 1
+//   ?samples=4000    draw the sampled lit windows as green dots (checks the shared rule)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>World lab</title>
+  </head>
+  <body>
+    <canvas class="world" aria-hidden="true"></canvas>
+    <aside class="panel" data-panel>
+      <h1>World lab</h1>
+      <div class="keys" data-keys></div>
+      <label>Camera u <input type="range" min="0" max="1" step="0.001" value="0" data-u /> <output data-u-out>0</output></label>
+      <label>Sky <input type="range" min="0" max="1" step="0.01" value="1" data-sky /></label>
+      <label>Wake <input type="range" min="0" max="1" step="0.01" value="1" data-wake /></label>
+      <label
+        >Highlight
+        <select data-hi>
+          <option value="">none</option>
+          <option value="och">och</option>
+          <option value="ais">ais</option>
+          <option value="club">club</option>
+        </select>
+        <input type="range" min="0" max="1" step="0.01" value="1" data-hs />
+      </label>
+      <label>Lift rank <input type="range" min="0" max="1" step="0.01" value="0" data-lr /></label>
+      <label>Lift amount <input type="range" min="0" max="1" step="0.01" value="1" data-la /></label>
+      <div class="row">
+        <button type="button" data-motion aria-pressed="true">Motion: on</button>
+        <button type="button" data-frozen aria-pressed="false">Frozen: off</button>
+        <button type="button" data-intro>Play intro</button>
+        <button type="button" data-verify>Verify rule</button>
+        <button type="button" data-bench>Bench</button>
+      </div>
+      <pre data-stats>Starting</pre>
+    </aside>
+
+    <script>
+      import { createWorld } from '../../world/renderer';
+      import { SCENE_ORDER, type SceneKey } from '../../world/contract';
+      import { verifyWindowRule } from '../../world/windows';
+      import { AdditiveBlending, BufferAttribute, BufferGeometry, Points, PointsMaterial } from 'three';
+
+      main();
+      async function main() {
+      const q = new URLSearchParams(location.search);
+      const $ = <T extends HTMLElement>(s: string) => document.querySelector<T>(s)!;
+      const canvas = $<HTMLCanvasElement>('canvas.world');
+      const motionOn = q.get('motion') !== '0';
+      if (q.get('ui') === '0') $('[data-panel]').hidden = true;
+
+      const world = (await createWorld({ canvas, motion: motionOn })) as Awaited<ReturnType<typeof createWorld>> & {
+        stats: () => Record<string, unknown>;
+      };
+      (window as unknown as { __world: unknown }).__world = world;
+
+      const uIn = $<HTMLInputElement>('[data-u]');
+      const uOut = $<HTMLOutputElement>('[data-u-out]');
+      const setU = (u: number) => {
+        uIn.value = String(u);
+        uOut.value = u.toFixed(3);
+        world.setCameraProgress(u);
+      };
+      const keysBox = $('[data-keys]');
+      for (const k of SCENE_ORDER) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = k;
+        b.addEventListener('click', () => setU(world.cameraKeys[k]));
+        keysBox.append(b);
+      }
+      uIn.addEventListener('input', () => setU(Number(uIn.value)));
+
+      const key = q.get('key') as SceneKey | null;
+      if (key && key in world.cameraKeys) setU(world.cameraKeys[key]);
+      else if (q.get('u')) setU(Number(q.get('u')));
+
+      const skyIn = $<HTMLInputElement>('[data-sky]');
+      const wakeIn = $<HTMLInputElement>('[data-wake]');
+      if (q.get('sky')) skyIn.value = q.get('sky')!;
+      if (q.get('wake')) wakeIn.value = q.get('wake')!;
+      const intro = () => world.setIntro({ sky: Number(skyIn.value), wake: Number(wakeIn.value) });
+      skyIn.addEventListener('input', intro);
+      wakeIn.addEventListener('input', intro);
+      intro();
+
+      const hiSel = $<HTMLSelectElement>('[data-hi]');
+      const hsIn = $<HTMLInputElement>('[data-hs]');
+      if (q.get('hi')) hiSel.value = q.get('hi')!;
+      if (q.get('hs')) hsIn.value = q.get('hs')!;
+      const hi = () => world.setHighlight((hiSel.value || null) as 'och' | 'ais' | 'club' | null, Number(hsIn.value));
+      hiSel.addEventListener('change', hi);
+      hsIn.addEventListener('input', hi);
+      hi();
+
+      const lrIn = $<HTMLInputElement>('[data-lr]');
+      const laIn = $<HTMLInputElement>('[data-la]');
+      if (q.get('lift')) lrIn.value = q.get('lift')!;
+      if (q.get('la')) laIn.value = q.get('la')!;
+      const lift = () => world.setLift(Number(lrIn.value), Number(laIn.value));
+      lrIn.addEventListener('input', lift);
+      laIn.addEventListener('input', lift);
+      lift();
+
+      let motion = motionOn;
+      const mBtn = $('[data-motion]');
+      const syncMotion = () => {
+        mBtn.textContent = `Motion: ${motion ? 'on' : 'off'}`;
+        mBtn.setAttribute('aria-pressed', String(motion));
+      };
+      syncMotion();
+      mBtn.addEventListener('click', () => {
+        motion = !motion;
+        world.setMotion(motion);
+        syncMotion();
+      });
+      let frozen = false;
+      const fBtn = $('[data-frozen]');
+      fBtn.addEventListener('click', () => {
+        frozen = !frozen;
+        world.setFrozen(frozen);
+        fBtn.textContent = `Frozen: ${frozen ? 'on' : 'off'}`;
+        fBtn.setAttribute('aria-pressed', String(frozen));
+      });
+
+      const playIntro = () => {
+        const t0 = performance.now();
+        const step = () => {
+          const t = performance.now() - t0;
+          const sky = Math.min(1, t / 700);
+          const wake = Math.min(1, Math.max(0, (t - 300) / 1600));
+          world.setIntro({ sky, wake });
+          skyIn.value = String(sky);
+          wakeIn.value = String(wake);
+          if (t < 1900) requestAnimationFrame(step);
+        };
+        step();
+      };
+      $('[data-intro]').addEventListener('click', playIntro);
+      if (q.get('intro') === '1') playIntro();
+
+      const statsEl = $('[data-stats]');
+      let extra = '';
+      $('[data-verify]').addEventListener('click', () => {
+        const r = verifyWindowRule(world.renderer);
+        extra = `rule check: ${r.cells} cells, ${r.mismatches} mismatches, ${(r.litShare * 100).toFixed(1)}% lit`;
+        (window as unknown as { __verify: unknown }).__verify = r;
+      });
+      const bench = (n = 120) => {
+        const gl = world.renderer.getContext();
+        const px = new Uint8Array(4);
+        world.setFrozen(true);
+        world.renderer.render(world.scene, world.camera);
+        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        const t0 = performance.now();
+        for (let i = 0; i < n; i++) {
+          world.renderer.render(world.scene, world.camera);
+          gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        }
+        const ms = (performance.now() - t0) / n;
+        world.setFrozen(frozen);
+        return ms;
+      };
+      (window as unknown as { __bench: unknown }).__bench = bench;
+      $('[data-bench]').addEventListener('click', () => {
+        extra = `bench: ${bench().toFixed(2)} ms per frame (render + GPU sync)`;
+      });
+
+      // Sampled lit windows as green dots: they should sit exactly on lit front windows.
+      const sN = Number(q.get('samples') || 0);
+      if (sN > 0) {
+        const s = world.sampleLitWindows(sN, Number(q.get('srank') || 1));
+        const g = new BufferGeometry();
+        g.setAttribute('position', new BufferAttribute(s.positions, 3));
+        world.scene.add(
+          new Points(g, new PointsMaterial({ color: 0x22ff66, size: 2, sizeAttenuation: false, blending: AdditiveBlending, depthWrite: false, transparent: true })),
+        );
+        extra = `samples: ${s.count}`;
+      }
+
+      // frame timing
+      let acc = 0;
+      let n = 0;
+      let fps = 0;
+      world.onFrame((_t, d) => {
+        acc += d;
+        n++;
+        if (acc > 1) {
+          fps = n / acc;
+          acc = 0;
+          n = 0;
+        }
+      });
+      setInterval(() => {
+        const s = world.stats();
+        statsEl.textContent = `${Object.entries(s)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\n')}\nfps: ${fps.toFixed(1)}\n${extra}`;
+        (window as unknown as { __fps: number }).__fps = fps;
+      }, 500);
+      }
+    </script>
+
+    <style is:global>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #05070d;
+        color: #eee9e1;
+        font: 13px/1.4 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      canvas.world {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .panel {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        width: min(320px, calc(100vw - 16px));
+        max-height: calc(100vh - 16px);
+        overflow: auto;
+        padding: 12px;
+        background: rgb(5 7 13 / 0.78);
+        border: 1px solid rgb(255 182 92 / 0.25);
+        border-radius: 10px;
+      }
+      .panel[hidden] {
+        display: none;
+      }
+      .panel h1 {
+        font-size: 15px;
+        margin: 0 0 8px;
+      }
+      .panel label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        margin: 6px 0;
+      }
+      .panel input[type='range'] {
+        flex: 1;
+      }
+      .keys,
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin: 6px 0;
+      }
+      .panel button {
+        font: inherit;
+        color: inherit;
+        background: #121838;
+        border: 1px solid rgb(255 182 92 / 0.3);
+        border-radius: 6px;
+        padding: 3px 8px;
+        cursor: pointer;
+      }
+      .panel pre {
+        white-space: pre-wrap;
+        font-size: 11px;
+        margin: 8px 0 0;
+        color: #8e95a8;
+      }
+    </style>
+  </body>
+</html>
