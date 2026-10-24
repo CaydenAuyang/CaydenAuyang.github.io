@@ -32,6 +32,8 @@ const ZETA = 0.7;
 const IDLE_AFTER = 3000;
 const SWAY = 8 * DEG;
 const SWAY_PERIOD = 6;
+/** When the sway takes over, the figure eases from where it was looking with this time constant (s), at about the sway's own speed. */
+const IDLE_EASE = 2.5;
 /** A press that moves less than this (CSS px) is a tap, not a drag. */
 const TAP_SLOP = 6;
 const TAP_MAX_MS = 600;
@@ -96,6 +98,8 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   // ---- The figure's turn ------------------------------------------------------------------------
   const turn = { yaw: 0, pitch: 0, vy: 0, vp: 0, ty: 0, tp: 0 };
   let lastInput = performance.now();
+  /** Where the turn was aimed when the sway took over (null while there is input). */
+  let idleFrom: { yaw: number; pitch: number } | null = null;
   let pointerKnown = false;
   let drag: { id: number; x: number; y: number; yaw: number; pitch: number; width: number } | null = null;
   const canTurn = typeof signal?.setFigureTurn === 'function';
@@ -111,11 +115,19 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
         const now = performance.now();
         if (!drag) {
           if (now - lastInput > IDLE_AFTER) {
-            turn.ty = SWAY * Math.sin(((now - lastInput - IDLE_AFTER) / 1000) * ((2 * Math.PI) / SWAY_PERIOD));
-            turn.tp = 0;
-          } else if (!pointerKnown || touchOnly) {
-            turn.ty = 0;
-            turn.tp = 0;
+            // The sway takes over gradually from wherever the figure was looking, so a figure
+            // turned toward a resting pointer drifts back instead of snapping to center.
+            const t = (now - lastInput - IDLE_AFTER) / 1000;
+            idleFrom ??= { yaw: turn.ty, pitch: turn.tp };
+            const settle = Math.exp(-t / IDLE_EASE);
+            turn.ty = idleFrom.yaw * settle + SWAY * Math.sin(t * ((2 * Math.PI) / SWAY_PERIOD)) * (1 - settle);
+            turn.tp = idleFrom.pitch * settle;
+          } else {
+            idleFrom = null;
+            if (!pointerKnown || touchOnly) {
+              turn.ty = 0;
+              turn.tp = 0;
+            }
           }
         }
         // Semi-implicit Euler in small steps, so a long frame can't make the spring blow up.

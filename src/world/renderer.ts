@@ -13,7 +13,8 @@ import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { createInteractions, pulseUniforms } from './pulse';
 import { createSpill, spillUniforms } from './spill';
-import { buildSky, starsInView } from './sky';
+import { buildShooting } from './shooting';
+import { buildSky, STAR_AXIS, STAR_DRIFT, starsInView } from './sky';
 import { buildSkyline } from './skyline';
 import { detectTier, readGpu } from './tier';
 import { litFrontWindows, litSideWindows, sampleWindows, visibleFrom, type FrontWindow } from './windows';
@@ -213,6 +214,10 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     requestRender: () => requestRender(),
   });
 
+  // ---- Shooting stars (11b.8): one streak on the sky dome, drawn only while it runs ----
+  const shooting = buildShooting(skyParts, camera, U, { axis: STAR_AXIS, rate: STAR_DRIFT }, () => motion);
+  sky.add(shooting.mesh);
+
   // ---- Video light spill (11b.4) ----
   const spill = createSpill(U, () => motion, () => requestRender());
 
@@ -257,6 +262,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     placeCamera();
     interactions.update(now);
     spill.update(delta, canvas.width, canvas.height);
+    shooting.update(now, { w: canvas.width, h: canvas.height });
     renderer.render(scene, camera);
     frames++;
   };
@@ -338,6 +344,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     },
     setSpill(color, strength, center) {
       spill.set(color, strength, center);
+    },
+    shootingStar(ndc) {
+      return shooting.fire(ndc);
     },
     sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
       const hp = path.poses.hero.pos;

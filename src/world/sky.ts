@@ -38,7 +38,8 @@ const FLASH_SHARE = 0.06;
 /** The drift: radians per second about the celestial pole. */
 export const STAR_DRIFT = 0.0012;
 /** The celestial pole: north (behind the camera), 22 degrees up, Hong Kong's latitude. */
-const AXIS = new Vector3(0, Math.sin(0.384), Math.cos(0.384));
+export const STAR_AXIS = new Vector3(0, Math.sin(0.384), Math.cos(0.384));
+const AXIS = STAR_AXIS;
 
 export interface SkyOptions {
   stars: number;

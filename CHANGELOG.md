@@ -41,3 +41,4 @@ Dated notes on what changed on the site.
 - Round 2, 11b.5 question scrubber: a slider from May to October applies the edits one at a time (mouse, touch or arrow keys); May, Edits and October are presets.
 - Round 2, 11b.6 lift indicator: an amber floor display on the right edge on laptops (G, 1 Question to 5 People, R Contact) shows where you are and jumps to any floor. Snapshot Experience is two screens so the chart stays clear; facts at line height 1.65; a solid phone header.
 - Round 2, 11b.7 two cities, one arc: live local times for Pomfret and Hong Kong, an arc of light between the two lights, and a Copy email button.
+- Round 2, 11b.8 shooting stars: one every 20 to 40 seconds, short and faint, and tapping a bright star sends one.
