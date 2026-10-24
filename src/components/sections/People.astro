@@ -11,8 +11,8 @@ import { people } from '../../data/content';
         {
           people.list.map((person) => (
             <li class="person">
-              <p class="person__name t-sub">{person.name}</p>
-              <p class="t-small t-dim">{person.role.text}</p>
+              <h3 class="person__name t-sub">{person.name}</h3>
+              <p class="t-meta">{person.role.text}</p>
               <p class="t-body person__text">{person.text.text}</p>
             </li>
           ))
@@ -28,7 +28,7 @@ import { people } from '../../data/content';
   }
   .person {
     display: grid;
-    gap: var(--space-1);
+    gap: var(--space-2);
   }
   /* With the 4px gap above it, 8px from the role line. */
   .person__text {

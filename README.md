@@ -29,7 +29,7 @@ Test pages (not linked, noindex): `/lab/world` (the city, with a camera slider a
 | `src/styles/tokens.css` | Colors with measured contrast ratios, type scale, 8px spacing, easings and durations. |
 | `src/styles/base.css` | Reset, focus rings, skip link, scrims and glass, the fixed canvas and fallback still, snapshot and print rules. |
 | `src/layouts/Base.astro` | The page frame: meta tags, share image, fonts, the pre-paint script, the canvas. |
-| `src/components/sections/` | One component per section, in page order: Hero, Question, Summer, Work, Since, People, Contact. |
+| `src/components/sections/` | One component per section, in page order: Hero, Question, Experience, Work, Since, People, Contact. |
 | `src/components/ui/` | The question panel, the preview video, the More toggle, external links. |
 | `src/world/contract.ts` | The one interface the world, the signal and the timeline use to talk to each other, plus the hero's screen anchors. |
 | `src/world/renderer.ts` and the files beside it | The world: tiers, camera path, sky, Peak, skyline (windows lit by a shared hash rule in `windows.ts`), harbour. |
@@ -59,13 +59,14 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | A tenth of the lit windows stream up into the figure; those windows dim | on load | 1,600 to 3,400 ms | `timeline.ts`, `signal.ts` |
 | The intro jumps to its end | the first scroll, touch or key | at once | `timeline.ts` |
 | The canvas fades in over the page background | when the scene is ready | 600 ms | `base.css` |
-| The camera moves along the skyline | scroll, every section | eased into each section's view | `timeline.ts`, `camera-path.ts` |
-| Figure to current, current to columns, columns to city, city to star field, field to two lights | scroll: Question, Summer, the top of Work, Since May, Contact | per point, a delay of up to 30%, curved paths, curl noise peaking mid-flight | `signal.ts` |
+| The camera moves along the skyline | scroll, every section | eased into each section's view; headings use capped tangents, so the camera never swings past a stop | `timeline.ts`, `camera-path.ts` |
+| Figure to current, current to columns, columns to city, city to star field, field to two lights | scroll: Question, Experience, the top of Work, Since May, Contact | per point, a delay of up to 30%, curved paths, curl noise peaking mid-flight | `signal.ts` |
 | Project highlights: a brightness wave (OurCityHealth), three small clusters (AI Simply), one low-rise block (Civic AI Club) | scroll, each project | fades in and out across the stop | `skyline.ts` |
 | Each project pins while you read it | scroll, desktop | about 120vh | `timeline.ts` |
 | The hero text fades as it scrolls up toward the figure | scroll, phones | until it would reach the shoulders | `timeline.ts` |
 | Smooth scrolling | always | Lenis | `timeline.ts` |
-| Stars twinkle and drift; a rare window flickers; aviation lights blink; the water ripples; a ferry crosses | always | aviation 1 s; ferry about 90 s | `sky.ts`, `skyline.ts`, `peak.ts`, `harbour.ts` |
+| Stars twinkle and drift: each swings between 40% and 100% of its brightness on its own 1.5 to 4 s rhythm, and 6% flash briefly every few seconds | always | flash: a 60 ms rise and a fast fall | `sky.ts`, `stars.vert.glsl` |
+| A rare window flickers; aviation lights blink; the water ripples; a ferry crosses | always | aviation 1 s; ferry about 90 s | `skyline.ts`, `peak.ts`, `harbour.ts` |
 | The current flows, the columns rise, the field drifts | while shown | slow | `signal.ts` |
 | The view tilts slightly toward the pointer | mouse or trackpad | ±1.5° yaw, ±0.8° pitch, about 600 ms lag | `renderer.ts` |
 | The scroll cue pulses, then hides | until the first scroll | 2.4 s loop | `Hero.astro` |
@@ -90,7 +91,7 @@ With reduced motion, none of this runs except opening and closing panels and the
 
 ## Credits
 
-- Fonts: [Unbounded](https://fonts.google.com/specimen/Unbounded) and [Geist](https://vercel.com/font), SIL Open Font License 1.1, through Fontsource.
+- Fonts: [Barlow Condensed](https://fonts.google.com/specimen/Barlow+Condensed) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/), SIL Open Font License 1.1, through Fontsource.
 - Libraries: [Astro](https://astro.build) (MIT), [three.js](https://threejs.org) (MIT), [GSAP](https://gsap.com) with ScrollTrigger (GreenSock standard "no charge" license), [Lenis](https://github.com/darkroomengineering/lenis) (MIT); for development, axe-core with `@axe-core/playwright` (MPL-2.0) and `playwright-core` (Apache-2.0).
 - The skyline is procedural and generic: no real buildings, no logos.
 - Level of finish referenced from https://loehx.com/ for ambition only; no design, code, text or assets from it are used.

@@ -41,7 +41,7 @@ const STATES = FILM
   'BC-50': ['B', 'C', 0.5, 'auto'],
   'C-rest': ['C', 'C', 1, 'question'],
   'CD-50': ['C', 'D', 0.5, 'auto'],
-  'D-rest': ['D', 'D', 1, 'summer'],
+  'D-rest': ['D', 'D', 1, 'experience'],
   'DA-50': ['D', 'A', 0.5, 'auto'],
   'A-rest': ['A', 'A', 1, 'och'],
   'A-hero': ['A', 'A', 1, 'hero'],

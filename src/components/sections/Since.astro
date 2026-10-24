@@ -16,8 +16,8 @@ import { since } from '../../data/content';
         {
           since.strands.map((strand) => (
             <li class="strand">
-              <h3 class="strand__label">{strand.label}</h3>
-              <p class="strand__status">{strand.status}</p>
+              <h3 class="strand__label t-label">{strand.label}</h3>
+              <p class="strand__status t-sub">{strand.status}</p>
               <p class="strand__text">{strand.text.text}</p>
             </li>
           ))
@@ -69,19 +69,12 @@ import { since } from '../../data/content';
     padding-top: var(--space-4);
     border-top: 1px solid var(--rule);
   }
-  .strand__label {
-    font-size: var(--fs-lead);
-    font-weight: var(--fw-medium);
-    line-height: var(--lh-snug);
-  }
   .strand__status {
-    font-size: var(--fs-lead);
-    font-weight: var(--fw-medium);
-    line-height: var(--lh-snug);
-    color: var(--window);
+    margin-top: var(--space-1);
   }
   .strand__text {
-    max-width: 40ch;
+    margin-top: var(--space-2);
+    max-width: var(--measure);
     font-size: var(--fs-body);
     line-height: var(--lh-body);
   }

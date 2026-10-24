@@ -1,0 +1,202 @@
+---
+// Experience.astro: section 3. Civic Exchange first with the full block (place, meta, lead, four
+// facts, and the full summer section from the long copy behind More), then the two Wisers
+// summers, one line each with their meta.
+import More from '../ui/More.astro';
+import ExternalLink from '../ui/ExternalLink.astro';
+import { experience } from '../../data/content';
+
+const { civic, roles } = experience;
+---
+
+<section id="experience" class="scene xp" data-scene="experience" aria-labelledby="experience-title">
+  <div class="wrap grid">
+    <div class="xp__block scrim">
+      <div class="xp__main">
+        <h2 id="experience-title" class="h2">{experience.heading}</h2>
+        <div class="xp__civic stack">
+          <div class="xp__where">
+            <h3 class="t-sub">{civic.name}</h3>
+            <p class="t-meta">{civic.meta.text}</p>
+          </div>
+          <p class="t-lead">{civic.lead.text}</p>
+          <ul class="facts">
+            {civic.facts.map((fact) => <li>{fact.text}</li>)}
+          </ul>
+        </div>
+      </div>
+
+      <More id="experience-more" label={civic.moreLabel} class="xp__more">
+        {
+          civic.more.map((block) => (
+            <>
+              {block.text && (
+                <p>
+                  <strong>{block.title}</strong> {block.text.text}
+                </p>
+              )}
+              {block.list && (
+                <>
+                  <p>
+                    <strong>{block.title}</strong>
+                  </p>
+                  <ul>
+                    {block.list.map((item) => (
+                      <li>{item.text}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          ))
+        }
+      </More>
+
+      <ul class="xp__roles">
+        {
+          roles.map((role) => (
+            <li class="xp__role">
+              <h3 class="t-sub xp__role-name">{role.name}</h3>
+              <p class="t-meta">{role.meta.text}</p>
+              <p class="t-body xp__role-line">{role.line.text}</p>
+              {role.link && (
+                <p>
+                  <ExternalLink class="action-link" href={role.link.href} arrow>
+                    {role.link.label}
+                  </ExternalLink>
+                </p>
+              )}
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  .xp {
+    --scene-h: 140vh;
+  }
+  .xp__civic {
+    margin-top: var(--space-5);
+  }
+  .xp__where {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .xp .facts {
+    margin-top: var(--space-4);
+  }
+  .xp :global(.xp__more) {
+    margin-top: var(--space-3);
+  }
+
+  /* The two Wisers summers: one line each, under a hairline. */
+  .xp__roles {
+    display: grid;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+  }
+  .xp__role {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--rule);
+  }
+  .xp__role-name {
+    font-size: clamp(22px, 0.4vw + 20.5px, 26px);
+  }
+  .xp__role-line {
+    margin-top: var(--space-1);
+  }
+  .xp__role .action-link {
+    margin-top: calc(var(--space-2) * -1);
+  }
+
+  /* Phones (and portrait tablets, the phone layout): the twelve columns fill the band from about
+     15% to 52% of the screen while this section scrolls, and the full-width text covers them.
+     About 55vh of empty world at the end lets the text clear the band before Selected work
+     comes in below it. */
+  @media (max-width: 767px) {
+    .xp {
+      padding-bottom: calc(22vh + 55vh);
+      padding-bottom: round(nearest, 77vh, 8px);
+    }
+  }
+  @media (min-width: 768px) and (max-width: 1023px) and (orientation: portrait) {
+    .xp {
+      padding-bottom: calc(var(--space-9) + 55vh);
+      padding-bottom: calc(var(--space-9) + round(nearest, 55vh, 8px));
+    }
+  }
+
+  /* Desktop: the right column (the same edge as the work text), clear of the archive rising
+     over Central, left of center. */
+  @media (min-width: 1024px) {
+    .xp__block {
+      grid-column: 8 / span 5;
+    }
+  }
+
+  /* Snapshot: one screen. The headline across the top; the short copy on the left (columns 1 to
+     4) with the long copy beside it in three columns; the two Wisers summers side by side along
+     the bottom. */
+  @media (min-width: 1024px) {
+    :global(html[data-snapshot]) .xp {
+      padding-block: var(--space-5);
+    }
+    :global(html[data-snapshot]) .xp__block {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      column-gap: var(--space-5);
+      align-items: start;
+    }
+    :global(html[data-snapshot]) .xp__main {
+      display: contents;
+    }
+    :global(html[data-snapshot]) .xp__main > .h2 {
+      grid-column: 1 / -1;
+      grid-row: 1;
+    }
+    :global(html[data-snapshot]) .xp__civic {
+      grid-column: 1 / span 4;
+      grid-row: 2;
+      margin-top: var(--space-3);
+    }
+    :global(html[data-snapshot]) .xp__block > :global(.xp__more) {
+      grid-column: 5 / span 8;
+      grid-row: 2;
+      margin-top: var(--space-3);
+    }
+    :global(html[data-snapshot]) .xp :global(.more__inner) {
+      columns: 3;
+      column-gap: var(--space-4);
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+    :global(html[data-snapshot]) .xp :global(.more__inner p),
+    :global(html[data-snapshot]) .xp :global(.more__inner li) {
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    :global(html[data-snapshot]) .xp :global(.more__inner p:has(+ ul)) {
+      break-after: avoid;
+    }
+    :global(html[data-snapshot]) .xp :global(.more__inner li) {
+      break-inside: avoid;
+    }
+    :global(html[data-snapshot]) .xp__roles {
+      grid-column: 1 / -1;
+      grid-row: 3;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: var(--space-5);
+      margin-top: var(--space-3);
+    }
+    :global(html[data-snapshot]) .xp__role {
+      padding-top: var(--space-3);
+    }
+  }
+</style>

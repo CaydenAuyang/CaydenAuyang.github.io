@@ -18,7 +18,7 @@
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Signal, SignalOptions, Target, World } from './contract';
-import { FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
+import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, usePhoneLayout } from './contract';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
 
@@ -45,6 +45,12 @@ const FIGURE_GAIN = [0.42, 0.95, 0.5, 0.55];
 const CURRENT_ROW = 0.8;
 /** Share of archive points that drift loose instead of joining a column. */
 const STRAYS = 0.04;
+/** The archive columns: one per notebook, each count / largest count of the full height. */
+const COLS = ARCHIVE.length;
+const COL_SHARE = ARCHIVE.map((c) => c.count / Math.max(...ARCHIVE.map((d) => d.count)));
+/** The columns' baseline above the tallest roof, and the screen row (from the top) the tallest reaches, in the experience view. */
+const COL_FOOT = 0.03;
+const COL_TOP_ROW = 0.1;
 
 const COLORS = { warm: '#FFB65C', cool: '#CFE3FF' };
 
@@ -281,6 +287,33 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     return r;
   });
 
+  // Archive columns (D): which column each point joins (-1: a stray) and how far up it sits (0..1
+  // of its column). Each column gets exactly its share of the points (largest remainder), picked
+  // at random so a morph fills every column at once, and its points are stratified up its height
+  // so even the shortest column (a dozen documents) reads as a solid stub, not a few specks.
+  const colOf = new Int8Array(N).fill(-1);
+  const colH = new Float32Array(N);
+  {
+    const members: number[] = [];
+    for (let i = 0; i < N; i++) if (!stray(i)) members.push(i);
+    members.sort((a, b) => fixed[3][a * 4] - fixed[3][b * 4] || a - b);
+    const total = COL_SHARE.reduce((s, v) => s + v, 0);
+    const exact = COL_SHARE.map((v) => (v / total) * members.length);
+    const quota = exact.map(Math.floor);
+    const left = members.length - quota.reduce((s, v) => s + v, 0);
+    const byRemainder = quota.map((_, c) => c).sort((a, b) => exact[b] - quota[b] - (exact[a] - quota[a]));
+    for (let j = 0; j < left; j++) quota[byRemainder[j]]++;
+    let k = 0;
+    for (let c = 0; c < COLS; c++) {
+      const col = members.slice(k, k + quota[c]).sort((a, b) => fixed[3][a * 4 + 3] - fixed[3][b * 4 + 3] || a - b);
+      k += quota[c];
+      col.forEach((i, j) => {
+        colOf[i] = c;
+        colH[i] = (j + fixed[1][i * 4]) / col.length;
+      });
+    }
+  }
+
   const uniforms = {
     uFrom: { value: 1 },
     uTo: { value: 1 },
@@ -322,7 +355,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const keys = world.cameraKeys;
     const hero = frameOf(world.getCameraPose(keys.hero), aspect);
     const question = frameOf(world.getCameraPose(keys.question), aspect);
-    const summer = frameOf(world.getCameraPose(keys.summer), aspect);
+    const experience = frameOf(world.getCameraPose(keys.experience), aspect);
     const since = frameOf(world.getCameraPose(keys.since), aspect);
     const people = frameOf(world.getCameraPose(keys.people), aspect);
     const contact = frameOf(world.getCameraPose(keys.contact), aspect);
@@ -406,31 +439,32 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- D: twelve columns of light above the Central cluster, seen from the summer pose.
+    // ---- D: twelve columns of light above the Central cluster, seen from the experience pose: an
+    // honest bar chart of the archive. Column c (ARCHIVE order, left to right) is count / largest
+    // count of the full height, its points are spread evenly up it, and every column has the same
+    // density and brightness, so only the data tells them apart.
     {
-      const s = summer;
+      const s = experience;
       const Dd = Math.max(depthOf(s, cluster), S * 0.2);
       const viewH = 2 * s.tanHalf * Dd;
       const viewW = viewH * s.aspect;
       const rowW = (phone ? 0.78 : 0.4) * viewW;
-      const spacing = rowW / 11;
-      // The columns rise out of the cluster's roofs (centralCluster is its tallest roof; the
-      // column bottoms fade in).
-      const base = cluster.y - viewH * 0.06;
+      const spacing = rowW / (COLS - 1);
+      // The columns stand on one baseline just above the tallest roof (centralCluster.y), so no
+      // tower hides the foot of a column and every bar is seen at its full length.
+      const base = cluster.y + viewH * COL_FOOT;
       const sxCluster = clamp(0.5 + (_v.subVectors(cluster, s.pos).dot(s.right) / (Dd * s.tanHalf * s.aspect)) * 0.5, 0.25, 0.75);
-      const topY = unproject(s, sxCluster, 0.1, Dd).y;
-      const height = Math.max(topY - base, viewH * 0.28);
+      const topY = unproject(s, sxCluster, COL_TOP_ROW, Dd).y;
+      const height = Math.max(topY - base, viewH * 0.2);
       uniforms.uColBase.value = base;
       uniforms.uColHeight.value = height;
       const row = horizontal(s.right);
       const depth = horizontal(s.fwd);
       const r = fixed[3];
-      const hash = (c: number) => Math.abs(Math.sin(c * 12.9898 + 4.1) * 43758.5453) % 1;
-      const colGain = Array.from({ length: 12 }, (_, c) => 0.8 + 0.2 * hash(c));
-      const colTop = Array.from({ length: 12 }, (_, c) => 0.72 + 0.28 * hash(c + 31));
       const t = T[3];
       for (let i = 0; i < N; i++) {
-        if (stray(i)) {
+        const c = colOf[i];
+        if (c < 0) {
           const ox = (r[i * 4] - 0.5) * rowW * 1.3;
           const oz = (r[i * 4 + 1] - 0.5) * spacing * 4;
           t[i * 4] = cluster.x + row.x * ox + depth.x * oz;
@@ -440,16 +474,15 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
           aInfo[i * 4 + 2] = 1;
           continue;
         }
-        const c = Math.min(11, Math.floor(r[i * 4] * 12));
         const a = r[i * 4 + 1] * Math.PI * 2;
         const rad = spacing * 0.085 * Math.sqrt(-2 * Math.log(Math.max(1e-6, r[i * 4 + 2])));
-        const ox = (c - 5.5) * spacing + Math.cos(a) * rad;
+        const ox = (c - (COLS - 1) / 2) * spacing + Math.cos(a) * rad;
         const oz = Math.sin(a) * rad;
         t[i * 4] = cluster.x + row.x * ox + depth.x * oz;
-        t[i * 4 + 1] = base + r[i * 4 + 3] * height;
+        t[i * 4 + 1] = base + colH[i] * COL_SHARE[c] * height;
         t[i * 4 + 2] = cluster.z + row.z * ox + depth.z * oz;
-        t[i * 4 + 3] = colGain[c] * (0.4 + 0.35 * fixed[0][i * 4]);
-        aInfo[i * 4 + 2] = colTop[c];
+        t[i * 4 + 3] = 0.9 * (0.4 + 0.35 * fixed[0][i * 4]);
+        aInfo[i * 4 + 2] = COL_SHARE[c];
       }
     }
 

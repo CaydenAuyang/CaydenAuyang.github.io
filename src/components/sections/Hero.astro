@@ -69,7 +69,7 @@ const vars = [
   </div>
 
   <div class="hero__cue" data-scroll-cue data-snapshot-hide aria-hidden="true">
-    <span>{hero.scrollCue}</span>
+    <span class="hero__cue-word t-label">{hero.scrollCue}</span>
     <span class="hero__cue-line"></span>
   </div>
 </section>
@@ -107,25 +107,24 @@ const vars = [
   }
   .hero__name {
     font-size: var(--fs-name);
-    font-weight: var(--fw-display-heavy);
   }
   .hero__name-line {
     display: block;
   }
   .hero__line {
     margin-top: var(--space-3);
-    max-width: 30ch;
+    max-width: 34ch;
     font-size: var(--fs-lead);
-    line-height: 1.4;
+    line-height: var(--lh-lead);
     text-wrap: pretty;
   }
   .hero__small {
     margin-top: var(--space-2);
-    max-width: 44ch;
+    max-width: 60ch;
     font-size: var(--fs-small);
     line-height: 1.5;
-    /* Text color: on phones this line can pass over the figure as the page scrolls. */
-    color: var(--text);
+    color: var(--c-meta);
+    text-wrap: balance;
   }
 
   /* Desktop: left of the figure, ending above the tower tops. */
@@ -139,20 +138,19 @@ const vars = [
       top: auto;
       right: auto;
       bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-6));
-      /* The left ~45%: the name at the spec's size reaches about 48% of the width, which still
-         clears the figure's head (its widest part, the shoulders, sits lower). The width comes
-         from the name's size, not the loaded font ("Auyang" in Unbounded is 4.84em wide), so
-         the block and its scrim don't change size when the font arrives. */
-      width: calc(min(var(--fs-name), 15.5vh) * 4.9);
+      /* Left of the figure. The width comes from the name's size, not the loaded font, so the
+         block and its scrim don't change size when the font arrives: "Auyang" in Barlow
+         Condensed 800 is about 2.9em wide, and the line under it is 34 characters of 20px mono
+         (408px). */
+      width: max(calc(min(var(--fs-name), 17vh) * 3.1), calc(var(--fs-lead) * 34 * 0.6));
       max-width: 52%;
     }
     /* The spec's scale, held down on short windows so the block clears the header. */
     .hero__name {
-      font-size: min(var(--fs-name), 15.5vh);
+      font-size: min(var(--fs-name), 17vh);
     }
     .hero__line {
       margin-top: var(--space-4);
-      max-width: 26ch;
     }
     .hero__small {
       margin-top: var(--space-3);
@@ -167,11 +165,14 @@ const vars = [
     display: flex;
     align-items: center;
     gap: var(--space-2);
-    font-size: var(--fs-small);
-    font-weight: var(--fw-medium);
-    color: var(--dim);
     text-shadow: var(--halo);
     transition: opacity 400ms var(--ease-out);
+  }
+  /* A fixed box sized in em of the font size, not the face, with the word starting at its left
+     edge, so the word swapping fonts moves nothing ("Scroll" is 3.0em in Barlow Condensed). */
+  .hero__cue-word {
+    width: 3.2em;
+    white-space: nowrap;
   }
   .hero__cue-line {
     position: relative;

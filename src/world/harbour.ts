@@ -37,7 +37,7 @@ export interface HarbourUniforms {
   uWake: IUniform<number>;
 }
 
-/** Profile slots: hero, question, summer, och, ais, club, more (since, people, contact reuse more). */
+/** Profile slots: hero, question, experience, och, ais, club, more (since, people, contact reuse more). */
 export const BAKE_SLOTS = 7;
 const PW = 2048;
 

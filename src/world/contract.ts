@@ -9,6 +9,7 @@
 // Spec: site-handoff/NIGHT-SIGNAL.md (sections 4 to 6).
 
 import type * as THREE from 'three';
+import { archive } from '../data/content';
 
 // ---- Scenes and camera ----------------------------------------------------------------------
 
@@ -16,7 +17,7 @@ import type * as THREE from 'three';
 export type SceneKey =
   | 'hero' // wide on the skyline from the Kowloon side, about 12 m above the water
   | 'question' // dollied forward and down toward the water
-  | 'summer' // panned right toward the tallest (Central) cluster
+  | 'experience' // panned right toward the tallest (Central) cluster
   | 'och' // work stop 1: OurCityHealth
   | 'ais' // work stop 2: AI Simply
   | 'club' // work stop 3: Civic AI Club (the compact low-rise block at the far left)
@@ -25,13 +26,19 @@ export type SceneKey =
   | 'people' // holding on the sky
   | 'contact'; // holding on the sky, pulled back slightly
 
-export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'summer', 'och', 'ais', 'club', 'more', 'since', 'people', 'contact'];
+export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'experience', 'och', 'ais', 'club', 'more', 'since', 'people', 'contact'];
 
 export interface CameraPose {
   position: THREE.Vector3;
   quaternion: THREE.Quaternion;
   fov: number;
 }
+
+/**
+ * The twelve Civic Exchange notebooks and their real document counts (content.md, Experience),
+ * left to right. Target D's columns are sized by these, so they are an honest bar chart.
+ */
+export const ARCHIVE: readonly { topic: string; count: number }[] = archive.columns;
 
 // ---- Tiers ----------------------------------------------------------------------------------
 
@@ -40,7 +47,7 @@ export type Tier = 'high' | 'low' | 'phone';
 export interface TierInfo {
   tier: Tier;
   dprCap: number; // 1.75 desktop, 1.5 phone
-  stars: number; // about 4,000 desktop, 1,500 phone
+  stars: number; // about 12,000 desktop, 4,000 phone
   towers: number; // about 260 desktop, 110 phone
   points: number; // 60,000 high, 30,000 low, 16,000 phone
 }
@@ -88,6 +95,25 @@ export const LIGHT_ANCHORS = {
   pomfret: { x: 0.14, y: 0.3 },
   hongKong: { x: 0.86, y: 0.3 },
 };
+
+// ---- Screen positions -----------------------------------------------------------------------
+
+/** A point on screen in normalized device coordinates: x -1 (left) to 1 (right), y -1 (bottom) to 1 (top). */
+export interface Ndc {
+  x: number;
+  y: number;
+}
+
+/** A box on screen as fractions of the viewport (x from the left, y from the top). */
+export interface ScreenBox {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** An RGB color, each channel 0 to 1. */
+export type Rgb = [number, number, number];
 
 // ---- The world ------------------------------------------------------------------------------
 
@@ -142,6 +168,28 @@ export interface World {
   /** Lit windows with lift rank below maxRank, front faces only, up to count (fewer if the city has fewer). */
   sampleLitWindows(count: number, maxRank: number): LitWindowSamples;
 
+  // ---- Interactions (NIGHT-SIGNAL.md section 11b). The lead's interact.ts decides when a pointer
+  // event belongs to the world (never on text or controls) and calls these. With motion off they
+  // are instant state changes: no rings, waves, sweeps or streaks, and the world draws on demand.
+
+  /** 11b.1 Spotlight: windows near the skyline point under the pointer brighten up to 60% and warm, fading over 800 ms after it moves on. null: pointer gone (or touch). */
+  setPointer(ndc: Ndc | null): void;
+  /**
+   * 11b.1 Pulse: a ring spreads across the harbour from the point under ndc (sky taps project
+   * onto the water below them), windows switch on in a wave by distance, and stars near the tap
+   * glint. At most 3 at once, 400 ms cooldown. Light must start on the next frame. Returns false
+   * if refused (cooldown or limit).
+   */
+  pulse(ndc: Ndc): boolean;
+  /** 11b.4 Spill: a playing video's average color, mixed into the harbour reflections and the windows nearest the video on screen at up to 20% (strength 0 to 1). null clears it. center: the video's center on screen. */
+  setSpill(color: Rgb | null, strength: number, center?: Ndc): void;
+  /** 11b.8 Shooting star: true if a bright star sits near ndc (and fires one from it). Without ndc, fires one now. */
+  shootingStar(ndc?: Ndc): boolean;
+  /** 11b.9 Light show: 12 s of rooftop searchlights and windows pulsing in rhythm. on=false stops it at once. */
+  lightShow(on: boolean): void;
+  /** Whether a light show is running. */
+  readonly lightShowOn: boolean;
+
   /** Called every rendered frame before drawing. Returns an unsubscribe function. */
   onFrame(cb: (time: number, delta: number) => void): () => void;
   /** Live motion on or off (reduced motion, Motion switch, snapshot). */
@@ -173,6 +221,27 @@ export interface Signal {
   /** Show the morph from one target to another, t 0..1. Also updates the world's window dimming. */
   setMorph(from: Target, to: Target, t: number): void;
   setMotion(enabled: boolean): void;
+
+  /**
+   * 5.1 The figure's turn, in radians, about its own center. yaw: positive turns the face toward
+   * the viewer's right (screen right), up to +-30 degrees. pitch: positive tilts the face up, up
+   * to +-5 degrees. The lead's interact.ts runs the spring, drag and idle sway and calls this
+   * every frame; the signal applies it in the shader (no per-point CPU work).
+   */
+  setFigureTurn(yaw: number, pitch: number): void;
+  /** Where the figure is on screen right now (its outline's box, as viewport fractions), or null when it isn't showing (morph away from B). For drag hit tests. */
+  figureBox(): ScreenBox | null;
+
+  /** 11b.3 Archive: which column (0 to 11, in ARCHIVE order) is under ndc, or -1. Only while the columns are showing (state D). */
+  columnAt(ndc: Ndc): number;
+  /** 11b.3 Brighten column i and dim the rest (-1: none). */
+  setColumnHighlight(i: number): void;
+  /** 11b.3 Where column i's top is on screen (viewport fractions), for its label, or null when the columns aren't showing. */
+  columnTop(i: number): { x: number; y: number } | null;
+
+  /** 11b.7 Two cities: send an extra light along the arc between the two lights (the email was hovered or focused). The regular one runs by itself about every 6 s while the lights show. */
+  sendArc(): void;
+
   dispose(): void;
 }
 

@@ -13,7 +13,7 @@ uniform mat4 projectionMatrix;
 in vec4 position;
 in vec4 aTo;
 in vec4 aRand; // x delay key, y size, z path, w phase (and D strays: w < uStray)
-in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (0..1)
+in vec4 aInfo; // x warm (1) or cool (0), y lift rank within the lifted windows (0..1), z archive column height (its share of the tallest)
 
 uniform int uFrom;
 uniform int uTo;
@@ -42,7 +42,7 @@ uniform float uWaterY;
 // Archive (D): columns rise slowly and wrap.
 uniform float uColBase;
 uniform float uColHeight;
-uniform float uRise; // column phase per second
+uniform float uRise; // rise per second, as a share of the tallest column
 uniform float uStray; // share of D points drifting loose
 // Two lights (E): their radius in world units.
 uniform float uLightR;
@@ -155,12 +155,13 @@ vec3 live(int k, vec4 b, out float alpha, out float fade) {
       alpha = b.w;
       return p;
     }
-    // Columns: light rises slowly and wraps at the top, where it has faded out. Each column has
-    // its own height (aInfo.z); above it the light thins out.
-    float h = fract((b.y - uColBase) / uColHeight + t * uRise);
-    vec3 p = vec3(b.x, uColBase + h * uColHeight, b.z);
+    // Columns: light rises slowly, at one speed in every column, and wraps at its own column's
+    // top (aInfo.z, a share of the tallest), so each column keeps an even density all the way up
+    // and its top stays exact. Only a sliver at each end fades, to hide the wrap.
     float top = aInfo.z;
-    fade = smoothstep(0.0, 0.14, h) * (1.0 - smoothstep(top * 0.55, top, h));
+    float h = mod((b.y - uColBase) / uColHeight + t * uRise, top);
+    vec3 p = vec3(b.x, uColBase + h * uColHeight, b.z);
+    fade = smoothstep(0.0, 0.012, h) * (1.0 - smoothstep(top - 0.006, top, h));
     alpha = b.w * fade;
     return p;
   }

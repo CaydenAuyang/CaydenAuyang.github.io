@@ -126,6 +126,14 @@ const { menu = false } = Astro.props;
     text-decoration: none;
     text-shadow: 0 0 12px rgb(var(--night-rgb) / 0.9);
   }
+  /* The name, in the name's face: Barlow Condensed 800, uppercase. */
+  .site-header__name {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: var(--fw-name);
+    letter-spacing: var(--track-display);
+    text-transform: uppercase;
+  }
   .site-header__btn {
     min-width: var(--tap);
     justify-content: center;
@@ -186,15 +194,14 @@ const { menu = false } = Astro.props;
     display: grid;
     gap: var(--space-1);
   }
+  /* Menu items are JetBrains Mono, like every control (spec section 3). */
   .menu__link {
     display: inline-flex;
     align-items: center;
     min-height: var(--tap);
-    font-family: var(--font-display);
-    font-weight: var(--fw-display);
-    font-size: clamp(28px, 3.2vw + 12px, 56px);
-    line-height: 1.1;
-    letter-spacing: var(--track-display);
+    font-weight: var(--fw-medium);
+    font-size: clamp(24px, 1.6vw + 18px, 44px);
+    line-height: 1.2;
     color: var(--text);
     text-decoration: none;
     transition: color var(--dur-quick) var(--ease-out);

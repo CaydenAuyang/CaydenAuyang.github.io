@@ -1,9 +1,10 @@
 // camera-path.ts: where the camera stands at each scene key, and the spline between them.
 //
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
-// spline; yaw and pitch run on their own Catmull-Rom curve. Inside each segment the parameter is
-// eased (power2.inOut), so the camera settles into every key. No roll, ever: the camera always
-// looks at a point with world up.
+// spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
+// never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
+// the camera settles into every key. No roll, ever: the camera always looks at a point with world
+// up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
 // that put the tallest tower tops and the waterline exactly at HERO_FRAMING. Every other key is
@@ -22,7 +23,7 @@ const DEG = Math.PI / 180;
 export const KEY_U: Record<SceneKey, number> = {
   hero: 0,
   question: 0.16,
-  summer: 0.29,
+  experience: 0.29,
   och: 0.42,
   ais: 0.54,
   club: 0.66,
@@ -171,13 +172,14 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const qPos = new Vector3(hero.pos.x + 0.02 * Dh, 5, Dh * 0.8);
   const question: KeyPose = { pos: qPos, yaw: 0, pitch: pitchForWaterline(qPos, phone ? 0.64 : 0.6) };
 
-  // summer: truck right and in, turning back toward the Central cluster, with sky above it for
-  // the archive columns.
+  // experience: truck right and in, turning back toward the Central cluster, with sky above it for
+  // the archive columns. On desktop the cluster sits left of center (x 0.3), so the columns stand
+  // in the dark sky left of the Experience text, which fills the right grid columns.
   const c = new Vector3(city.central.x, city.central.y * 0.45, city.central.z);
   const sDist = Math.max(city.central.y / (0.36 * 2 * T), fitW(W * 0.16, phone ? 0.95 : 0.5));
   const sYaw = -13 * DEG;
   const sPos = new Vector3(c.x - Math.sin(sYaw) * sDist, 34, c.z + Math.cos(sYaw) * sDist);
-  const summer = aimAt(sPos, c, phone ? 0.5 : 0.62, phone ? 0.74 : 0.7, aspect);
+  const experience = aimAt(sPos, c, phone ? 0.5 : 0.3, phone ? 0.74 : 0.7, aspect);
 
   // och: the first stop along the shoreline. Low and close, just left of Central, looking left
   // down the waterfront: the skyline recedes in perspective toward the low clusters (the next
@@ -218,13 +220,15 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const contact: KeyPose = { pos: cPos, yaw: 18 * DEG, pitch: 20 * DEG };
   contact.pitch = clearOfSkyline(city, contact, aspect, 0.05);
 
-  const poses: Record<SceneKey, KeyPose> = { hero, question, summer, och, ais, club, more, since, people, contact };
+  const poses: Record<SceneKey, KeyPose> = { hero, question, experience, och, ais, club, more, since, people, contact };
   const order = SCENE_ORDER;
   const posCurve = new CatmullRomCurve3(order.map((k) => poses[k].pos.clone()), false, 'centripetal');
-  const angCurve = new CatmullRomCurve3(order.map((k) => new Vector3(poses[k].yaw, poses[k].pitch, 0)), false, 'catmullrom', 0.5);
+  const yawK = order.map((k) => poses[k].yaw);
+  const pitchK = order.map((k) => poses[k].pitch);
+  const yawM = limitedTangents(yawK);
+  const pitchM = limitedTangents(pitchK);
   const us = order.map((k) => KEY_U[k]);
   const n = order.length;
-  const ang = new Vector3();
 
   const ease = (s: number) => (s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2);
 
@@ -246,12 +250,42 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
       const t = (i + s) / (n - 1);
       const o = out ?? { pos: new Vector3(), yaw: 0, pitch: 0 };
       posCurve.getPoint(t, o.pos);
-      angCurve.getPoint(t, ang);
-      o.yaw = ang.x;
-      o.pitch = ang.y;
+      o.yaw = hermite(yawK, yawM, i, s);
+      o.pitch = hermite(pitchK, pitchM, i, s);
       return o;
     },
   };
+}
+
+/**
+ * Tangents for a heading channel (one value per key, keys evenly spaced): Catmull-Rom tangents,
+ * limited as Fritsch and Carlson do for monotone curves. Where the turn reverses at a key the
+ * tangent is zero, and elsewhere it is at most three times the gentler of the two neighbouring
+ * slopes, so a short segment next to a long swing doesn't overshoot its key and come back.
+ */
+function limitedTangents(v: number[]): number[] {
+  const n = v.length;
+  const d: number[] = [];
+  for (let i = 0; i < n - 1; i++) d.push(v[i + 1] - v[i]);
+  const m: number[] = [d[0]];
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] * d[i] <= 0) {
+      m.push(0);
+      continue;
+    }
+    const cr = 0.5 * (d[i - 1] + d[i]);
+    const cap = 3 * Math.min(Math.abs(d[i - 1]), Math.abs(d[i]));
+    m.push(Math.sign(cr) * Math.min(Math.abs(cr), cap));
+  }
+  m.push(d[n - 2]);
+  return m;
+}
+
+/** Cubic Hermite between keys i and i + 1 at s (0..1), with tangents m. */
+function hermite(v: number[], m: number[], i: number, s: number): number {
+  const s2 = s * s;
+  const s3 = s2 * s;
+  return (2 * s3 - 3 * s2 + 1) * v[i] + (s3 - 2 * s2 + s) * m[i] + (-2 * s3 + 3 * s2) * v[i + 1] + (s3 - s2) * m[i + 1];
 }
 
 const look = new Vector3();

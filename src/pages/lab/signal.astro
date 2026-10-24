@@ -5,7 +5,7 @@
 // world (src/world/renderer.ts, the default once it exists).
 //
 // Query options, so screenshots can set any state:
-//   from, to (A to F), t (0..1), cam (auto | hero | question | summer | since | people | contact |
+//   from, to (A to F), t (0..1), cam (auto | hero | question | experience | since | people | contact |
 //   a number 0..1 on the camera path), motion (0 or 1), tier (high | low | phone; mock world only,
 //   the real world picks its own), world (real | mock), hud (0 hides the panel), still (1: the
 //   figure alone on black, for figure-still.webp).
@@ -41,7 +41,7 @@
             <option value="auto">auto (follows the morph)</option>
             <option value="hero">hero</option>
             <option value="question">question</option>
-            <option value="summer">summer</option>
+            <option value="experience">experience</option>
             <option value="och">och</option>
             <option value="since">since</option>
             <option value="people">people</option>
@@ -123,7 +123,7 @@
         return { tier, dprCap: 1.75, stars: 4000, towers: 260, points: 60000 };
       }
 
-      const KEYS: Record<SceneKey, number> = { hero: 0, question: 0.1, summer: 0.2, och: 0.32, ais: 0.42, club: 0.52, more: 0.62, since: 0.76, people: 0.88, contact: 1 };
+      const KEYS: Record<SceneKey, number> = { hero: 0, question: 0.1, experience: 0.2, och: 0.32, ais: 0.42, club: 0.52, more: 0.62, since: 0.76, people: 0.88, contact: 1 };
 
       function createMockWorld(canvas: HTMLCanvasElement, tier: TierInfo, opts: { motion: boolean; still: boolean }): World {
         const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, preserveDrawingBuffer: opts.still, powerPreference: 'high-performance' });
@@ -268,7 +268,7 @@
               return heroPose();
             case 'question':
               return pose(new Vector3(0, 7, d * 0.62), 0, -1.5 * deg, 38);
-            case 'summer':
+            case 'experience':
               return pose(new Vector3(-120, 22, d * 0.72), 6 * deg, 9 * deg, 38);
             case 'och':
               return pose(new Vector3(260, 20, d * 0.64), 0, 6 * deg, 38);
@@ -399,7 +399,7 @@
 
       const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F'];
       const NAMES: Record<Target, string> = { A: 'A city', B: 'B figure', C: 'C current', D: 'D archive', E: 'E two lights', F: 'F field' };
-      const HOME: Record<Target, SceneKey> = { A: 'more', B: 'hero', C: 'question', D: 'summer', E: 'contact', F: 'since' };
+      const HOME: Record<Target, SceneKey> = { A: 'more', B: 'hero', C: 'question', D: 'experience', E: 'contact', F: 'since' };
 
       const fromSel = $<HTMLSelectElement>('[data-from]');
       const toSel = $<HTMLSelectElement>('[data-to]');

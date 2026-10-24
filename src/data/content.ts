@@ -37,7 +37,7 @@ export const meta = {
 
 export const nav: Link[] = [
   { label: 'Question', href: '#question' },
-  { label: 'Summer', href: '#summer' },
+  { label: 'Experience', href: '#experience' },
   { label: 'Work', href: '#work' },
   { label: 'Since May', href: '#since' },
   { label: 'People', href: '#people' },
@@ -115,7 +115,7 @@ export const question = {
   ] satisfies Line[],
 };
 
-// ---- 3. Summer ---------------------------------------------------------------------------------
+// ---- 3. Experience -----------------------------------------------------------------------------
 
 export interface MoreBlock {
   // A short bold lead-in ("The problem."), shown at the start of the text's paragraph.
@@ -127,70 +127,127 @@ export interface MoreBlock {
   list?: Line[];
 }
 
-export const summer = {
-  heading: 'Summer 2026',
-  subhead: 'Civic Exchange, Hong Kong',
-  meta: {
-    text: 'Intern (voluntary), June 9 to August 28, 2026',
-    source: 'CEX §1, Agr; C4 p6',
-  } satisfies Line,
-  lead: {
-    text: 'A Hong Kong think tank had 25 years of research nobody could search. I listened first, then built the fix.',
-    source: 'CEX §2, C1 p1; CEX §3',
-  } satisfies Line,
-  facts: [
-    { text: '11 interviews before building anything', source: 'CEX §3a, UR, FD P2' },
-    { text: '12 searchable notebooks, about 2,350 documents', source: 'CEX §3b, ER §3.1' },
-    { text: '18 of 18 hand-checked citations correct', source: 'CEX §3b, ER §5.1' },
-    { text: 'Handed over with a 39-page manual and a staff workshop', source: 'CEX §3g, FD P42; §3f, FD P38' },
-  ] satisfies Line[],
-  // The full Summer section from the long copy.
-  more: [
+// Civic Exchange first, with the full block; then the two Wisers summers, one line each.
+export interface Role {
+  name: string;
+  meta: Line;
+  line: Line;
+  link?: Link;
+}
+
+export const experience = {
+  heading: 'Experience',
+  civic: {
+    name: 'Civic Exchange, Hong Kong',
+    meta: {
+      text: 'Intern (voluntary), June 9 to August 28, 2026',
+      source: 'CEX §1, Agr; C4 p6',
+    } satisfies Line,
+    lead: {
+      text: 'A Hong Kong think tank had 25 years of research nobody could search. I listened first, then built the fix.',
+      source: 'CEX §2, C1 p1; CEX §3',
+    } satisfies Line,
+    facts: [
+      { text: '11 interviews before building anything', source: 'CEX §3a, UR, FD P2' },
+      { text: '12 searchable notebooks, about 2,350 documents', source: 'CEX §3b, ER §3.1' },
+      { text: '18 of 18 hand-checked citations correct', source: 'CEX §3b, ER §5.1' },
+      { text: 'Handed over with a 39-page manual and a staff workshop', source: 'CEX §3g, FD P42; §3f, FD P38' },
+    ] satisfies Line[],
+    // The full Summer section from the long copy (The problem, Listening first, What I built,
+    // What I took away).
+    more: [
+      {
+        title: 'The problem.',
+        text: {
+          text: "Civic Exchange is a public policy think tank in Hong Kong. Its executive director, Lawrence Iu, didn't give me a technical assignment. He described a problem: staff used AI in different ways and got different results, 25 years of research sat in folders nobody could search, and reports didn't share a style.",
+          source: 'CEX §2, C1 p1; CEX §3; title confirmed by Cayden',
+        },
+      },
+      {
+        title: 'Listening first.',
+        text: {
+          text: 'I started with interviews: 11 of them, from interns to the executive director, written up as a report on how the team actually used AI. Then a staff town hall, where the real objections came out, and the team approved the notebook categories before I built the full set.',
+          source: 'CEX §3a, UR, FD P2; CEX §3f, FD P18; CEX §6, CE p32',
+        },
+      },
+      {
+        title: 'What I built.',
+        list: [
+          {
+            text: '12 searchable notebooks holding about 2,350 documents, drawn from an archive of more than 10,000 files.',
+            source: 'CEX §3b, ER §3.1; Corpus_Triage',
+          },
+          {
+            text: 'Every answer cites its source. In testing, all 18 citations I checked by hand were correct, and questions asked in Chinese worked too.',
+            source: 'CEX §3b, ER §5.1, FD P17',
+          },
+          {
+            text: "Writing and translation assistants grounded in Civic Exchange's own reports and its 390-term glossary.",
+            source: 'CEX §3c, ER §3.3',
+          },
+          { text: 'A move to Google Workspace for Nonprofits, worked out with the operations team.', source: 'CEX §3e, FD P22' },
+          {
+            text: 'A handover: a 39-page manual and a workshop where everyone in the room used the tools.',
+            source: 'CEX §3g, FD P42; CEX §3f, FD P38',
+          },
+        ],
+      },
+      {
+        title: 'What I took away.',
+        text: {
+          text: 'The hard part was never the model. It was finding out what people actually needed, and giving them something they could check. These tools can find and draft. Deciding what matters stays with people.',
+          source: 'CEX §2, C1 p1; CEX §3g, FD P43; CEX §6, ER §6.3',
+        },
+      },
+    ] satisfies MoreBlock[] as MoreBlock[],
+    moreLabel: 'about Civic Exchange',
+  },
+  roles: [
     {
-      title: 'The problem.',
-      text: {
-        text: "Civic Exchange is a public policy think tank in Hong Kong. Its executive director, Lawrence Iu, didn't give me a technical assignment. He described a problem: staff used AI in different ways and got different results, 25 years of research sat in folders nobody could search, and reports didn't share a style.",
-        source: 'CEX §2, C1 p1; CEX §3; title confirmed by Cayden',
+      name: 'Wisers Information Limited, Hong Kong',
+      // CONFIRM: the title. Records say Data Intern, AI Team Intern and AI Engineering Intern, so
+      // the page says plain "Intern" until Cayden picks one.
+      meta: { text: 'Intern, July to August 2025', source: 'OCH §3, CV' },
+      line: {
+        text: "Built a prototype agent that reads a Mac's screen with computer vision and OCR, then plans its steps with a language model.",
+        source: 'OCH §3, GUI',
+      },
+      link: { label: 'View the code', href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent' },
+    },
+    {
+      name: 'Wisers Information Limited, Hong Kong',
+      meta: { text: 'Intern, July to August 2024', source: 'OCH §3, CV' },
+      line: {
+        text: 'Built a pipeline that turned thousands of RedNote posts into brand analysis for four sportswear brands.',
+        source: 'POSTER; OCH §3; Drive: Sportswear Brand Trend Analysis Report, July 2024',
       },
     },
-    {
-      title: 'Listening first.',
-      text: {
-        text: 'I started with interviews: 11 of them, from interns to the executive director, written up as a report on how the team actually used AI. Then a staff town hall, where the real objections came out, and the team approved the notebook categories before I built the full set.',
-        source: 'CEX §3a, UR, FD P2; CEX §3f, FD P18; CEX §6, CE p32',
-      },
-    },
-    {
-      title: 'What I built.',
-      list: [
-        {
-          text: '12 searchable notebooks holding about 2,350 documents, drawn from an archive of more than 10,000 files.',
-          source: 'CEX §3b, ER §3.1; Corpus_Triage',
-        },
-        {
-          text: 'Every answer cites its source. In testing, all 18 citations I checked by hand were correct, and questions asked in Chinese worked too.',
-          source: 'CEX §3b, ER §5.1, FD P17',
-        },
-        {
-          text: "Writing and translation assistants grounded in Civic Exchange's own reports and its 390-term glossary.",
-          source: 'CEX §3c, ER §3.3',
-        },
-        { text: 'A move to Google Workspace for Nonprofits, worked out with the operations team.', source: 'CEX §3e, FD P22' },
-        {
-          text: 'A handover: a 39-page manual and a workshop where everyone in the room used the tools.',
-          source: 'CEX §3g, FD P42; CEX §3f, FD P38',
-        },
-      ],
-    },
-    {
-      title: 'What I took away.',
-      text: {
-        text: 'The hard part was never the model. It was finding out what people actually needed, and giving them something they could check. These tools can find and draft. Deciding what matters stays with people.',
-        source: 'CEX §2, C1 p1; CEX §3g, FD P43; CEX §6, ER §6.3',
-      },
-    },
-  ] satisfies MoreBlock[] as MoreBlock[],
-  moreLabel: 'about the summer',
+  ] satisfies Role[] as Role[],
+};
+
+/**
+ * The twelve notebooks behind "12 searchable notebooks, about 2,350 documents": the Experience
+ * archive columns (NIGHT-SIGNAL.md 11b.3). Each label reads "<topic>, <count> documents". The
+ * counts add up to 2,347, shown on the page as "about 2,350".
+ */
+export const archive = {
+  source: 'CEX §3b, ER §3.1',
+  columns: [
+    { topic: 'Overview', count: 80 },
+    { topic: 'Energy', count: 264 },
+    { topic: 'Mobility', count: 299 },
+    { topic: 'Buildings', count: 179 },
+    { topic: 'Finance', count: 300 },
+    { topic: 'Nature', count: 293 },
+    { topic: 'Waste', count: 42 },
+    { topic: 'Cross-cutting', count: 290 },
+    { topic: 'Urban Liveability', count: 170 },
+    { topic: 'Community', count: 117 },
+    { topic: 'Consumption', count: 13 },
+    { topic: 'Sustainable Finance (team)', count: 300 },
+  ],
+  total: 2347,
+  label: (topic: string, count: number) => `${topic}, ${count} documents`,
 };
 
 // ---- 4. Work -----------------------------------------------------------------------------------
@@ -291,14 +348,6 @@ export const work = {
         name: 'Inferno Acoustic Map',
         line: { text: "Dante's Inferno, mapped by how its sound decays.", source: 'POSTER; 20-Repos card' },
         href: 'https://github.com/CaydenAuyang/Inferno-Acoustic-Map',
-      },
-      {
-        name: 'Screen-parsing agent',
-        line: {
-          text: "A prototype from my 2025 Wisers internship that reads and operates a Mac's screen.",
-          source: 'OCH §3, GUI',
-        },
-        href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent',
       },
     ],
   },

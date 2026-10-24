@@ -48,6 +48,8 @@ async function boot() {
       : null;
     tl?.attach(world, signal);
     html.classList.add('is-ready');
+    // ?debug exposes the scene to the test scripts (scripts/perf.mjs).
+    if (new URLSearchParams(location.search).has('debug')) (window as unknown as { __night: unknown }).__night = { world, signal };
   } catch (error) {
     // Anything failing here leaves the HTML and the still fallback in place.
     console.error('Night scene failed to start', error);

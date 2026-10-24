@@ -24,8 +24,8 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     aria-labelledby="contact-title"
     style={`--lights-y: ${Math.max(LIGHT_ANCHORS.pomfret.y, LIGHT_ANCHORS.hongKong.y)}`}
   >
-    <p class="contact__light" style={at(LIGHT_ANCHORS.pomfret)} aria-hidden="true">{contact.lights.pomfret}</p>
-    <p class="contact__light" style={at(LIGHT_ANCHORS.hongKong)} aria-hidden="true">{contact.lights.hongKong}</p>
+    <p class="contact__light t-label" style={at(LIGHT_ANCHORS.pomfret)} aria-hidden="true">{contact.lights.pomfret}</p>
+    <p class="contact__light t-label" style={at(LIGHT_ANCHORS.hongKong)} aria-hidden="true">{contact.lights.hongKong}</p>
 
     <div class="contact__body wrap scrim">
       <h2 id="contact-title" class="h2">{contact.heading}</h2>
@@ -38,7 +38,7 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
         <ExternalLink class="action-link" href={contact.github.href} arrow>{contact.github.label}</ExternalLink>
       </p>
       <p class="contact__portfolio t-body">{contact.portfolio.text}</p>
-      <p class="contact__small t-small">{contact.smallPrint}</p>
+      <p class="contact__small t-meta">{contact.smallPrint}</p>
     </div>
   </section>
 </footer>
@@ -77,10 +77,6 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     top: calc(100% - (1 - var(--ly)) * 100vh + var(--space-5));
     top: calc(100% - (1 - var(--ly)) * 100dvh + var(--space-5));
     transform: translateX(-50%);
-    font-size: var(--fs-small);
-    font-weight: var(--fw-medium);
-    /* Text color: each label sits right under a bright light. */
-    color: var(--text);
     white-space: nowrap;
     text-shadow: var(--halo);
   }
@@ -111,7 +107,6 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     font-size: var(--fs-email);
     font-weight: var(--fw-medium);
     line-height: 1.15;
-    letter-spacing: -0.02em;
     color: var(--window);
     text-decoration: underline;
     text-decoration-thickness: 1px;

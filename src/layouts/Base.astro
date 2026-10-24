@@ -89,10 +89,10 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={imageUrl} />
 
-    <!-- Fonts: the two faces the first screen needs are preloaded. -->
-    <Font cssVariable="--font-unbounded" preload={[{ weight: 700, style: 'normal' }]} />
+    <!-- Fonts: the faces the first screen needs are preloaded (the name, and the mono text). -->
+    <Font cssVariable="--font-barlow" preload={[{ weight: 800, style: 'normal' }]} />
     <Font
-      cssVariable="--font-geist"
+      cssVariable="--font-mono"
       preload={[
         { weight: 400, style: 'normal' },
         { weight: 500, style: 'normal' },

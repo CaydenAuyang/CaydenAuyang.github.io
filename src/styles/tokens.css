@@ -2,25 +2,41 @@
   tokens.css: every color, size, space, easing and layer the site uses, in one place.
   Spec: NIGHT-SIGNAL.md section 3 (art direction).
 
-  Contrast ratios below were measured with the WCAG 2.x formula (relative luminance, sRGB) in
-  node. AA needs 4.5:1 for body text and 3:1 for text 18.66px bold / 24px regular and up, and for
-  interface parts such as focus rings.
+  Text colors (Cayden's call, never all one white): headlines in window, project names and
+  subheads in cool, small uppercase labels in neon (16px, never body text), body in text, meta in
+  dim. AA needs 4.5:1 for text under 24px (18.66px bold) and 3:1 above, and for focus rings.
 
-                 on night   on sky    on glow
-    text           16.67     14.32     12.46    body text, everywhere
-    dim             6.73      5.78      5.03    secondary text, everywhere
-    window         11.60      9.97      8.68    accent text, used only at 18px and up (a design
-                                                rule, stricter than AA needs)
-    cool           15.43     13.26     11.54    never text (distant stars, cool windows)
-    neon            6.47      5.56      4.84    never text (aviation lights)
+  Measured against the real pixels behind each line (2026-10-24): every frame of a full scroll at
+  1440 x 900 and 390 x 844, live (motion on), in ?snapshot and without WebGL (the still), with the
+  text hidden and the scrims, glass and halos left in. The background is the 90th-percentile
+  luminance of each line's box; the number is the worst frame anywhere on the page.
 
-  Glass (night at 45% over the world): over glow it composites to #1A1529 (text 14.69, dim 5.93,
-  window 10.22); over sky to #0C1025 (text 15.57, dim 6.28).
-  Scrim (night at 60%) even over a fully lit window: text keeps 6.44 (5.33 over a cool window).
-  dim drops to 2.60 and window to 4.48 there, so text over the city also carries a dark halo
-  (--halo) that darkens the light right around each letter. Pure night at 80% would be needed for
-  dim to pass on the scrim alone, which would black out the city behind every block.
-  The focus ring is window on a night halo: 11.60 against the halo.
+    pairing                                size        worst   needs   where the worst frame is
+    window: headlines and the name         48-153px     7.21    3      Experience over the columns
+    window: links, inserted words          18-28px      5.70    4.5    GitHub, Contact (390)
+    cool: project names, subheads          22-65px      8.99    3      Civic Exchange (snapshot)
+    neon: small labels                     16px         5.42    4.5    Reflect. over the still
+    text: body, lead, facts, captions      12-20px      5.67    4.5    a Civic AI Club fact (390)
+    dim: meta lines                        12-13px      4.67    4.5    Wisers 2025 meta (390)
+    dim: struck words, switch labels       15-28px      5.22    3/4.5  "down to a school"
+    night on text: the chosen switch       15px        16.67    4.5    flat
+
+  Flat, for reference (WCAG 2.x formula in node):
+
+                 on night   on sky    on glow   on glass over glow (#1A1529)
+    window         11.60      9.97      8.68     10.22
+    cool           15.43     13.26     11.54     13.59
+    neon            6.47      5.56      4.84      5.70
+    text           16.67     14.32     12.46     14.69
+    dim             6.73      5.78      5.03      5.93
+
+  What makes the city frames pass: over a fully lit window, the block scrim (night at 60%) keeps
+  text at 6.44 (cool 5.96), but dim drops to 2.60, neon to 2.50 and window to 4.48. So every
+  block over the city carries a dark halo (--halo) around its letters; links and note numbers
+  carry the tighter --halo-strong; and small neon and dim lines also get a small scrim of their
+  own that hugs the words (base.css): two 60% layers leave 16% of the light, where dim keeps
+  5.13 and neon 4.93 even over a fully lit window. The focus ring is window on a night halo:
+  11.60 against it.
 */
 
 :root {
@@ -28,9 +44,9 @@
   --night: #05070d; /* page ground, deepest water */
   --sky: #121838; /* sky near the horizon */
   --glow: #2b2140; /* light-pollution haze along the horizon */
-  --window: #ffb65c; /* lit windows, the one accent: links, inserted words, focus */
-  --cool: #cfe3ff; /* about 20% of windows, distant stars */
-  --neon: #ff4f8b; /* aviation lights; never text */
+  --window: #ffb65c; /* lit windows, headlines, links, inserted words, focus */
+  --cool: #cfe3ff; /* about 20% of windows, distant stars, project names and subheads */
+  --neon: #ff4f8b; /* aviation lights, small uppercase labels (14px and up); never body text */
   --text: #eee9e1; /* primary text */
   --dim: #8e95a8; /* secondary text */
 
@@ -83,35 +99,51 @@
   --focus-halo: var(--night);
 
   /* ---- Type ---- */
-  /* Families come from Astro's font API (astro.config.mjs), with metric-matched fallbacks. */
-  --font-display: var(--font-unbounded), sans-serif;
-  --font-body: var(--font-geist), sans-serif;
+  /* Families come from Astro's font API (astro.config.mjs), with metric-matched fallbacks.
+     Barlow Condensed (600 to 800) is always uppercase: the name, section headlines, project names,
+     subheads and small labels. JetBrains Mono (400, 500) is everything else. */
+  --font-display: var(--font-barlow), sans-serif;
+  --font-body: var(--font-mono), monospace;
 
-  --fs-name: clamp(52px, 9vw, 168px);
-  --fs-h2: clamp(40px, 6vw, 112px);
-  --fs-project: clamp(32px, 4vw, 72px);
-  --fs-lead: clamp(20px, 0.25vw + 18.5px, 22px);
-  --fs-body: clamp(17px, 0.15vw + 16.4px, 18px);
-  --fs-small: clamp(13px, 0.1vw + 12.6px, 14px);
+  --fs-name: clamp(64px, 11vw, 200px);
+  --fs-h2: clamp(48px, 7vw, 128px);
+  --fs-project: clamp(36px, 4.5vw, 80px);
+  /* Subheads (Civic Exchange, Wisers, Lawrence Iu, the Since May statuses, the More work cards). */
+  --fs-sub: clamp(26px, 1vw + 22px, 36px);
+  /* Small uppercase labels. Neon text is never smaller than 14px. */
+  --fs-label: 16px;
+  --fs-lead: clamp(18px, 0.19vw + 17.26px, 20px); /* 18px at 390, 20px at 1440 */
+  --fs-body: clamp(15px, 0.095vw + 14.63px, 16px); /* 15px at 390, 16px at 1440 */
+  --fs-small: clamp(12px, 0.095vw + 11.63px, 13px); /* 12px at 390, 13px at 1440 */
   /* The question itself, inside the glass panel. */
-  --fs-question: clamp(22px, 1.4vw + 16px, 36px);
-  /* The email: the largest link on the page. */
-  --fs-email: clamp(28px, 3.6vw + 14px, 64px);
+  --fs-question: clamp(19px, 0.86vw + 15.6px, 28px);
+  /* The email: the largest link on the page. 22 characters at 0.6em each fit 390px at 26px. */
+  --fs-email: clamp(24px, 3.6vw + 12px, 64px);
 
-  --lh-display: 0.95;
-  --lh-body: 1.55;
+  --lh-display: 0.9;
+  --lh-body: 1.65;
+  --lh-lead: 1.5;
   --lh-snug: 1.3;
-  --track-display: -0.02em;
+  --track-display: 0.01em;
+  /* Small labels get a little more air than the big type; at 16px, 0.01em is a sixth of a pixel. */
+  --track-label: 0.06em;
 
-  --fw-display: 700; /* Unbounded runs 600 to 800 */
-  --fw-display-heavy: 800;
+  --fw-name: 800;
+  --fw-display: 700;
+  --fw-label: 600;
   --fw-regular: 400;
   --fw-medium: 500;
 
-  /* Line length: 60 characters or fewer. Geist's average character is 0.446em wide (its "0",
-     which `ch` measures, is 0.663em), so 60 characters is about 27em on average; 25em keeps
-     real lines (some letters are wider) at 60 or under. */
-  --measure: 25em;
+  /* Line length: 60 characters or fewer. JetBrains Mono is monospaced and `ch` is its advance,
+     so 60ch is exactly 60 characters. */
+  --measure: 60ch;
+
+  /* ---- Text colors: never all one white (NIGHT-SIGNAL.md section 3) ---- */
+  --c-headline: var(--window); /* the name and the section headlines */
+  --c-sub: var(--cool); /* project names and subheads */
+  --c-label: var(--neon); /* small uppercase labels, 14px and up; never body text */
+  --c-body: var(--text);
+  --c-meta: var(--dim);
 
   /* ---- Space: an 8px base ---- */
   --space-1: 4px; /* half step, for hairline gaps only */

@@ -9,7 +9,7 @@ import { question } from '../../data/content';
   <div class="wrap">
     <div class="question__head stack scrim">
       <h2 id="question-title" class="h2">{question.heading}</h2>
-      <p class="t-lead t-dim">{question.lead.text}</p>
+      <p class="t-lead">{question.lead.text}</p>
     </div>
     <QuestionPanel
       views={question.views}
@@ -27,8 +27,5 @@ import { question } from '../../data/content';
   }
   .question__head {
     margin-bottom: var(--space-6);
-  }
-  .question__head .t-lead {
-    color: var(--text);
   }
 </style>

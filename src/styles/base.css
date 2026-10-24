@@ -242,24 +242,45 @@ html[data-snapshot] .world-canvas {
 
 /* ---- Type roles ----------------------------------------------------------------------------- */
 
+/* Barlow Condensed, always uppercase, line height 0.9, tracking 0.01em. */
 .t-display,
 .h2,
-.t-project {
+.t-project,
+.t-sub,
+.t-label {
   font-family: var(--font-display);
   font-weight: var(--fw-display);
   line-height: var(--lh-display);
   letter-spacing: var(--track-display);
+  text-transform: uppercase;
   text-wrap: balance;
+}
+.t-display {
+  font-weight: var(--fw-name);
+  color: var(--c-headline);
 }
 .h2 {
   font-size: var(--fs-h2);
+  color: var(--c-headline);
 }
 .t-project {
   font-size: var(--fs-project);
+  color: var(--c-sub);
 }
+.t-sub {
+  font-size: var(--fs-sub);
+  color: var(--c-sub);
+}
+.t-label {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-label);
+  letter-spacing: var(--track-label);
+  color: var(--c-label);
+}
+/* JetBrains Mono for everything else. */
 .t-lead {
   font-size: var(--fs-lead);
-  line-height: 1.45;
+  line-height: var(--lh-lead);
   max-width: var(--measure);
   text-wrap: pretty;
 }
@@ -273,13 +294,32 @@ html[data-snapshot] .world-canvas {
   font-size: var(--fs-small);
   line-height: 1.5;
 }
-.t-dim {
-  color: var(--dim);
+.t-meta {
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--c-meta);
 }
-.t-sub {
-  font-size: var(--fs-lead);
-  font-weight: var(--fw-medium);
-  line-height: var(--lh-snug);
+/* Small neon and dim text: the city (or the figure in the still shown without WebGL) can pass
+   behind it on scroll, and a 60% scrim isn't enough for small text over a lit window. So it
+   carries the tight strong halo and a small scrim of its own that hugs the words: night at 60%
+   under the block plus 60% under the line leaves the light at 16% (tokens.css). */
+.t-label,
+.t-meta {
+  position: relative;
+  width: fit-content;
+  text-shadow: var(--halo-strong);
+}
+.t-label::before,
+.t-meta::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-2) * -1) calc(var(--space-4) * -1);
+  z-index: -1;
+  background: var(--scrim-hug);
+  pointer-events: none;
+}
+.t-dim {
+  color: var(--c-meta);
 }
 
 /* ---- Layout --------------------------------------------------------------------------------- */
@@ -330,6 +370,9 @@ main,
   /* Rounded to the 8px grid where round() works; the line above is the fallback. */
   padding-block: round(nearest, 22vh, 8px);
   scroll-margin-top: 0;
+  /* Opening a More panel must leave the reader where they are. Without this the browser's scroll
+     anchoring picks the text scrim (which grows with the block) and scrolls the page up. */
+  overflow-anchor: none;
 }
 @media (min-width: 768px) {
   .scene {
@@ -360,6 +403,7 @@ main,
 .scrim::before {
   content: '';
   position: absolute;
+  overflow-anchor: none;
   inset: -80%;
   z-index: -1;
   background: var(--scrim-wide);
@@ -389,13 +433,13 @@ main,
   position: relative;
   padding-left: var(--space-5);
   font-size: var(--fs-body);
-  line-height: 1.45;
+  line-height: 1.5;
 }
 .facts > li::before {
   content: '';
   position: absolute;
   left: 2px;
-  top: 0.55em;
+  top: 0.45em;
   width: 6px;
   height: 8px;
   border-radius: 1px;
@@ -498,7 +542,10 @@ html[data-snapshot] .skip-link {
   *,
   *::before,
   *::after {
-    transition-duration: 1ms !important;
+    /* No transitions at all, not even 1ms ones: the menu hides the page with visibility, and a
+       transition (inherited by every child) keeps it hidden for a frame after closing, so the
+       focus the menu hands back would land on <body>. Nothing waits for transitionend. */
+    transition-duration: 0s !important;
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;

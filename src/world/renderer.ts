@@ -11,7 +11,7 @@ import { generateCity } from './city';
 import { BAKE_SLOTS, buildHarbour, type WindowSet } from './harbour';
 import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
-import { buildSky } from './sky';
+import { buildSky, starsInView } from './sky';
 import { buildSkyline } from './skyline';
 import { detectTier, readGpu } from './tier';
 import { litFrontWindows, litSideWindows, sampleWindows, visibleFrom, type FrontWindow } from './windows';
@@ -53,7 +53,18 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   // ---- Build the city ----
   const city = generateCity(tier.towers, seed);
   const skyline = buildSkyline(city, U, tier.tier === 'phone' ? 2 : 4);
-  const sky = buildSky(U, tier.stars, seed, true);
+  // Phones see a narrow slice of sky, so their stars crowd where the phone camera looks (about
+  // 66 degrees left of south to 33 right) and flash a little more often, to keep one or two
+  // flashing in view.
+  const phoneTier = tier.tier === 'phone';
+  const skyParts = buildSky(U, {
+    stars: tier.stars,
+    seed,
+    clouds: true,
+    flashEvery: phoneTier ? [1.8, 3.5] : [5, 9],
+    core: phoneTier ? [-66 * DEG, 33 * DEG, 0.8] : undefined,
+  });
+  const sky = skyParts.group;
   const peak = buildPeak(city, U);
   const lights = buildLights(city, U, tier.tier === 'phone' ? 0.55 : 1);
 
@@ -83,8 +94,8 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   // Reflection profiles per camera stop: the hero now, the others in idle time, a step at a
   // time (front faces, then side faces, then the bake), so oblique stops reflect the towers and
   // faces they actually see. Side faces only matter at the oblique stops.
-  const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, summer: 2, och: 3, ais: 4, club: 5, more: 6, since: 6, people: 6, contact: 6 };
-  const SLOT_KEYS: SceneKey[] = ['hero', 'question', 'summer', 'och', 'ais', 'club', 'more'];
+  const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, experience: 2, och: 3, ais: 4, club: 5, more: 6, since: 6, people: 6, contact: 6 };
+  const SLOT_KEYS: SceneKey[] = ['hero', 'question', 'experience', 'och', 'ais', 'club', 'more'];
   const OBLIQUE = new Set([2, 3, 4, 5]);
   let sideRight: FrontWindow[] | null = null;
   let sideLeft: FrontWindow[] | null = null;
@@ -351,6 +362,8 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       reflectionBakes: bakesDone,
       reflectionStats: JSON.stringify(harbour.stats),
       visibleLitFront: vis.reduce((s, v) => s + v, 0),
+      stars: skyParts.count,
+      starsInView: starsInView(skyParts, camera),
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
       points: renderer.info.render.points,

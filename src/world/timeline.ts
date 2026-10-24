@@ -36,7 +36,7 @@ interface Beat {
 const BEATS: Record<SceneKey, Beat> = {
   hero: { key: 'hero', arrive: 0, morph: { hold: 'B' } },
   question: { key: 'question', arrive: 0.9, morph: { from: 'B', to: 'C', over: [0.05, 0.75] } },
-  summer: { key: 'summer', arrive: 0.8, morph: { from: 'C', to: 'D', over: [0.05, 0.7] } },
+  experience: { key: 'experience', arrive: 0.8, morph: { from: 'C', to: 'D', over: [0.05, 0.7] } },
   och: { key: 'och', arrive: 0, morph: { hold: 'A' }, highlight: 'och' },
   ais: { key: 'ais', arrive: 0.45, morph: { hold: 'A' }, highlight: 'ais' },
   club: { key: 'club', arrive: 0.45, morph: { hold: 'A' }, highlight: 'club' },
@@ -67,7 +67,7 @@ function sceneElements(): Scene[] {
   const add = (key: SceneKey, el: HTMLElement | null, beat: Beat = BEATS[key]) => el && out.push({ key, el, beat });
   add('hero', pick('[data-scene="hero"]'));
   add('question', pick('[data-scene="question"]'));
-  add('summer', pick('[data-scene="summer"]'));
+  add('experience', pick('[data-scene="experience"]'));
   add('och', pick('[data-scene="work"]'), WORK_INTRO);
   add('och', pick('[data-stop="och"]'));
   add('ais', pick('[data-stop="ais"]'));

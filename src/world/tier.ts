@@ -7,9 +7,9 @@
 import { PHONE_MAX_WIDTH, type Tier, type TierInfo } from './contract';
 
 const TABLE: Record<Tier, Omit<TierInfo, 'tier'>> = {
-  high: { dprCap: 1.75, stars: 4000, towers: 260, points: 60000 },
-  low: { dprCap: 1.5, stars: 3000, towers: 260, points: 30000 },
-  phone: { dprCap: 1.5, stars: 1500, towers: 110, points: 16000 },
+  high: { dprCap: 1.75, stars: 12000, towers: 260, points: 60000 },
+  low: { dprCap: 1.5, stars: 9000, towers: 260, points: 30000 },
+  phone: { dprCap: 1.5, stars: 4000, towers: 110, points: 16000 },
 };
 
 export interface TierResult extends TierInfo {
