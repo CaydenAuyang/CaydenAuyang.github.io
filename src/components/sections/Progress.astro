@@ -284,8 +284,13 @@ const L = { may: 'May', now: 'Now', declined: 'declined', delivered: 'delivered'
   .pc-fill {
     transition: opacity 120ms var(--ease-quick) var(--d, 0ms);
   }
-  :global(html.js-motion) .pc:not(.is-drawn) .pc-draw {
-    clip-path: inset(0 100% 0 0);
+  /* Both ends are inset() so the clip can interpolate (inset to none would jump). The -8px
+     margins keep stroke edges and end markers from being cut off. */
+  :global(html.js-motion) .pc .pc-draw {
+    clip-path: inset(-8px 100% -8px -8px);
+  }
+  :global(html.js-motion) .pc.is-drawn .pc-draw {
+    clip-path: inset(-8px -8px -8px -8px);
   }
   :global(html.js-motion) .pc:not(.is-drawn) .pc-x {
     opacity: 0;
