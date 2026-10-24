@@ -170,11 +170,26 @@ import { ui } from '../../data/site';
     .stop__text .t-lead {
       font-size: var(--fs-lead);
     }
-    /* Pinned (motion on, JavaScript on, not snapshot): exactly one viewport tall. */
-    :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop {
-      height: 100vh;
+    /*
+      Held (motion on, JavaScript on, not snapshot): each project is a 220vh track whose frame
+      (the grid) stays still for 120vh of scroll (spec section 6). The track's height is in the
+      CSS from the first paint, so reloads and #links land in the right place and nothing moves
+      when the scripts start. The timeline adds .is-tall when an open More panel makes the frame
+      taller than the window; that project then scrolls normally.
+    */
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop:not(.is-tall) {
+      height: 220vh;
       min-height: 0;
+      padding-block: 0;
+      align-items: flex-start;
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop:not(.is-tall) .stop__grid {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      box-sizing: border-box;
       padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+      align-content: center;
     }
     /* Keep the pinned frame inside the viewport on short windows. */
     :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop__grid :global(.stop__video) {

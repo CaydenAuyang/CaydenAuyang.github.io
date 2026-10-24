@@ -72,8 +72,10 @@ const at = (a: { x: number; y: number }) => `--lx: ${a.x}; --ly: ${a.y}`;
     transition: opacity var(--dur-fade) var(--ease-out);
     position: absolute;
     left: calc(var(--lx) * 100%);
-    top: calc(var(--ly) * 100vh + var(--space-5));
-    top: calc(var(--ly) * 100dvh + var(--space-5));
+    /* From the section's bottom, which meets the window's bottom at the end of the page, so the
+       labels stay under the lights even when the section is taller than the window. */
+    top: calc(100% - (1 - var(--ly)) * 100vh + var(--space-5));
+    top: calc(100% - (1 - var(--ly)) * 100dvh + var(--space-5));
     transform: translateX(-50%);
     font-size: var(--fs-small);
     font-weight: var(--fw-medium);

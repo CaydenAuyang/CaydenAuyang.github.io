@@ -166,8 +166,8 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
    * One trigger per scene, in page order (ScrollTrigger needs pins created in order).
    *   - Project stops start when their top reaches the top of the window, so the top of Work (the
    *     archive columns dissolving back into the city) gets real scroll length on phones too. On
-   *     desktop they pin for about 120vh (spec section 6), unless an opened More panel makes the
-   *     project taller than the window: then it scrolls normally so nothing is cut off.
+   *     desktop the CSS holds each one still for about 120vh (spec section 6), unless an opened
+   *     More panel makes it taller than the window: then it scrolls normally so nothing is cut off.
    *   - Contact starts as soon as it enters the window, so the two lights have room to gather.
    *   - Everything else starts when its top reaches the middle of the window.
    */
@@ -175,16 +175,17 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     triggers.forEach((st) => st.kill(true));
     triggers = scenes.map(({ key, el }) => {
       if (el.hasAttribute('data-pin')) {
-        el.style.height = 'auto';
-        const fits = el.scrollHeight <= window.innerHeight + 1;
-        el.style.height = pinning && fits ? '' : 'auto';
-        if (pinning && fits) {
-          return ScrollTrigger.create({ trigger: el, start: 'top top', end: '+=120%', pin: true, pinSpacing: true });
-        }
-        // Unpinned (phones, reduced motion, snapshot, or too tall): the first project takes over
-        // at the top of the window, giving the archive's dissolve its scroll; the next two take
-        // over a little earlier, so the city never shows the last project under the next video.
-        return ScrollTrigger.create({ trigger: el, start: key === 'och' ? 'top top' : 'top 35%', end: 'bottom top' });
+        // Desktop with motion: the CSS holds each project's frame still for 120vh (a sticky frame
+        // in a 220vh track), so nothing is pinned by script. If an open More panel makes the frame
+        // taller than the window, .is-tall lets that project scroll normally instead.
+        el.classList.remove('is-tall');
+        const frame = el.querySelector<HTMLElement>('.stop__grid');
+        if (pinning && frame && frame.scrollHeight > window.innerHeight + 1) el.classList.add('is-tall');
+        // Phones (and reduced motion, snapshot): the first project takes over at the top of the
+        // window, giving the archive's dissolve its scroll; the next two take over a little
+        // earlier, so the city never shows the last project under the next video.
+        const start = pinning || key === 'och' ? 'top top' : 'top 35%';
+        return ScrollTrigger.create({ trigger: el, start, end: 'bottom top' });
       }
       if (key === 'contact') {
         // Snapshot freezes People on the star field and Contact on the two lights, so Contact
@@ -197,7 +198,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   }
   build();
 
-  // A More toggle changes a section's height: rebuild the triggers (and the pins) from scratch.
+  // A More toggle changes a section's height: rebuild the triggers from scratch.
   window.addEventListener('world:layout', build);
 
   // On phones (and portrait tablets) the hero text sits under the figure, so it fades out as it
@@ -208,7 +209,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   if (heroText && heroFigure && heroSection && !snapshot) {
     const fadeDistance = () => {
       const gap = heroText.getBoundingClientRect().top + window.scrollY - (heroFigure.getBoundingClientRect().bottom + window.scrollY);
-      return Math.max(60, gap);
+      return Math.max(120, gap);
     };
     ScrollTrigger.create({
       trigger: heroSection,

@@ -510,3 +510,8 @@ html[data-snapshot] *::after {
   transition: none !important;
   animation: none !important;
 }
+
+/* Browsers reset text-shadow on buttons; let them inherit the halo like the text around them. */
+button {
+  text-shadow: inherit;
+}
