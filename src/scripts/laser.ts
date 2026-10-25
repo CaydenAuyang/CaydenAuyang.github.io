@@ -1,4 +1,5 @@
-// laser.ts: the laser pointer (NIGHT-SIGNAL.md 11b.10). Desktop with a fine pointer only.
+// laser.ts: the laser pointer (NIGHT-SIGNAL.md 11b.10). With a mouse only (V4.md 8.1: a mouse or
+// trackpad that hovers, MOUSE in src/world/layout.ts; an iPad with a trackpad counts as touch).
 //
 // The system cursor is hidden over the page and a laser dot is drawn instead, on its own fixed 2D
 // canvas above everything (pointer-events: none, sharp on high-DPI screens): a 6px white core with
@@ -12,8 +13,10 @@
 //   - Touch, pens, reduced motion and snapshot keep the system cursor: no dot, no tail.
 // The city warms where you point through the lead's interact.ts (the spotlight), not here.
 
+import { MOUSE } from '../world/layout';
+
 const html = document.documentElement;
-const fine = window.matchMedia('(hover: hover) and (pointer: fine)');
+const fine = window.matchMedia(MOUSE);
 const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 const TAIL_MS = 180;

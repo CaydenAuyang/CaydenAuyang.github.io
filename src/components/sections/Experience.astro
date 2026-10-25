@@ -3,10 +3,15 @@
 // supervisor line, lead, four facts, and the full summer section from the long copy behind More),
 // then Wisers: one entry with two summers, 2024 first.
 //
-// Civic Exchange (`.xp__track`): on desktop with motion on, a track whose one-screen frame
-// (`.xp__wrap`) holds still for about 70vh once the twelve columns stand, so the whole block can be
-// read with the columns still beside it (V4 section 1). The timeline lets go (`.is-tall`) while an
-// open More panel makes the block taller than the window.
+// Civic Exchange (`.xp__track`): where sections are held (the pin layout: wide, at least 600 tall;
+// V4.md 8.1) with motion on, a track whose one-screen frame (`.xp__wrap`) holds still for about
+// 70vh once the twelve columns stand, so the whole block can be read with the columns still beside
+// it (V4 section 1). The timeline lets go (`.is-tall`) while an open More panel makes the block
+// taller than the window. Side by side (short and wide) the block is the right column, clear of
+// the columns in the left half. In the stack layout (phones, upright iPads) the columns stand
+// across the upper half and the block scrolls up from below, after half a screen of sky in which
+// they form; as the text reaches the columns' feet it fades out (src/scripts/civic.ts), so the
+// columns sit above the text, never behind it (V4.md 8.2).
 //
 // The archive (NIGHT-SIGNAL.md 11b.3): the twelve columns of light the signal raises over Central
 // are sized by the notebooks' real document counts. Screen readers get the same data as a
@@ -14,13 +19,16 @@
 // interact.ts shows over a hovered or tapped column is `[data-archive-label]`: it sets the text,
 // `hidden`, and left/top in viewport pixels (the column's top); the CSS centers it just above.
 //
-// Wisers (`data-scene="wisers"`): with motion on, a tall track whose one-screen frame holds still
-// for about 160vh of scroll while the signal draws the 2024 feed and shoe, then the 2025 screen
-// agent, inside WISERS_ANCHOR (contract.ts). The text keeps out of that box: the right column on
-// desktop, the bottom of the screen on phones. The timeline sets data-beat="2024" or "2025" on the
-// track; that summer's label lights and the other dims (with no attribute both read evenly).
-// Snapshot: the track is two screens with the frame held, one per summer. On phones the text fades
-// out as the held frame leaves, so it never rises through the pictures (src/scripts/wisers.ts).
+// Wisers (`data-scene="wisers"`): in the pin layout (motion on or off), a tall track whose
+// one-screen frame holds still for about 160vh of scroll while the signal draws the 2024 feed and
+// shoe, then the 2025 screen agent, inside WISERS_ANCHOR (contract.ts). Elsewhere nothing is held
+// (V4.md 8.2): the block scrolls, and the timeline draws each picture while its summer's line is
+// being read (it starts those scenes at the [data-summer] lines, and treats a sticky frame as
+// held). The text keeps out of that box: the right column side by side (short and wide); in the
+// stack layout the pictures sit above and the text is cut off as it reaches their bottom edge
+// (src/scripts/wisers.ts). The timeline sets data-beat="2024" or "2025" on the track; that
+// summer's label lights and the other dims (with no attribute both read evenly). Snapshot: the
+// track is two screens with the frame held, one per summer.
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { archive, experience } from '../../data/content';
@@ -124,10 +132,13 @@ const headline = ignite(experience.heading);
 </section>
 
 <script>
+  import '../../scripts/civic';
   import '../../scripts/wisers';
 </script>
 
 <style>
+  @import '../../styles/media.css';
+
   .xp {
     --scene-h: 140vh;
   }
@@ -189,52 +200,71 @@ const headline = ignite(experience.heading);
     background: var(--scrim-hug);
   }
 
-  /* Phones (and portrait tablets, the phone layout): the twelve columns fill the band from about
-     15% to 52% of the screen while Civic Exchange scrolls, and the full-width text covers them.
-     About 55vh of empty world after it lets the text clear the band before Wisers comes in. */
-  @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+  /* Stack (phones and upright iPads): the twelve columns stand across the band from 13% to 55% of
+     the screen. Half a screen of sky above the block (instead of the scenes' 22vh) lets them form
+     before EXPERIENCE comes up under them, and as the text reaches their feet it fades out
+     (civic.ts), its band of night with it. The frame's box reaches 160px past the block above and
+     below, as that band does (base.css), so the fade's mask covers all of it; the negative margins
+     keep everything where it was. About 55vh of empty world after it lets the text clear the band
+     before Wisers comes in. */
+  @media (--stack) {
+    .xp {
+      padding-top: 50vh;
+      padding-top: round(nearest, 50vh, 8px);
+    }
     .xp__wrap {
-      margin-bottom: 55vh;
-      margin-bottom: round(nearest, 55vh, 8px);
+      padding-block: 160px;
+      margin-top: -160px;
+      margin-bottom: calc(55vh - 160px);
+      margin-bottom: calc(round(nearest, 55vh, 8px) - 160px);
+    }
+    /* civic.ts keeps taps off the faded part, but a keyboard still reaches More there. When it
+       takes focus the browser scrolls it into view counting this margin, so it lands below the
+       fade (the line at 55% of the canvas plus 8px, then 48px of fade), not under the columns. */
+    :global(html:not(.no-webgl):not(.world-lost)) .xp :global(.xp__more .more__btn) {
+      scroll-margin-top: calc(55 * var(--lvh) + 64px);
     }
   }
 
-  /* Tablets (768 to 1023px, portrait or landscape): the page grid has 12 narrow columns there, so
-     the blocks span all of them, as on phones. */
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .xp__block,
-    .wisers__block {
-      grid-column: 1 / -1;
+  /* Side by side (short and wide): Civic Exchange is the right column (the same edge as the work
+     text), clear of the archive rising over Central in the left half (x 0.09 to 0.52 of the window
+     at 852 x 393 and 1440 x 900 alike). Its scrim stops short of the columns: it is masked off from
+     13% of the block's width left of the text (about 0.54 of the window at 1024 to 1440, 0.53 at
+     1920, 0.55 at 852) and fades in to full by the text's edge, so it never dims some columns and
+     not others. */
+  @media (--short), (--wide) {
+    .xp__block {
+      grid-column: 8 / span 5;
+    }
+    .xp__block.scrim::before {
+      /* The pseudo is 2.6 block widths wide; the block starts at 0.8 / 2.6 = 30.77% of it. */
+      -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+      mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
   }
-
-  /* Desktop: the right column (the same edge as the work text), clear of the archive rising over
-     Central and of the Wisers pictures (WISERS_ANCHOR, left sky, x 0.1 to 0.5). Each block's scrim
-     stops short of the pictures: it is masked off from 13% of the block's width left of the text
-     (about 0.54 of the window at 1024 to 1440, 0.53 at 1920; the columns end near 0.51) and fades
-     in to full by the text's edge, so it never dims some columns and not others. */
-  @media (min-width: 1024px) {
-    .xp__block,
+  /* Side by side: Wisers in the same right column, clear of its pictures (WISERS_ANCHOR, left sky,
+     x 0.1 to 0.5), its scrim masked the same way. */
+  @media (--short), (--wide) {
     .wisers__block {
       grid-column: 8 / span 5;
     }
-    .xp__block.scrim::before,
     .wisers__block.scrim::before {
-      /* The pseudo is 2.6 block widths wide; the block starts at 0.8 / 2.6 = 30.77% of it. */
       -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
   }
 
   /*
-    Civic Exchange held (desktop, motion on, JavaScript on, not snapshot; V4 section 1): a 170vh
-    track whose one-screen frame stays still for 70vh of scroll once the twelve columns stand, the
-    block centered in it, as Wisers and the work stops are held. The track's height is in the CSS
-    from the first paint. The timeline adds .is-tall while an open More panel makes the block taller
-    than the frame; then it scrolls normally. The frame keeps its padding either way, so the
-    timeline's fit test reads the same held or not. Phones, reduced motion and snapshot don't hold.
+    Civic Exchange held (the pin layout: wide and at least 600 tall; motion on, JavaScript on, not
+    snapshot; V4 section 1): a 170vh track whose one-screen frame stays still for 70vh of scroll
+    once the twelve columns stand, the block centered in it, as Wisers and the work stops are held.
+    The track's height is in the CSS from the first paint. The timeline adds .is-tall while an open
+    More panel makes the block taller than the frame; then it scrolls normally. The frame keeps its
+    padding either way, so the timeline's fit test reads the same held or not. The frame is one
+    small viewport tall, so on an iPad the toolbar never pushes the block out of it. Stack, short,
+    reduced motion and snapshot don't hold.
   */
-  @media (min-width: 1024px) {
+  @media (--pin) {
     :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__wrap {
       box-sizing: border-box;
       padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
@@ -255,20 +285,21 @@ const headline = ignite(experience.heading);
       position: sticky;
       top: 0;
       height: 100vh;
+      height: 100svh;
       align-content: center;
     }
-  }
-  /* Short desktop windows (1024 x 768, 1280 x 720): a tighter frame and one smaller gap, so the
-     block (about 680px at 1024 wide) still fits and holds. */
-  @media (min-width: 1024px) and (max-height: 820px) {
-    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__wrap {
-      padding-block: calc(var(--header-h) + var(--space-2)) var(--space-3);
-    }
-    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track.is-tall .xp__wrap {
-      padding-top: var(--civic-top, calc(var(--header-h) + var(--space-2)));
-    }
-    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__civic {
-      margin-top: var(--space-4);
+    /* Short windows (1024 x 768, 1280 x 720, iPads sideways): a tighter frame and one smaller gap,
+       so the block (about 680px at 1024 wide) still fits and holds. */
+    @media (max-height: 820px) {
+      :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__wrap {
+        padding-block: calc(var(--header-h) + var(--space-2)) var(--space-3);
+      }
+      :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track.is-tall .xp__wrap {
+        padding-top: var(--civic-top, calc(var(--header-h) + var(--space-2)));
+      }
+      :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__civic {
+        margin-top: var(--space-4);
+      }
     }
   }
 
@@ -290,11 +321,22 @@ const headline = ignite(experience.heading);
     gap: var(--space-4);
     margin-top: var(--space-4);
   }
-  /* Phones: tighter, so the block fits under the pictures (below 0.48 of the height). */
-  @media (max-width: 767px) {
+  /* Stack: tighter, so snapshot's held frame fits under the pictures (below 0.48 of the height),
+     and at a reading width on upright iPads. Not held, the two summers sit a quarter of a screen
+     apart, so each line is read while its pictures draw and hold (the timeline's wisers2024 and
+     wisers2025 scenes start at the lines): the 2024 line reaches the pictures' edge as the 2025
+     line is a quarter of the way up, where the screen agent starts. */
+  @media (--stack) {
+    .wisers__block {
+      max-width: 40rem;
+    }
     .wisers__summers {
       gap: var(--space-3);
       margin-top: var(--space-3);
+    }
+    :global(html:not([data-snapshot])) .wisers__summers {
+      gap: 25vh;
+      gap: 25svh;
     }
     .wisers__summer {
       gap: var(--space-1);
@@ -348,14 +390,10 @@ const headline = ignite(experience.heading);
     box-shadow: 0 0 10px rgb(var(--window-rgb) / 0.7);
   }
 
-  /* Held (with JavaScript, motion on or off: holding still isn't motion): a 260vh track whose
-     one-screen frame stays still for 160vh of scroll, like the work stops, so each picture gets
-     its time. Desktop: the text centered in the right column. Phones: the text at the bottom of
-     the screen, below the pictures (WISERS_ANCHOR.phone ends at 0.48 of the height). */
-  :global(html.js:not([data-snapshot])) .wisers {
-    height: 260vh;
-  }
-  :global(html.js:not([data-snapshot])) .wisers__frame,
+  /* Held (the pin layout, with JavaScript, motion on or off: holding still isn't motion): a 260vh
+     track whose one-screen frame stays still for 160vh of scroll, like the work stops, so each
+     picture gets its time, the text centered in the right column. The timeline reads a sticky
+     frame as held. Snapshot holds it in every layout, over two screens (below). */
   :global(html[data-snapshot]) .wisers__frame {
     position: sticky;
     top: 0;
@@ -363,12 +401,39 @@ const headline = ignite(experience.heading);
     height: 100svh;
     padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
   }
-  @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
-    :global(html.js:not([data-snapshot])) .wisers__frame,
+  @media (--pin) {
+    :global(html.js:not([data-snapshot])) .wisers {
+      height: 260vh;
+      height: 260svh;
+    }
+    :global(html.js:not([data-snapshot])) .wisers__frame {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      height: 100svh;
+      min-height: 0;
+      padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+    }
+  }
+  /* Stack, snapshot: the text at the bottom of the screen, below the pictures (WISERS_ANCHOR.phone
+     ends at 0.48 of the height). */
+  @media (--stack) {
     :global(html[data-snapshot]) .wisers__frame {
       justify-content: flex-end;
       padding-top: calc(48vh + var(--space-3));
       padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    }
+    /* Stack, not held: the block scrolls up under the pictures and wisers.ts cuts it off at their
+       bottom edge with a mask on the frame. The frame's box reaches 160px past the block above and
+       below, as the block's band of night does (base.css), so the mask covers all of it; the
+       negative margins (inside a flow root, so they don't collapse outward) keep everything where
+       it was. */
+    :global(html:not([data-snapshot])) .wisers {
+      display: flow-root;
+    }
+    :global(html:not([data-snapshot])) .wisers__frame {
+      padding-block: 160px;
+      margin-block: -160px;
     }
   }
   /* Printing: no held track and no screen-sized spacing (either would print an empty page). The
@@ -380,7 +445,7 @@ const headline = ignite(experience.heading);
        right column (8 to 12) by margin. */
     .xp__wrap {
       display: block !important;
-      margin-bottom: 0 !important;
+      margin-block: 0 !important;
       position: static !important;
       height: auto !important;
       padding-block: 0 !important;
@@ -409,7 +474,13 @@ const headline = ignite(experience.heading);
       height: auto !important;
       min-height: 0 !important;
       padding: 0 !important;
+      margin-block: 0 !important;
       justify-content: flex-start !important;
+      -webkit-mask-image: none !important;
+      mask-image: none !important;
+    }
+    .wisers__summers {
+      gap: var(--space-3) !important;
     }
   }
   @media print and (min-width: 1024px) {
@@ -423,21 +494,51 @@ const headline = ignite(experience.heading);
     height: 200vh;
     margin-top: 0;
   }
-  /* No JavaScript: one screen of its own in the flow. */
-  @media (min-width: 768px) {
+  /* Short, snapshot: the held frame is a phone held sideways, too short for both summers, so each
+     of the two screens shows its own summer under the name (by the timeline's beat), and the frame
+     drops the header's room (snapshot has no header). On screen only: paper shows both. */
+  @media (--short) {
+    @media screen {
+      :global(html[data-snapshot]) .wisers__frame {
+        padding-block: var(--space-3);
+      }
+      :global(html[data-snapshot]) .wisers:not([data-beat='2025']) [data-summer='2025'],
+      :global(html[data-snapshot]) .wisers[data-beat='2025'] [data-summer='2024'] {
+        display: none;
+      }
+    }
+  }
+  /* Side by side and not held (no JavaScript, phones sideways, wide windows under 600 tall): one
+     screen of its own in the flow. */
+  @media (--short), (--wide) {
     .wisers__frame {
       min-height: 100vh;
     }
   }
+  /* Short (phones sideways), not held: the window is too short to read both summers while their
+     pictures draw beside them, so the lines come up one at a time. The 2024 line is half gone at
+     the top as the 2025 line is a quarter of the way up, where the screen agent starts (the
+     timeline's wisers2025), and the 2025 line is half gone by the time SELECTED WORK comes up and
+     the screen agent leaves (the work beat). */
+  @media (--short) {
+    :global(html:not([data-snapshot])) .wisers__summers {
+      gap: 58vh;
+      gap: 58svh;
+    }
+    :global(html:not([data-snapshot])) .wisers__frame {
+      padding-bottom: 30vh;
+      padding-bottom: 30svh;
+    }
+  }
 
   /*
-    Snapshot (desktop): Civic Exchange takes two screens. The first is the live layout: the chart
+    Snapshot (wide): Civic Exchange takes two screens. The first is the live layout: the chart
     clear on the left, the headline and the Civic Exchange short copy on the right, centered. The
     second holds the open More text, in two columns in the same right column, so the chart stays
     clear there too. The block's scrim becomes a band down the right side (feathered over 120px at
     the top and bottom, masked off on the left as live). Wisers follows in two screens.
   */
-  @media (min-width: 1024px) {
+  @media (--wide) {
     :global(html[data-snapshot]) .xp {
       padding-block: 0;
     }

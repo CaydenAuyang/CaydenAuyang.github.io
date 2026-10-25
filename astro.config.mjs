@@ -25,6 +25,12 @@ export default defineConfig({
   site: 'https://caydenauyang.github.io',
   output: 'static',
 
+  // CSS for Safari 15 and up: the minifier would otherwise rewrite (max-width: 767px) as
+  // (width <= 767px), which Safari only reads from 16.4, so older iPhones lost every layout rule.
+  vite: {
+    build: { cssTarget: ['safari15', 'chrome100', 'firefox100'] },
+  },
+
   fonts: [
     {
       provider: fontProviders.fontsource(),

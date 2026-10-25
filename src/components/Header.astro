@@ -5,8 +5,9 @@
 // Menu opens a full-screen overlay listing the section links over the dimmed world. It is a
 // modal <dialog>: the rest of the page is inert while it is open (a focus trap), Esc closes it,
 // and focus goes back to the Menu button. Picking a section closes it and moves focus to that
-// section. Opening and closing dispatch `world:scroll-lock` so the timeline can stop and start
-// smooth scrolling (src/scripts/menu.ts).
+// section. While it is open the page can't scroll (V4.md 8.2): `overflow: hidden` on <html>, and
+// `world:scroll-lock` so the timeline stops and starts smooth scrolling; closing it puts the page
+// back where it was (src/scripts/menu.ts). Every control is a 44px target.
 //
 // Without JavaScript the Menu button is hidden; every section is still a scroll away.
 // In snapshot mode the Menu button is hidden too.
@@ -71,6 +72,8 @@ const { menu = false } = Astro.props;
 </script>
 
 <style>
+  @import '../styles/media.css';
+
   .site-header {
     position: fixed;
     inset: 0 0 auto 0;
@@ -80,7 +83,8 @@ const { menu = false } = Astro.props;
     justify-content: space-between;
     gap: var(--space-3);
     height: var(--header-h);
-    padding-inline: var(--gutter);
+    padding-left: var(--gutter-l);
+    padding-right: var(--gutter-r);
     padding-top: env(safe-area-inset-top, 0);
     pointer-events: none;
   }
@@ -141,9 +145,12 @@ const { menu = false } = Astro.props;
     border-radius: var(--radius-control);
     transition: color var(--dur-quick) var(--ease-out);
   }
-  .site-header__name:hover,
-  .site-header__btn:hover {
-    color: var(--window);
+  /* Hover looks only with a mouse: on touch a tapped control would keep them (V4.md 8.4). */
+  @media (--mouse) {
+    .site-header__name:hover,
+    .site-header__btn:hover {
+      color: var(--window);
+    }
   }
   /* Menu and Close sit flush with the screen's right edge on phones, so their ring is drawn
      inside the button, where the edge can't clip it. */
@@ -152,7 +159,9 @@ const { menu = false } = Astro.props;
     box-shadow: inset 0 0 0 6px var(--focus-halo);
   }
 
-  /* The overlay: the whole screen, the world dimmed behind it. No glass here. */
+  /* The overlay: the whole screen, the world dimmed behind it. No glass here. It scrolls on its
+     own if it has to (a phone held sideways), and a swipe that reaches its end never carries on
+     to the locked page behind. */
   .menu {
     position: fixed;
     inset: 0;
@@ -161,11 +170,12 @@ const { menu = false } = Astro.props;
     max-width: none;
     max-height: none;
     margin: 0;
-    padding: 0 var(--gutter) var(--space-6);
+    padding: 0 var(--gutter-r) calc(var(--space-6) + env(safe-area-inset-bottom, 0px)) var(--gutter-l);
     border: 0;
     background: rgb(var(--night-rgb) / 0.86);
     color: var(--text);
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   .menu::backdrop {
     background: transparent;
@@ -205,8 +215,10 @@ const { menu = false } = Astro.props;
     text-decoration: none;
     transition: color var(--dur-quick) var(--ease-out);
   }
-  .menu__link:hover {
-    color: var(--window);
+  @media (--mouse) {
+    .menu__link:hover {
+      color: var(--window);
+    }
   }
   .menu[open] .menu__list > li {
     animation: menu-item 420ms var(--ease-out) both;

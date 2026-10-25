@@ -166,8 +166,11 @@ const START_STOP = LAST_STOP;
 </script>
 
 <style>
+  @import '../../styles/media.css';
+
   /* Glass: one of only two places it appears (the other is the video frames). Sized to its text:
-     at most 34rem wide on desktop, the full width inside the gutters on phones, 24px of padding. */
+     at most 34rem wide side by side (short and wide), the full width inside the gutters in the
+     stack layout (phones and upright iPads; V4.md 8.2), 24px of padding. */
   .qp {
     max-width: 34rem;
     padding: var(--space-4);
@@ -177,6 +180,20 @@ const START_STOP = LAST_STOP;
     -webkit-backdrop-filter: blur(var(--glass-blur));
     backdrop-filter: blur(var(--glass-blur));
     box-shadow: var(--glow-soft);
+  }
+  @media (--stack) {
+    .qp {
+      max-width: none;
+    }
+  }
+  /* Touch screens: no blur over the live canvas, which phones would redo every frame (V4.md 8.6).
+     A flat fill and the same border instead. */
+  @media (--touch) {
+    .qp {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: var(--glass-flat);
+    }
   }
 
   /* The switch: three segments, each a 44px target. */
@@ -205,7 +222,7 @@ const START_STOP = LAST_STOP;
       color var(--dur-quick) var(--ease-out),
       background var(--dur-quick) var(--ease-out);
   }
-  @media (min-width: 768px) {
+  @media (--short), (--wide) {
     .qp__opt {
       padding: 0 var(--space-4);
     }
@@ -216,8 +233,11 @@ const START_STOP = LAST_STOP;
       padding: 0 var(--space-2);
     }
   }
-  .qp__opt:hover {
-    color: var(--text);
+  /* Hover only with a mouse: on touch a tapped segment would keep it (V4.md 8.4). */
+  @media (--mouse) {
+    .qp__opt:hover {
+      color: var(--text);
+    }
   }
   .qp__switch input:checked + .qp__opt {
     background: var(--text);
@@ -249,8 +269,9 @@ const START_STOP = LAST_STOP;
     pointer-events: none;
   }
   /* The panel's width is the measure: 34rem less its padding holds 41 characters at 20px and 48
-     at 17px, under the 60 the spec allows. */
+     at 17px, under the 60 the spec allows. Full width on an upright iPad, the lines stop at 60. */
   .qp__text {
+    max-width: var(--measure);
     font-size: var(--fs-mission);
     line-height: 1.55;
     text-wrap: pretty;

@@ -1,3 +1,5 @@
+@import './media.css';
+
 /*
   base.css: the page-wide rules. A small reset, the type roles, the layout grid, the world's
   layers (the fixed canvas and the still behind it), and the shared bits every section uses
@@ -10,6 +12,12 @@
                         full, controls that make no sense on paper hidden.
     .js-intro           motion on and not snapshot: the hero text starts masked and wipes in.
     .is-ready           set by the world once its first frame is drawn: the canvas fades in.
+    .no-webgl           set by the world when there is no WebGL: the still stays.
+    .world-lost         set by the world while the browser has taken its WebGL context away (iOS
+                        does under memory pressure or after a while in the background; V4.md 8.8):
+                        the still shows exactly as without WebGL until the context comes back.
+  The layouts (stack, short, wide, pin) and the input (mouse, touch) are the names in media.css
+  (V4.md 8.1); html[data-layout] and html[data-input] carry the same for scripts.
 */
 
 /*
@@ -229,9 +237,15 @@ html:not(.js) [data-needs-js] {
 
 /* ---- The world: a still behind a fixed canvas, both behind the page ------------------------- */
 
+/* The still and the canvas are the large viewport's size (V4.md 8.3): a phone's toolbar hiding or
+   showing never resizes them, so neither the still's crop nor the world's view moves. */
 .world-fallback {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100lvh;
   z-index: var(--z-fallback);
   pointer-events: none;
   /* The phone still's mirrored sides (below) reach past the window or the paper. */
@@ -278,8 +292,9 @@ html:not(.js) [data-needs-js] {
 }
 /*
   The lead's still render of the hero scene, when it exists (Base.astro checks at build time and
-  sets --still-desktop and --still-phone). The phone still follows usePhoneLayout(). It shows
-  until the canvas is ready, and for good where WebGL is missing (html.no-webgl).
+  sets --still-desktop and --still-phone). The phone still follows the stack layout, as the live
+  figure's phone anchors do. It shows until the canvas is ready, for good where WebGL is missing
+  (html.no-webgl), and while the world's context is lost (html.world-lost).
   Each still is placed so its figure's centre lands on the figure's anchor (contract.ts
   FIGURE_ANCHOR), whatever the window's shape: background-position puts that point of the image
   on the same point of the window (the desktop still's figure is centred at 64% 36% of it, the
@@ -307,7 +322,7 @@ html:not(.js) [data-needs-js] {
   background-position: 64% 36%;
   background-repeat: no-repeat;
 }
-@media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
+@media (--stack) {
   .world-fallback[data-still] {
     background-image: var(--still-phone), var(--still-edge-phone);
     background-size: auto 100%, 100% 100%;
@@ -344,32 +359,44 @@ html:not(.js) [data-needs-js] {
 }
 /*
   With motion on, the intro grows the scene out of a dark sky, so a finished still behind it would
-  flash and then dissolve. Show the plain gradient instead, unless WebGL turns out to be missing.
+  flash and then dissolve. Show the plain gradient instead, unless WebGL turns out to be missing or
+  its context is lost.
 */
-html.js-intro:not(.no-webgl) .world-fallback[data-still] {
+html.js-intro:not(.no-webgl, .world-lost) .world-fallback[data-still] {
   background-image: var(--night-gradient);
 }
-html.js-intro:not(.no-webgl) .world-fallback[data-still]::before {
+html.js-intro:not(.no-webgl, .world-lost) .world-fallback[data-still]::before {
   display: none;
 }
 /* Once the canvas has faded in over it (600 ms), the still steps aside. */
-html.is-ready:not(.no-webgl) .world-fallback {
+html.is-ready:not(.no-webgl, .world-lost) .world-fallback {
   visibility: hidden;
   transition: visibility 0s linear 700ms;
 }
 
 .world-canvas {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
   z-index: var(--z-world);
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: 100lvh;
   pointer-events: none;
   opacity: 0;
   transition: opacity var(--dur-fade) var(--ease-out);
 }
 html.is-ready .world-canvas {
   opacity: 1;
+}
+/* Context lost: the canvas holds a blank or stale frame, so it goes at once and the still shows
+   in its place; when the world has rebuilt on restore and drops the class, it fades back in. */
+html.world-lost .world-canvas,
+html.world-lost [data-hero-hint],
+html.world-lost [data-archive-label] {
+  visibility: hidden;
+  opacity: 0;
+  transition: none;
 }
 html[data-motion='off'] .world-canvas,
 html[data-snapshot] .world-canvas {
@@ -714,16 +741,18 @@ html.js-ignite .is-lit .ign__l.is-flicker {
   width: 100%;
   max-width: var(--max-page);
   margin-inline: auto;
-  padding-inline: var(--gutter);
+  padding-left: var(--gutter-l);
+  padding-right: var(--gutter-r);
 }
 
-/* 12 columns on desktop; one on phones. Edges line up across sections. */
+/* 12 columns side by side (short and wide); one in the stack layout, phones and upright iPads,
+   where every block spans the width (grid-column: 1 / -1). Edges line up across sections. */
 .grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   column-gap: var(--space-4);
 }
-@media (min-width: 768px) {
+@media (--short), (--wide) {
   .grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
     column-gap: var(--space-5);
@@ -745,7 +774,8 @@ main,
 /*
   Scenes. Each section is a stop on the camera's path, so it is tall enough for the world to
   move behind it (NIGHT-SIGNAL.md section 6). The content sits in the middle; the rest is empty
-  world. On phones the sections are as tall as their content plus generous air.
+  world. In the stack and short layouts the sections are as tall as their content plus generous
+  air, a share of the window's height.
 */
 .scene {
   position: relative;
@@ -760,7 +790,7 @@ main,
      anchoring picks the text scrim (which grows with the block) and scrolls the page up. */
   overflow-anchor: none;
 }
-@media (min-width: 768px) {
+@media (--wide) {
   .scene {
     min-height: var(--scene-h, 120vh);
     padding-block: var(--space-9);
@@ -796,14 +826,14 @@ main,
   pointer-events: none;
 }
 /*
-  Phones: text runs the full width, so the scrim is a band instead of an ellipse: night at 60%
-  under the whole block, feathering to 0 over 160px above and below it, and running past the
-  screen's sides (main clips it there, so it never shows an edge). Its top sits a fixed 160px above
-  the block, so a block that grows (a font arriving, a More panel opening) never moves it; an
-  ellipse sized in % of the block would, and a tall block's ellipse reached up into the screens
-  above it.
+  Stack (phones, upright iPads): text runs the full width, so the scrim is a band instead of an
+  ellipse: night at 60% under the whole block, feathering to 0 over 160px above and below it, and
+  running past the screen's sides (main clips it there, so it never shows an edge). Its top sits a
+  fixed 160px above the block, so a block that grows (a font arriving, a More panel opening) never
+  moves it; an ellipse sized in % of the block would, and a tall block's ellipse reached up into
+  the screens above it.
 */
-@media (max-width: 767px) {
+@media (--stack) {
   .scrim:not(.scrim--soft)::before {
     inset: -160px -48px;
     background: linear-gradient(
@@ -903,8 +933,15 @@ main,
   text-decoration-color: rgb(var(--window-rgb) / 0.45);
   transition: text-decoration-color var(--dur-quick) var(--ease-out);
 }
-.action-link:hover {
-  text-decoration-color: var(--window);
+/* Hover only with a mouse: on touch a tapped link would keep its hover look (V4.md 8.4). The
+   underline always shows it's a link. */
+@media (--mouse) {
+  .action-link:hover {
+    text-decoration-color: var(--window);
+  }
+  .action-link:hover .arrow {
+    transform: translate(2px, -2px);
+  }
 }
 /* Like the small labels and dim lines, a link carries a small scrim of its own: the lit skyline or
    the harbour's reflections can sit right behind it. */
@@ -924,9 +961,6 @@ main,
   height: 14px;
   flex: none;
   transition: transform var(--dur-quick) var(--ease-out);
-}
-.action-link:hover .arrow {
-  transform: translate(2px, -2px);
 }
 
 /*
@@ -1157,6 +1191,8 @@ html[data-snapshot] .world-fallback[data-still]::after {
   is the page less those titles (17vh) and the fixed spacing, caption, role and three lines of the
   lead. On A5 landscape that makes the frame small (its caption keeps the column's width, so it
   doesn't wrap into a tall stack); on Letter it is about half the page.
+  This is a paper width, not one of the screen layouts (media.css): Letter and A4 landscape are
+  wide in screen terms, but two columns don't fit their pages, so print keeps its own cut.
 */
 @media print and (max-width: 1023px) {
   .stop__grid {
@@ -1176,16 +1212,19 @@ html[data-snapshot] .world-fallback[data-still]::after {
     max-width: calc(min(55vh, 83vh - 282px) * 1.6);
   }
 }
-/* Portrait paper and A5 landscape: the phone still, with its mirrored sides filling the page. */
-@media print and (max-width: 767px), print and (max-width: 1023px) and (orientation: portrait) {
-  .world-fallback[data-still],
-  html.js-intro:not(.no-webgl) .world-fallback[data-still] {
-    background-image: var(--still-phone), var(--still-edge-phone);
-    background-size: auto 100%, 100% 100%;
-    background-position: 50% 22%, 0 0;
+/* Portrait paper and A5 landscape (the stack layout on paper, as on screen): the phone still, with
+   its mirrored sides filling the page. */
+@media print {
+  @media (--stack) {
+    .world-fallback[data-still],
+    html.js-intro:not(.no-webgl) .world-fallback[data-still] {
+      background-image: var(--still-phone), var(--still-edge-phone);
+      background-size: auto 100%, 100% 100%;
+      background-position: 50% 22%, 0 0;
+    }
   }
 }
-@media (min-width: 1024px) {
+@media (--wide) {
   html[data-snapshot] .scene {
     min-height: 100vh;
     padding-block: var(--space-6);

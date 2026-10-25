@@ -3,7 +3,9 @@
 // The current floor is the section whose range on the page contains the middle of the window.
 // Section ranges are measured once and again whenever the page's size changes (More panels,
 // fonts, resizing), so following the scroll reads no layout: each scroll frame only compares
-// numbers. The lit floor carries aria-current="location".
+// numbers. The lit floor carries aria-current="location". Where the rail is hidden (the stack and
+// short layouts, touch screens; Lift.astro) it does nothing until the layout or input changes.
+import { onLayoutChange } from '../world/layout';
 
 const nav = document.querySelector<HTMLElement>('[data-lift]');
 const links = nav ? Array.from(nav.querySelectorAll<HTMLAnchorElement>('[data-floor]')) : [];
@@ -15,6 +17,7 @@ if (nav && floors.length) {
   let ranges: { top: number; bottom: number }[] = [];
   let lit = -1;
   let queued = false;
+  let shown = false;
 
   const measure = () => {
     const y = window.scrollY;
@@ -33,6 +36,7 @@ if (nav && floors.length) {
 
   const update = () => {
     queued = false;
+    if (!shown) return;
     const mid = window.scrollY + window.innerHeight / 2;
     let found = -1;
     for (let i = 0; i < ranges.length; i++) {
@@ -54,11 +58,13 @@ if (nav && floors.length) {
   };
 
   const queue = () => {
-    if (queued) return;
+    if (queued || !shown) return;
     queued = true;
     requestAnimationFrame(update);
   };
   const remeasure = () => {
+    shown = getComputedStyle(nav).display !== 'none';
+    if (!shown) return;
     measure();
     update();
   };
@@ -66,6 +72,7 @@ if (nav && floors.length) {
   remeasure();
   window.addEventListener('scroll', queue, { passive: true });
   window.addEventListener('resize', remeasure);
+  onLayoutChange(remeasure);
   window.addEventListener('world:layout', () => requestAnimationFrame(remeasure));
   if ('ResizeObserver' in window) new ResizeObserver(() => remeasure()).observe(document.body);
   document.fonts?.ready.then(remeasure);

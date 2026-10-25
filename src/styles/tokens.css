@@ -1,3 +1,5 @@
+@import './media.css';
+
 /*
   tokens.css: every color, size, space, easing and layer the site uses, in one place.
   Spec: NIGHT-SIGNAL.md section 3 (art direction).
@@ -83,6 +85,10 @@
   --glass-bg: rgb(var(--night-rgb) / 0.45);
   --glass-border: rgb(var(--window-rgb) / 0.18);
   --glass-blur: 16px;
+  /* Glass on touch screens (V4.md 8.6): no blur, since phones would redo it every frame over the
+     live canvas. A flat fill dark enough to stand in for it (with the panel's border kept): the
+     sharp city behind lets more of a lit window through than the blur did. */
+  --glass-flat: rgb(var(--night-rgb) / 0.72);
   --glow-soft: 0 0 64px 0 rgb(var(--window-rgb) / 0.08);
   /* Scrim behind text that could overlap light: night at 60% fading to 0. Never a box. */
   --scrim: radial-gradient(
@@ -155,8 +161,10 @@
   /* The mission text (Previously and Now), inside the glass panel: lead size, at line height
      1.55, never larger. */
   --fs-mission: clamp(17px, 1.3vw, 20px);
-  /* The email: the largest link on the page. 22 characters at 0.6em each fit 390px at 26px. */
-  --fs-email: clamp(24px, 3.6vw + 12px, 64px);
+  /* The email: the largest link on the page, on one line: 22 characters at 0.6em each (13.2em, so
+     13.3 with a hair to spare) never wider than the content. 26px at 390; at 360 the width holds it
+     to 24.7px (the vw term alone would make it 25px, and it broke onto two lines). */
+  --fs-email: min(clamp(24px, 3.6vw + 12px, 64px), (100vw - 2 * var(--gutter)) / 13.3);
 
   --lh-display: 0.9;
   --lh-body: 1.65;
@@ -194,11 +202,24 @@
   --space-8: 96px;
   --space-9: 128px;
 
-  /* The side gutter, always on the 8px grid: 16px on phones, then 5vw rounded down to 8px
-     (32px at 768, 48px at 1024, 72px at 1440), at most 80px. Browsers without round() use
-     plain 5vw. A custom property can't fall back by redeclaring it, hence @supports below. */
+  /* The side gutter, always on the 8px grid: 5vw rounded down to 8px, at least 16px and at most
+     80px. That is 16px on every phone held upright (5vw is under 24px up to 479 wide), 32 to 48px
+     on upright iPads (744 to 1024 wide), 72px at 1440. Phones held sideways (short) keep 16px
+     (below; V4.md 8.2). Browsers without round() use plain 5vw. A custom property can't fall back
+     by redeclaring it, hence @supports below. */
   --gutter: clamp(16px, 5vw, 80px);
+  /* Each side's padding: the gutter, or the safe area where that is wider, so nothing sits under
+     the notch or the rounded corners of a phone held sideways (V4.md 8.2). Use these for side
+     padding and insets; --gutter alone for widths that need both sides at once. */
+  --gutter-l: max(var(--gutter), env(safe-area-inset-left, 0px));
+  --gutter-r: max(var(--gutter), env(safe-area-inset-right, 0px));
   --max-page: 1440px;
+  /* One hundredth of the small and the large viewport height (V4.md 8.3), for formulas that mix
+     them: on a phone the window is the small one while the toolbar shows, and the world's canvas
+     is always the large one, so whatever lines up with the world measures in --lvh. Plain vh
+     where a browser has neither (below). */
+  --svh: 1vh;
+  --lvh: 1vh;
   --header-h: 64px;
   --tap: 44px;
   --radius-frame: 14px;
@@ -221,13 +242,25 @@
   --z-skip: 1000;
 }
 
+/* The hundredth of a pixel keeps an exact multiple on its step: WebKit made 5vw at 1440 a hair under
+   72 and rounded it down to 64. */
 @supports (width: round(down, 5vw, 8px)) {
   :root {
-    --gutter: clamp(16px, round(down, 5vw, 8px), 80px);
+    --gutter: clamp(16px, round(down, 5vw + 0.01px, 8px), 80px);
   }
 }
-@media (max-width: 767px) {
+@supports (height: 1svh) {
+  :root {
+    --svh: 1svh;
+    --lvh: 1lvh;
+  }
+}
+/* Phones sideways (V4.md 8.2): compact side by side, and the titles scale with the height too, so
+   the name and a section title never fill a 393px tall window. */
+@media (--short) {
   :root {
     --gutter: 16px;
+    --fs-name: clamp(44px, min(9vw, 15 * var(--svh)), 160px);
+    --fs-h2: clamp(34px, min(6vw, 10 * var(--svh)), 104px);
   }
 }

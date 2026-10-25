@@ -8,12 +8,15 @@
 //
 //   - The figure (5.1): with a mouse, the pointer's x turns it up to 30 degrees each way and its y
 //     tilts it up to 5, through a spring that settles in about 600 ms with a slight overshoot.
-//     Dragging on the figure overrides the pointer; on phones a drag turns it and it springs back
-//     to center on release. After 3 s without input it sways 8 degrees each way over 6 s.
+//     Dragging on the figure overrides the pointer; on touch (V4.md 8.4) a drag starts once the
+//     finger has moved 8 px more sideways than up or down, so a vertical swipe always scrolls the
+//     page (the hero is touch-action: pan-y), and the figure springs back to center on release.
+//     After 3 s without input it sways 8 degrees each way over 6 s.
 //   - Spotlight (11b.1): the mouse's position goes to the world, which brightens the windows near it.
 //   - Pulse (11b.1): a click or tap on the sky, city or water sends a pulse, and tells the page
 //     (`world:pulse`) so the hero hint can go. A tap on a bright star also fires a shooting star (11b.8).
-//   - Archive (11b.3): hovering or tapping a column of light lights it and shows its label.
+//   - Archive (11b.3): hovering (with a mouse) or tapping (touch) a column of light lights it and
+//     shows its label; a tap elsewhere closes it.
 //   - Spill (11b.4) and the arc (11b.7) come in as window events from the page. The light show
 //     (11b.9) has no control since v3: the timeline runs it while Contact is on screen.
 //
@@ -21,8 +24,9 @@
 // With motion off (reduced motion) there is no pointer-follow, sway or spring: a drag turns the
 // figure directly and it stays put, and the world draws on demand. Snapshot never starts this.
 
-import { ARCHIVE, type Ndc, type Rgb, type Signal, type World } from './contract';
+import { ARCHIVE, type Ndc, type Rgb, type ScreenBox, type Signal, type World } from './contract';
 import { archive } from '../data/content';
+import { hasMouse, onLayoutChange } from './layout';
 
 const DEG = Math.PI / 180;
 const MAX_YAW = 30 * DEG;
@@ -37,18 +41,30 @@ const SWAY_PERIOD = 6;
 const IDLE_EASE = 2.5;
 /** A press that moves less than this (CSS px) is a tap, not a drag. */
 const TAP_SLOP = 6;
+/** On touch, a press on the figure becomes a drag after this much movement (CSS px), if more sideways than up or down. */
+const DRAG_START = 8;
 const TAP_MAX_MS = 600;
 /** Dragging one figure width turns it through the whole range. */
 const DRAG_RANGE = 2 * MAX_YAW;
 
 const clamp = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 
+declare global {
+  interface WindowEventMap {
+    /** A playing video's average colour and where it is (src/scripts/loop-video.ts, 11b.4). */
+    'world:spill': CustomEvent<{ color: Rgb | null; strength: number; rect?: DOMRect }>;
+    /** The email was hovered or focused (src/scripts/contact.ts, 11b.7). */
+    'world:arc': Event;
+  }
+}
+
 /** Things a press can start on that belong to the page, not the world. */
 const CONTENT =
   'a, button, input, select, textarea, label, summary, details, video, audio, iframe, dialog, [role="button"], [role="slider"], [role="link"], [role="tab"], [contenteditable], [tabindex]:not([tabindex="-1"]), .glass, [data-no-world]';
 
-function toNdc(x: number, y: number): Ndc {
-  return { x: (x / window.innerWidth) * 2 - 1, y: 1 - (y / window.innerHeight) * 2 };
+/** A point on screen (CSS px) in NDC of a canvas this size (World.viewSize: it can be taller than the window). */
+function toNdc(x: number, y: number, view: { width: number; height: number }): Ndc {
+  return { x: (x / view.width) * 2 - 1, y: 1 - (y / view.height) * 2 };
 }
 
 /** Whether (x, y) is on a line of text: inside one of the line boxes of the text node there. */
@@ -86,8 +102,12 @@ export interface InteractOptions {
 
 export function createInteractions({ world, signal, motion }: InteractOptions): { dispose(): void } {
   const html = document.documentElement;
-  const touchOnly = window.matchMedia('(hover: none)').matches;
   const off: (() => void)[] = [];
+  // Touch has no hover (V4.md 8.1): no pointer-follow, and the figure springs back after a drag.
+  let touchOnly = !hasMouse();
+  off.push(onLayoutChange(() => (touchOnly = !hasMouse())));
+  const view = () => world.viewSize?.() ?? { width: window.innerWidth, height: window.innerHeight };
+  const ndcAt = (x: number, y: number) => toNdc(x, y, view());
   const on = <K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void, opts?: AddEventListenerOptions) => {
     window.addEventListener(type, fn as EventListener, opts);
     off.push(() => window.removeEventListener(type, fn as EventListener, opts));
@@ -103,6 +123,8 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   let idleFrom: { yaw: number; pitch: number } | null = null;
   let pointerKnown = false;
   let drag: { id: number; x: number; y: number; yaw: number; pitch: number; width: number } | null = null;
+  /** A touch press on the figure that isn't a drag yet (DRAG_START). */
+  let pending: { id: number; x: number; y: number; box: ScreenBox; target: EventTarget | null } | null = null;
   const canTurn = typeof signal?.setFigureTurn === 'function';
 
   const applyTurn = () => {
@@ -180,8 +202,7 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
       labelFor = -1;
       return;
     }
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    const { width: W, height: H } = view();
     let base = 0;
     for (let i = 0; i < ARCHIVE.length; i++) {
       const t = signal!.columnTop!(i);
@@ -240,7 +261,7 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     hoverQueued = false;
     const e = hoverEvent;
     if (!e) return;
-    const ndc = toNdc(e.clientX, e.clientY);
+    const ndc = ndcAt(e.clientX, e.clientY);
     const worldHere = isWorld(e);
     world.setPointer?.(ndc);
     if (hasColumns) showColumn(worldHere ? signal!.columnAt(ndc) : -1);
@@ -250,6 +271,15 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   on(
     'pointermove',
     (e) => {
+      if (pending && e.pointerId === pending.id) {
+        const dx = e.clientX - pending.x;
+        const dy = e.clientY - pending.y;
+        if (Math.hypot(dx, dy) >= DRAG_START) {
+          // sideways: a drag, from where the finger came down; up or down: the page scrolls
+          if (Math.abs(dx) > Math.abs(dy)) startDrag(pending.id, pending.x, pending.y, pending.box, pending.target);
+          pending = null;
+        }
+      }
       if (e.pointerType === 'touch') {
         if (drag && e.pointerId === drag.id) moveDrag(e);
         return;
@@ -284,13 +314,25 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   const insideFigure = (x: number, y: number) => {
     const box = signal?.figureBox?.();
     if (!box) return null;
-    const fx = x / window.innerWidth;
-    const fy = y / window.innerHeight;
+    const { width, height } = view();
+    const fx = x / width;
+    const fy = y / height;
     const padX = (box.x1 - box.x0) * 0.08;
     const padY = (box.y1 - box.y0) * 0.04;
     if (fx < box.x0 - padX || fx > box.x1 + padX || fy < box.y0 - padY || fy > box.y1 + padY) return null;
     return box;
   };
+
+  function startDrag(id: number, x: number, y: number, box: ScreenBox, target: EventTarget | null) {
+    drag = { id, x, y, yaw: turn.yaw, pitch: turn.pitch, width: Math.max(80, (box.x1 - box.x0) * view().width) };
+    // Keep the pointer's events coming here until it lifts, wherever it goes.
+    const el = target instanceof Element ? target : html;
+    try {
+      el.setPointerCapture(id);
+    } catch {
+      /* the pointer is already gone */
+    }
+  }
 
   function moveDrag(e: PointerEvent) {
     if (!drag) return;
@@ -317,7 +359,9 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     if (!worldHere || !canTurn) return;
     const box = insideFigure(e.clientX, e.clientY);
     if (box) {
-      drag = { id: e.pointerId, x: e.clientX, y: e.clientY, yaw: turn.yaw, pitch: turn.pitch, width: Math.max(80, (box.x1 - box.x0) * window.innerWidth) };
+      // With a mouse the drag starts at once; on touch it waits to see which way the finger goes.
+      if (e.pointerType === 'mouse') startDrag(e.pointerId, e.clientX, e.clientY, box, e.target);
+      else pending = { id: e.pointerId, x: e.clientX, y: e.clientY, box, target: e.target };
       // A press on the figure clears any old selection, as a press on the page would (the drag
       // itself cancels selectstart below, which would otherwise keep it).
       document.getSelection()?.removeAllRanges();
@@ -345,6 +389,7 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
   on('pointerup', (e) => {
     const p = press;
     press = null;
+    pending = null;
     const wasDrag = drag && e.pointerId === drag.id && (Math.abs(e.clientX - (p?.x ?? e.clientX)) > TAP_SLOP || Math.abs(e.clientY - (p?.y ?? e.clientY)) > TAP_SLOP);
     endDrag();
     if (!p || p.id !== e.pointerId || !p.world || wasDrag) return;
@@ -353,12 +398,14 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     tap(e);
   });
   on('pointercancel', () => {
+    // the browser took the gesture (a vertical swipe: the page scrolls)
     press = null;
+    pending = null;
     endDrag();
   });
 
   function tap(e: PointerEvent) {
-    const ndc = toNdc(e.clientX, e.clientY);
+    const ndc = ndcAt(e.clientX, e.clientY);
     // A tap on a column (phones have no hover) shows that column instead of pulsing.
     if (hasColumns && e.pointerType !== 'mouse') {
       const i = signal!.columnAt(ndc);
@@ -376,7 +423,7 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
     }
   }
 
-  // ---- Phones: horizontal drags on the hero turn the figure instead of doing nothing -----------
+  // ---- Touch: horizontal drags on the hero turn the figure, vertical swipes scroll (8.4) -------
   if (canTurn) {
     const hero = document.querySelector<HTMLElement>('[data-scene="hero"]');
     if (hero) hero.style.touchAction = 'pan-y pinch-zoom';
@@ -384,10 +431,10 @@ export function createInteractions({ world, signal, motion }: InteractOptions): 
 
   // ---- Page events: spill and arc --------------------------------------------------------
   on('world:spill', (e) => {
-    const d = (e as CustomEvent<{ color: Rgb | null; strength: number; rect?: DOMRect }>).detail;
+    const d = e.detail;
     if (!d || typeof world.setSpill !== 'function') return;
     const r = d.rect;
-    const center = r ? toNdc(r.left + r.width / 2, r.top + r.height / 2) : undefined;
+    const center = r ? ndcAt(r.left + r.width / 2, r.top + r.height / 2) : undefined;
     world.setSpill(d.color, d.strength ?? 0, center);
     redraw();
   });

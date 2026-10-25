@@ -25,7 +25,7 @@
 // turning away fade), and assembles it as a scan from the crown down.
 
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
-import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
+import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target } from './contract';
 import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, SHORT_PHONE_HEIGHT, usePhoneLayout, WISERS_ANCHOR } from './contract';
 import { AGENT, agentKnots, buildFeed, buildScreen, buildShoe, FEED, ROLE, type Picture } from './shapes/wisers';
 import fragmentShader from './shaders/signal.frag.glsl?raw';
@@ -1051,8 +1051,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   });
 
   // ---- Rebuild the view-dependent targets when the viewport changes shape ----
-  // The world solves its hero framing from the aspect on every resize, so any size change moves
-  // the screen-anchored targets.
+  // The world solves its hero framing from the aspect, so a new shape moves the screen-anchored
+  // targets. The world says when (V4.md 8.3: once the size settles, for a width change, a turn or a
+  // large height change; never for the browser toolbar), and the targets follow in the same task.
+  // A world without onRebuild (an older lab page): any settled size change, 200 ms after.
   let lastShape = `${window.innerWidth}x${window.innerHeight}`;
   let resizeTimer = 0;
   const onResize = () => {
@@ -1065,7 +1067,16 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       world.requestRender();
     }, 200);
   };
-  window.addEventListener('resize', onResize);
+  const offRebuild = world.onRebuild?.(() => {
+    build();
+    world.requestRender();
+  });
+  if (!offRebuild) window.addEventListener('resize', onResize);
+  /** The canvas in CSS px: NDC and screen fractions are of the canvas, which can be taller than the window. */
+  const view = () => {
+    const v = world.viewSize?.();
+    return { W: v?.width || window.innerWidth, H: v?.height || window.innerHeight };
+  };
 
   // ---- The figure on screen ----
   // Whether target B is what the points show: held, mostly arrived, or barely left.
@@ -1131,8 +1142,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   // A world point on screen in CSS px (and whether it is in front of the camera).
   function toScreen(v: Vector3, out: { x: number; y: number; ok: boolean }) {
     _p.copy(v).project(world.camera);
-    out.x = ((_p.x + 1) / 2) * window.innerWidth;
-    out.y = ((1 - _p.y) / 2) * window.innerHeight;
+    const { W, H } = view();
+    out.x = ((_p.x + 1) / 2) * W;
+    out.y = ((1 - _p.y) / 2) * H;
     out.ok = _p.z < 1;
     return out;
   }
@@ -1195,8 +1207,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     columnsBox(): ScreenBox | null {
       if (disposed || !drawn((k) => k === 'D')) return null;
       world.camera.updateMatrixWorld();
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const { W, H } = view();
       let x0 = Infinity;
       let y0 = Infinity;
       let x1 = -Infinity;
@@ -1221,8 +1232,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     columnAt(ndc: Ndc) {
       if (disposed || !columnsShowing()) return -1;
       world.camera.updateMatrixWorld();
-      const W = window.innerWidth;
-      const H = window.innerHeight;
+      const { W, H } = view();
       const x = ((ndc.x + 1) / 2) * W;
       const y = ((1 - ndc.y) / 2) * H;
       // Hit areas: a column's line on screen, widened to half the gap to its neighbours (at least
@@ -1266,7 +1276,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       world.camera.updateMatrixWorld();
       toScreen(colTops[i], _top);
       if (!_top.ok) return null;
-      return { x: _top.x / window.innerWidth, y: _top.y / window.innerHeight };
+      const { W, H } = view();
+      return { x: _top.x / W, y: _top.y / H };
     },
     sendArc() {
       if (disposed) return;
@@ -1275,7 +1286,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     setMorph(from: Target, to: Target, t: number) {
       if (disposed) return;
       if (!(from in ID) || !(to in ID)) return;
-      cur = { from, to, t: clamp(Number.isFinite(t) ? t : 0, 0, 1) };
+      const next = clamp(Number.isFinite(t) ? t : 0, 0, 1);
+      // a morph on its way keeps the world at its full frame rate (V4.md 8.6)
+      if (from !== cur.from || to !== cur.to || next !== cur.t) world.keepAwake?.();
+      cur = { from, to, t: next };
       apply();
     },
     setMotion(enabled: boolean) {
@@ -1290,6 +1304,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (disposed) return;
       disposed = true;
       unsubscribe();
+      offRebuild?.();
       window.removeEventListener('resize', onResize);
       window.clearTimeout(resizeTimer);
       world.scene.remove(points);

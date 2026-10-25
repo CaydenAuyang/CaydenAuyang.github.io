@@ -1,0 +1,22 @@
+/*
+ * media.css: the page's three layouts and its two kinds of input (V4.md section 8.1), defined once.
+ * Every stylesheet that needs one imports this file and writes @media (--stack) and so on;
+ * postcss-custom-media (postcss.config.mjs) replaces the names with the queries at build time.
+ * The same queries, as strings, are in src/world/layout.ts; Hero.astro stops the build if the two
+ * ever disagree.
+ *
+ *   --stack  width 767 or less, or portrait up to 1199 wide: phones upright, iPads upright
+ *   --short  landscape, 768 wide or more, 560 tall or less: phones sideways
+ *   --wide   everything else: laptops, desktops, iPads sideways
+ *   --pin    wide and at least 600 tall: the only place sections are held still while you scroll
+ *   --mouse  a mouse or trackpad that hovers; --touch is everything else
+ *
+ * Use them alone, and nest @media blocks to combine them (postcss-custom-media can't distribute
+ * "and" over a list).
+ */
+@custom-media --stack (max-width: 767px), (orientation: portrait) and (max-width: 1199px);
+@custom-media --short (orientation: landscape) and (min-width: 768px) and (max-height: 560px);
+@custom-media --wide (orientation: landscape) and (min-width: 768px) and (min-height: 561px), (orientation: portrait) and (min-width: 1200px);
+@custom-media --pin (orientation: landscape) and (min-width: 768px) and (min-height: 600px), (orientation: portrait) and (min-width: 1200px) and (min-height: 600px);
+@custom-media --mouse (hover: hover) and (pointer: fine);
+@custom-media --touch (hover: none), (pointer: coarse), (pointer: none);

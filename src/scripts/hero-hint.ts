@@ -3,7 +3,10 @@
 //
 //   - It shows only once the world is drawn (html.is-ready) and its interactions are listening
 //     (html.has-interactions, added by the lead's interact.ts), with motion on or off. Never in
-//     snapshot mode or without WebGL (html.no-webgl), where there is nothing to click.
+//     snapshot mode or without WebGL (html.no-webgl), where there is nothing to click, nor while
+//     the world's context is lost (html.world-lost; base.css hides it if that happens later).
+//   - "Click" with a mouse, "Tap" otherwise: the input from src/world/layout.ts, which follows a
+//     hybrid device as it switches.
 //   - With motion on it waits for the intro (about 2.6 s after the page started loading).
 //   - It fades away once the page has scrolled a little (on phones it would otherwise slide up
 //     across the figure's bright outline) and comes back at the top. If it would touch the hero's
@@ -12,6 +15,7 @@
 //     remembers that, so a returning visitor who already pulsed doesn't see it again. Storage can
 //     be missing or blocked (private windows); then the hint simply shows again next visit.
 import { ui } from '../data/site';
+import { hasMouse, onLayoutChange } from '../world/layout';
 
 const KEY = 'night-signal:pulsed';
 const html = document.documentElement;
@@ -35,15 +39,17 @@ function rememberPulse() {
 }
 
 if (hint && text && !html.hasAttribute('data-snapshot') && !pulsedBefore()) {
-  const mouse = window.matchMedia('(hover: hover) and (pointer: fine)');
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   const label = () => {
-    text.textContent = mouse.matches ? ui.hintMouse : ui.hintTouch;
+    text.textContent = hasMouse() ? ui.hintMouse : ui.hintTouch;
   };
   let state: 'waiting' | 'shown' | 'gone' = 'waiting';
 
   const ready = () =>
-    html.classList.contains('is-ready') && html.classList.contains('has-interactions') && !html.classList.contains('no-webgl');
+    html.classList.contains('is-ready') &&
+    html.classList.contains('has-interactions') &&
+    !html.classList.contains('no-webgl') &&
+    !html.classList.contains('world-lost');
 
   const show = () => {
     if (state !== 'waiting' || !ready()) return;
@@ -73,7 +79,7 @@ if (hint && text && !html.hasAttribute('data-snapshot') && !pulsedBefore()) {
   watch.observe(html, { attributes: true, attributeFilter: ['class'] });
   show();
 
-  mouse.addEventListener?.('change', label);
+  onLayoutChange(label);
 
   window.addEventListener(
     'world:pulse',

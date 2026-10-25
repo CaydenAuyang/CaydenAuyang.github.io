@@ -1,14 +1,17 @@
 ---
-// Lift.astro: the lift indicator (NIGHT-SIGNAL.md 11b.6). Desktop only (1024px and up): a slim
-// rail on the right edge, styled like a Hong Kong lift's floor display in amber. G is the hero,
-// 1 to 3 the sections, R (the roof, where the camera ends in the sky) Contact. The floor whose
-// section holds the middle of the window is lit and carries aria-current; clicking a floor scrolls
-// there (plain anchor links; Lenis smooths them). Floors read bottom to top like a lift, which is
-// also the tab order. Hovering or focusing a floor shows its section's name beside the rail.
+// Lift.astro: the lift indicator (NIGHT-SIGNAL.md 11b.6). The wide layout with a mouse only
+// (V4.md 8.2): its 26 x 32px floors are mouse targets, too small for a finger, and their names
+// show on hover. A slim rail on the right edge, styled like a Hong Kong lift's floor display in
+// amber. G is the hero (and the intro module under it), 1 to 3 the sections, R (the roof, where
+// the camera ends in the sky) Contact. The floor whose section holds the middle of the window is
+// lit and carries aria-current; clicking a floor scrolls there (plain anchor links; Lenis smooths
+// them). Floors read bottom to top like a lift, which is also the tab order. Hovering or focusing
+// a floor shows its section's name beside the rail.
 //
-// It sits at the screen's right edge, inside the gutter (always wider than the rail from 1024px),
-// vertically centered, so it never covers content. Hidden on smaller screens, in snapshot, without
-// JavaScript (it couldn't follow the scroll), and under the menu (src/scripts/lift.ts).
+// It sits in the middle of the right gutter (always wider than the rail in wide), vertically
+// centered, so it never covers content. Hidden in the stack and short layouts, on touch screens
+// (iPads included), in snapshot, without JavaScript (it couldn't follow the scroll), and under the
+// menu (src/scripts/lift.ts).
 import { floors } from '../data/content';
 import { ui } from '../data/site';
 ---
@@ -38,26 +41,25 @@ import { ui } from '../data/site';
 </script>
 
 <style>
+  @import '../styles/media.css';
+
   .lift {
     display: none;
   }
-  /* 26px wide, 6px from the screen's edge (10px from 1280px): 36px clear of the text column at
-     1440, 28px at 1280, 16px at 1024 (the narrowest gutter, 48px). */
-  @media (min-width: 1024px) {
-    .lift {
-      --rail: 26px;
-      display: block;
-      position: fixed;
-      top: 50%;
-      right: 6px;
-      z-index: var(--z-header);
-      width: var(--rail);
-      transform: translateY(-50%);
-    }
-  }
-  @media (min-width: 1280px) {
-    .lift {
-      right: 10px;
+  /* 26px wide, centered in the right gutter, at most 10px from the screen's edge: 36px clear of
+     the text column at 1440, 28px at 1280, 12px at 1024, 3px at 768 (the narrowest gutter, 32px). */
+  @media (--wide) {
+    @media (--mouse) {
+      .lift {
+        --rail: 26px;
+        display: block;
+        position: fixed;
+        top: 50%;
+        right: clamp(3px, (var(--gutter-r) - var(--rail)) / 2, 10px);
+        z-index: var(--z-header);
+        width: var(--rail);
+        transform: translateY(-50%);
+      }
     }
   }
   :global(html.menu-open) .lift {

@@ -3,6 +3,18 @@
 // One WebGLRenderer on the page's canvas, no post-processing. Draws, in order: the sky dome, the
 // Peak, the towers (one instanced draw), the water, the stars and the small lights. That is six
 // draw calls, leaving plenty of the 40-call budget for the signal.
+//
+// Phones and tablets (V4.md 8.3 to 8.8):
+//   - Size: the drawing buffer follows the canvas (100lvh, so the browser toolbar never moves it);
+//     the view (camera path, reflections, the signal's targets) is rebuilt once the size settles,
+//     only for a width change, a turn or, on touch, a height change of 25% or more.
+//   - Pacing: at most 60 fps on 90 and 120 Hz screens, 30 on touch once nothing has moved for
+//     2 s, and nothing while the tab is hidden.
+//   - Step-down: while scrolling, if the 90th percentile frame time over 2 s is over 22 ms, one
+//     step at a time, 2 s apart: pixel ratio down 0.25 to 1, two beams instead of five, the
+//     harbour at half resolution, half the stars. Never back up in a visit, except after a turn.
+//   - Context loss: the still shows (html.world-lost) until the context is back, then the world
+//     rebuilds.
 
 import { PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer } from 'three';
 import { SCENE_ORDER, usePhoneLayout, type CameraPose, type Landmarks, type LitWindowSamples, type SceneKey, type World, type WorldOptions } from './contract';
@@ -13,7 +25,8 @@ import { PALETTE } from './palette';
 import { buildLights, buildPeak } from './peak';
 import { createInteractions, pulseUniforms } from './pulse';
 import { createSpill, spillUniforms } from './spill';
-import { buildBeams, showUniforms } from './lightshow';
+import { BEAMS, buildBeams, showUniforms } from './lightshow';
+import { hasMouse, onLayoutChange } from './layout';
 import { buildShooting } from './shooting';
 import { buildSky, STAR_AXIS, STAR_DRIFT, starsInView } from './sky';
 import { buildSkyline } from './skyline';
@@ -22,6 +35,38 @@ import { litFrontWindows, litSideWindows, sampleWindows, visibleFrom, type Front
 
 export const DEFAULT_SEED = 0x1997;
 const DEG = Math.PI / 180;
+
+/** Resize (8.3): ms the size must hold before the view rebuilds, and on touch the height change (share) below which it never does (the browser toolbar; ScrollTrigger's rule). */
+const SETTLE_MS = 150;
+const TOOLBAR_SHARE = 0.25;
+/**
+ * Pacing (8.6): frames keep a 60 fps schedule, slots FRAME ms apart (IDLE_FRAME on touch once
+ * nothing has moved for IDLE_AFTER ms: 30 fps). A display tick draws only when the next slot is
+ * due, within SLACK ms. Slots move on by whole frames, so a 75 or 90 Hz screen still averages 60;
+ * a frame more than a whole slot late starts the schedule again instead of catching up.
+ */
+const FRAME = 1000 / 60;
+const IDLE_FRAME = 1000 / 30;
+const IDLE_AFTER = 2000;
+const SLACK = 2;
+/**
+ * Step-down (8.5): the intervals between display ticks over the last WINDOW ms of scrolling (a
+ * tick counts as scrolling up to SCROLL_HOLD ms after a scroll event), checked every CHECK ms once
+ * there are at least MIN of them; if their 90th percentile is over SLOW ms, one step, at least GAP
+ * ms after the last. Ticks the pacing skips count too, so a 75, 90 or 120 Hz screen is judged by
+ * its own interval, not by the gaps the 60 fps cap leaves.
+ *
+ * The cadence is how fast the page ticks when the world draws nothing: the shortest gap after a
+ * skipped tick that another gap within FRESH ms of it agrees with (to 15%). When it is slower than
+ * 45 fps (Low Power Mode, Energy Saver, or other work on the page), a lighter world can't help, so
+ * only gaps over 1.5 of it count as slow, for TRUST ms after it was measured. Before a step, if it
+ * is unknown or more than FRESH ms old, the next PROBE ticks skip drawing to measure it (at most
+ * once per GAP), and the next check decides.
+ */
+const STEP = { window: 2000, check: 500, min: 30, slow: 22, gap: 2000, scrollHold: 300, fresh: 5000, trust: 20000, probe: 3 };
+const DPR_STEP = 0.25;
+const DPR_FLOOR = 1;
+const BEAMS_LOW = 2;
 
 export async function createWorld(opts: WorldOptions): Promise<World> {
   const { canvas } = opts;
@@ -85,7 +130,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     height = Math.max(1, canvas.clientHeight || window.innerHeight);
   };
   measure();
-  // Phones and portrait tablets get the phone framing (the same rule the page's CSS uses).
+  // The stack layout (phones and iPads upright) gets the phone framing, as in the page's CSS.
   const isPhoneFrame = () => usePhoneLayout(width, height);
   path = buildCameraPath(city, width / height, isPhoneFrame());
 
@@ -174,7 +219,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   let u = 0;
   const base: KeyPose = { pos: new Vector3(), yaw: 0, pitch: 0 };
   let motion = opts.motion;
-  const touch = window.matchMedia?.('(hover: none), (pointer: coarse)').matches ?? false;
+  // Mouse or touch (8.1): touch has no parallax, and drops to 30 fps when nothing moves.
+  let touch = !hasMouse();
+  const offLayout = onLayoutChange(() => (touch = !hasMouse()));
   const par = { tx: 0, ty: 0, x: 0, y: 0 };
   const onPointer = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
@@ -192,25 +239,76 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     sky.position.copy(camera.position);
   };
 
-  const resize = () => {
+  // ---- Size (8.3) ----
+  // fit() matches the drawing buffer and the projection to the canvas: cheap. rebuild() solves the
+  // camera path for the new shape, rebakes the reflections and has the signal rebuild its targets
+  // (onRebuild): expensive, so it waits until the size has held for SETTLE_MS, and runs only for a
+  // width change, a turn or (on touch) a height change of TOOLBAR_SHARE or more.
+  /** The step-down's pixel ratio limit (none until it steps). */
+  let dprLimit = Infinity;
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, tier.dprCap, dprLimit);
+  let rebuilds = 0;
+  let fits = 0;
+  const built = { w: 0, h: 0 };
+  const rebuildSubs = new Set<() => void>();
+  const fit = () => {
     measure();
-    const dpr = Math.min(window.devicePixelRatio || 1, tier.dprCap);
+    const dpr = pixelRatio();
+    const same = dpr === renderer.getPixelRatio() && canvas.width === Math.floor(width * dpr) && canvas.height === Math.floor(height * dpr);
+    if (same && camera.aspect === width / height) return;
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
     U.uPixelRatio.value = dpr;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
+    fits++;
+    placeCamera();
+    requestRender();
+  };
+  const rebuild = (count = true) => {
+    fit();
+    built.w = width;
+    built.h = height;
     path = buildCameraPath(city, camera.aspect, isPhoneFrame());
     // Distance haze starts a kilometre short of the hero camera, so the city band along the bottom
     // of the first screen keeps the clarity it had when the hero stood closer.
     const fogStart = Math.max(city.width * 0.55, path.heroDistance - 1000);
-    for (const m of [skyline, harbour.mesh, peak, lights.points]) {
-      const f = (m.material as { uniforms?: { uFog?: { value: Vector3 } } }).uniforms?.uFog?.value;
+    for (const m of [skyline.material, harbour.water, peak.material, lights.points.material]) {
+      const f = (m as { uniforms?: { uFog?: { value: Vector3 } } }).uniforms?.uFog?.value;
       if (f) f.z = fogStart;
     }
     placeCamera();
     scheduleBakes();
+    if (count) {
+      rebuilds++;
+      for (const cb of rebuildSubs) cb();
+    }
     requestRender();
+  };
+  let settleTimer = 0;
+  let fitQueued = false;
+  const settle = () => {
+    settleTimer = 0;
+    if (disposed || lost) return;
+    measure();
+    const turned = height >= width !== built.h >= built.w;
+    if (turned) resetQuality();
+    const toolbar = touch && !turned && width === built.w && Math.abs(height - built.h) < TOOLBAR_SHARE * built.h;
+    if ((width === built.w && height === built.h) || toolbar) fit();
+    else rebuild();
+  };
+  const onResize = () => {
+    // With a mouse the buffer follows a window being dragged; on touch everything waits for the
+    // size to settle (a turn passes through sizes in between).
+    if (!touch && !fitQueued) {
+      fitQueued = true;
+      requestAnimationFrame(() => {
+        fitQueued = false;
+        if (!disposed && !lost) fit();
+      });
+    }
+    window.clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(settle, SETTLE_MS);
   };
 
   // ---- Spotlight and pulse (11b.1) ----
@@ -228,7 +326,15 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   sky.add(shooting.mesh);
 
   // ---- Searchlights (4.7) and the Contact light show (11b.9): one draw for every beam ----
-  const beams = buildBeams(city, U, PALETTE.cool, camera, () => ({ w: canvas.width, h: canvas.height }), () => requestRender());
+  const beams = buildBeams(
+    city,
+    U,
+    PALETTE.cool,
+    camera,
+    () => ({ w: canvas.width, h: canvas.height }),
+    () => requestRender(),
+    () => ({ w: width, h: height }),
+  );
   scene.add(beams.mesh);
 
   // ---- Video light spill (11b.4) ----
@@ -251,19 +357,143 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     else r.set(0, 0, 0, 0);
   };
 
-  // ---- Loop ----
+  // ---- Step-down (8.5) ----
+  type Step = { at: number; step: string; p90?: number };
+  const steps: Step[] = [];
+  let starsHalf = false;
+  const setStarsHalf = (on: boolean) => {
+    starsHalf = on;
+    skyParts.stars.geometry.setDrawRange(0, on ? Math.ceil(skyParts.count / 2) : Infinity);
+  };
+  // Tick intervals while scrolling: a ring of the latest, with when each tick came.
+  const RING = 256;
+  const ring = { t: new Float64Array(RING), gap: new Float32Array(RING), head: 0, n: 0 };
+  const recent: number[] = [];
+  let checkAt = 0;
+  let stepAt = -Infinity;
+  let lastP90 = 0;
+  // The cadence: gaps after ticks that drew nothing, with when each came.
+  const GAPS_RING = 16;
+  const gaps = { t: new Float64Array(GAPS_RING), gap: new Float32Array(GAPS_RING), head: 0, n: 0 };
+  const fresh: number[] = [];
+  const noteIdle = (now: number, gap: number) => {
+    gaps.t[gaps.head] = now;
+    gaps.gap[gaps.head] = gap;
+    gaps.head = (gaps.head + 1) % GAPS_RING;
+    gaps.n = Math.min(GAPS_RING, gaps.n + 1);
+  };
+  /** When the latest gap after a skipped tick came (-Infinity before any). */
+  const cadenceAt = () => (gaps.n ? gaps.t[(gaps.head - 1 + GAPS_RING) % GAPS_RING] : -Infinity);
+  /** The cadence in ms, or 0 while no two gaps agree. */
+  const cadence = () => {
+    const at = cadenceAt();
+    fresh.length = 0;
+    for (let k = 0; k < gaps.n; k++) {
+      const i = (gaps.head - 1 - k + GAPS_RING) % GAPS_RING;
+      if (at - gaps.t[i] > STEP.fresh) break;
+      fresh.push(gaps.gap[i]);
+    }
+    fresh.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < fresh.length; i++) if (fresh[i + 1] <= fresh[i] * 1.15) return fresh[i];
+    return 0;
+  };
+  /** Ticks still to skip for a cadence probe, when the last began, and how many there have been. */
+  let probe = 0;
+  let probedAt = -Infinity;
+  let probes = 0;
+  const stepDown = (now: number, p90: number) => {
+    let step: string;
+    if (renderer.getPixelRatio() > DPR_FLOOR + 1e-3) {
+      dprLimit = Math.max(DPR_FLOOR, renderer.getPixelRatio() - DPR_STEP);
+      fit();
+      step = `pixel ratio ${renderer.getPixelRatio()}`;
+    } else if (beams.maxBeams > BEAMS_LOW) {
+      beams.setMaxBeams(BEAMS_LOW);
+      step = `${BEAMS_LOW} beams`;
+    } else if (!harbour.half) {
+      harbour.setHalf(true);
+      step = 'harbour at half resolution';
+    } else if (!starsHalf) {
+      setStarsHalf(true);
+      step = 'half the stars';
+    } else {
+      return;
+    }
+    steps.push({ at: Math.round(now - t0), step, p90: Math.round(p90 * 10) / 10 });
+    stepAt = now;
+    ring.n = 0;
+  };
+  const sample = (now: number, gap: number) => {
+    ring.t[ring.head] = now;
+    ring.gap[ring.head] = gap;
+    ring.head = (ring.head + 1) % RING;
+    ring.n = Math.min(RING, ring.n + 1);
+    if (now < checkAt || now - stepAt < STEP.gap) return;
+    checkAt = now + STEP.check;
+    recent.length = 0;
+    let oldest = now;
+    for (let k = 0; k < ring.n; k++) {
+      const i = (ring.head - 1 - k + RING) % RING;
+      if (now - ring.t[i] > STEP.window) break;
+      recent.push(ring.gap[i]);
+      oldest = ring.t[i];
+    }
+    if (recent.length < STEP.min || now - oldest < STEP.window * 0.75) return;
+    recent.sort((a, b) => a - b);
+    lastP90 = recent[Math.floor(recent.length * 0.9)];
+    if (lastP90 <= STEP.slow) return;
+    // The page ticks this slowly even when the world draws nothing: not the world's doing.
+    const c = cadence();
+    const age = now - cadenceAt();
+    if (c > 1000 / 45 && lastP90 <= c * 1.5 && age <= STEP.trust) return;
+    if ((!c || age > STEP.fresh) && now - probedAt > STEP.gap) {
+      // Measure the cadence first; the next check decides.
+      probe = STEP.probe;
+      probedAt = now;
+      probes++;
+      return;
+    }
+    stepDown(now, lastP90);
+  };
+  /** Back to full quality after a turn (the only time it steps back up). */
+  const resetQuality = () => {
+    if (dprLimit === Infinity && beams.maxBeams === BEAMS && !harbour.half && !starsHalf) return;
+    dprLimit = Infinity;
+    beams.setMaxBeams(BEAMS);
+    harbour.setHalf(false);
+    setStarsHalf(false);
+    steps.push({ at: Math.round(performance.now() - t0), step: 'full quality after a turn' });
+    ring.n = 0;
+  };
+
+  // ---- Loop (8.6) ----
   const subs = new Set<(time: number, delta: number) => void>();
   const t0 = performance.now();
   let last = t0;
+  /** The pacing slot the last drawn frame filled. */
+  let slot = -Infinity;
+  /** The last display tick (NaN after the loop stops), and whether it drew. */
+  let prevTick = NaN;
+  let prevDrew = true;
   let raf = 0;
   let frozen = false;
   let disposed = false;
+  let lost = false;
   let hidden = document.visibilityState === 'hidden';
   let frames = 0;
+  /** The last scroll, input, intro step, morph or interaction (keepAwake), and the last scroll. */
+  let activeAt = t0;
+  let scrollAt = -Infinity;
+  /** Whether frames come at the resting rate (30 fps on touch with nothing moving). */
+  let resting = false;
+  const keepAwake = () => {
+    activeAt = performance.now();
+  };
 
   const draw = (now: number) => {
     const time = (now - t0) / 1000;
-    const delta = Math.min(0.1, (now - last) / 1000);
+    const gap = now - last;
+    const delta = Math.min(0.1, gap / 1000);
     last = now;
     if (motion) U.uTime.value = time;
     // parallax eases with about a 600 ms lag (time constant 0.2 s)
@@ -277,6 +507,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     spill.update(delta, canvas.width, canvas.height);
     shooting.update(now, { w: canvas.width, h: canvas.height });
     beams.update(now, delta, motion, U.uWake.value);
+    harbour.prerender(renderer, camera);
     renderer.render(scene, camera);
     frames++;
   };
@@ -286,7 +517,25 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   let drawing = false;
   const tick = (now: number) => {
     raf = 0;
-    if (disposed) return;
+    if (disposed || lost) return;
+    resting = touch && motion && !frozen && now - activeAt > IDLE_AFTER;
+    // The interval since the last tick: after a tick that drew nothing (with the loop running) it
+    // is the cadence; while scrolling at the full rate it is what the step-down judges.
+    const gap = now - prevTick;
+    prevTick = now;
+    if (gap > 0) {
+      if (!prevDrew && !frozen) noteIdle(now, gap);
+      if (motion && !frozen && !resting && frames > 0 && now - scrollAt < STEP.scrollHold) sample(now, gap);
+    }
+    const frame = resting ? IDLE_FRAME : FRAME;
+    if (probe > 0 || now < slot + frame - SLACK) {
+      if (probe > 0) probe--;
+      prevDrew = false;
+      start();
+      return;
+    }
+    slot = now - (slot + frame) > frame ? now : slot + frame;
+    prevDrew = true;
     drawing = true;
     try {
       draw(now);
@@ -294,27 +543,64 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       drawing = false;
     }
     if (!frozen && !hidden) start();
+    else prevTick = NaN;
   };
   const start = () => {
-    if (!raf && !drawing && !disposed) raf = requestAnimationFrame(tick);
+    if (!raf && !drawing && !disposed && !lost) raf = requestAnimationFrame(tick);
   };
   function requestRender() {
     start();
   }
   const onVis = () => {
     hidden = document.visibilityState === 'hidden';
+    prevTick = NaN;
     if (!hidden) {
       last = performance.now();
+      keepAwake();
       start();
     }
   };
   document.addEventListener('visibilitychange', onVis);
-  const onResize = () => resize();
   window.addEventListener('resize', onResize);
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
   ro?.observe(canvas);
+  // Scrolling and any input keep the full frame rate (and scrolling is when the step-down measures).
+  const onScroll = () => {
+    scrollAt = performance.now();
+    activeAt = scrollAt;
+  };
+  const AWAKE: (keyof WindowEventMap)[] = ['pointerdown', 'pointermove', 'touchstart', 'touchmove', 'wheel', 'keydown'];
+  window.addEventListener('scroll', onScroll, { passive: true });
+  for (const type of AWAKE) window.addEventListener(type, keepAwake, { passive: true });
 
-  resize();
+  // ---- Context loss (8.8) ----
+  // iOS drops WebGL contexts when memory is tight or the tab has been in the background. While the
+  // context is gone the page shows the still (html.world-lost, styled like no-webgl). three.js
+  // re-creates its GPU state from the copies it keeps when the context comes back (its listener
+  // runs before this one); then the view is rebuilt and every program compiled again.
+  let losses = 0;
+  const onLost = (e: Event) => {
+    e.preventDefault();
+    lost = true;
+    losses++;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    prevTick = NaN;
+    document.documentElement.classList.add('world-lost');
+  };
+  const onRestored = () => {
+    lost = false;
+    rebuild();
+    renderer.compile(scene, camera);
+    document.documentElement.classList.remove('world-lost');
+    last = performance.now();
+    keepAwake();
+    start();
+  };
+  canvas.addEventListener('webglcontextlost', onLost);
+  canvas.addEventListener('webglcontextrestored', onRestored);
+
+  rebuild(false);
   // Compile every program now, so the first scroll doesn't stall.
   renderer.compile(scene, camera);
   start();
@@ -329,7 +615,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       return path.keys;
     },
     setCameraProgress(next: number) {
-      u = Math.min(1, Math.max(0, next));
+      const v = Math.min(1, Math.max(0, next));
+      if (v !== u) keepAwake();
+      u = v;
       placeCamera();
       if (frozen) requestRender();
     },
@@ -337,12 +625,17 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       return poseToCameraPose(path.pose(at));
     },
     setIntro(p: { sky: number; wake: number }) {
-      U.uSkyFade.value = clamp01(p.sky);
-      U.uWake.value = clamp01(p.wake);
+      const sky = clamp01(p.sky);
+      const wake = clamp01(p.wake);
+      if (sky !== U.uSkyFade.value || wake !== U.uWake.value) keepAwake();
+      U.uSkyFade.value = sky;
+      U.uWake.value = wake;
       if (frozen) requestRender();
     },
     setLift(maxRank: number, amount: number) {
-      U.uLift.value.set(maxRank, clamp01(amount));
+      const a = clamp01(amount);
+      if (maxRank !== U.uLift.value.x || a !== U.uLift.value.y) keepAwake();
+      U.uLift.value.set(maxRank, a);
       if (frozen) requestRender();
     },
     setHighlight(key, strength) {
@@ -354,12 +647,14 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       interactions.setPointer(ndc);
     },
     pulse(ndc) {
+      keepAwake();
       return interactions.pulse(ndc);
     },
     setSpill(color, strength, center) {
       spill.set(color, strength, center);
     },
     shootingStar(ndc) {
+      keepAwake();
       return shooting.fire(ndc);
     },
     lightShow(on: boolean) {
@@ -383,6 +678,14 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       subs.add(cb);
       return () => subs.delete(cb);
     },
+    onRebuild(cb) {
+      rebuildSubs.add(cb);
+      return () => rebuildSubs.delete(cb);
+    },
+    keepAwake,
+    viewSize() {
+      return { width, height };
+    },
     setMotion(enabled: boolean) {
       motion = enabled;
       U.uMotion.value = enabled ? 1 : 0;
@@ -397,14 +700,24 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       }
     },
     requestRender,
-    resize,
+    resize() {
+      rebuild();
+    },
     dispose() {
       disposed = true;
       if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(settleTimer);
       window.removeEventListener('pointermove', onPointer);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', onScroll);
+      for (const type of AWAKE) window.removeEventListener(type, keepAwake);
       document.removeEventListener('visibilitychange', onVis);
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
       ro?.disconnect();
+      offLayout();
+      rebuildSubs.clear();
+      harbour.dispose();
       scene.traverse((o) => {
         const m = o as unknown as { geometry?: { dispose(): void }; material?: { dispose(): void; uniforms?: Record<string, { value: unknown }> } };
         m.geometry?.dispose();
@@ -440,6 +753,17 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
       frames,
       heroDistance: Math.round(path.heroDistance),
       dpr: renderer.getPixelRatio(),
+      // 8.3 to 8.8, for scripts/devices.mjs and scripts/perf.mjs
+      rebuilds,
+      fits,
+      steps: steps.map((st) => ({ ...st })),
+      quality: { dpr: renderer.getPixelRatio(), beams: beams.maxBeams, harbourHalf: harbour.half, starsHalf },
+      lastP90: Math.round(lastP90 * 10) / 10,
+      cadence: Math.round(cadence() * 10) / 10,
+      probes,
+      resting,
+      touch,
+      contextLosses: losses,
     }),
   };
   return world;

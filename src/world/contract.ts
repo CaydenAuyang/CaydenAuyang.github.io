@@ -10,6 +10,7 @@
 
 import type * as THREE from 'three';
 import { archive } from '../data/content';
+import { layoutFor } from './layout';
 
 // ---- Scenes and camera ----------------------------------------------------------------------
 
@@ -44,8 +45,8 @@ export const ARCHIVE: readonly { topic: string; count: number }[] = archive.colu
 export type Tier = 'high' | 'low' | 'phone';
 
 export interface TierInfo {
-  tier: Tier;
-  dprCap: number; // 1.75 desktop, 1.5 phone
+  tier: Tier; // phones are phone, tablets low (V4.md 8.5)
+  dprCap: number; // 1.75 high, 1.5 low and phone
   stars: number; // about 12,000 desktop, 4,000 phone
   towers: number; // about 260 desktop, 110 phone
   points: number; // 60,000 high, 30,000 low, 16,000 phone
@@ -76,17 +77,18 @@ export const HERO_FRAMING = {
   phone: { skylineTop: 0.83, horizon: 0.92 },
 };
 
-/** Phones use the phone anchors and framing below this width (CSS px). */
+/** Windows this wide or narrower always use the phone anchors and framing (CSS px). */
 export const PHONE_MAX_WIDTH = 767;
 
 /**
- * Whether a viewport uses the phone anchors and framing: phones, and portrait screens under
- * 1024px wide (portrait tablets, square counting as portrait, as in CSS), where the desktop
- * layout would put the figure under the name.
- * CSS twin: @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait).
+ * Whether a viewport uses the phone anchors and framing: the stack layout (V4.md 8.1), so phones
+ * upright and every iPad upright up to 1199 wide (square counting as portrait, as in CSS), where
+ * the desktop layout would put the figure under the name. Phones sideways (short) and everything
+ * wide use the desktop framing, the figure on the right.
+ * CSS twin: @media (--stack) in src/styles/media.css.
  */
 export function usePhoneLayout(width: number, height: number): boolean {
-  return width <= PHONE_MAX_WIDTH || (width < 1024 && height >= width);
+  return layoutFor(width, height) === 'stack';
 }
 
 /**
@@ -221,11 +223,30 @@ export interface World {
 
   /** Called every rendered frame before drawing. Returns an unsubscribe function. */
   onFrame(cb: (time: number, delta: number) => void): () => void;
+  /**
+   * V4.md 8.3: called right after the world rebuilds its view (camera path and reflections) for a
+   * new window shape: once, 150 ms after a width change, an orientation change or (on touch) a
+   * height change of 25% or more. The browser toolbar never triggers it. The signal rebuilds its
+   * screen-anchored targets here. Returns an unsubscribe function.
+   */
+  onRebuild?(cb: () => void): () => void;
+  /**
+   * V4.md 8.6: something is moving (a morph, an interaction), so keep the full frame rate. On touch
+   * the world drops to 30 fps after 2 s with no scroll, input, intro, morph or call to this.
+   */
+  keepAwake?(): void;
+  /**
+   * The canvas's size in CSS px. Screen fractions and NDC are fractions of the canvas, which is
+   * 100lvh tall: on a phone with its toolbar showing it runs below the window, so innerHeight
+   * would put things too high. Turn pointer positions into NDC with this.
+   */
+  viewSize?(): { width: number; height: number };
   /** Live motion on or off (reduced motion, Motion switch, snapshot). */
   setMotion(enabled: boolean): void;
   /** Frozen: no continuous loop; draws only when requestRender() is called. */
   setFrozen(frozen: boolean): void;
   requestRender(): void;
+  /** Rebuild the view for the canvas's current size now (normally the world does this itself). */
   resize(): void;
   dispose(): void;
 }

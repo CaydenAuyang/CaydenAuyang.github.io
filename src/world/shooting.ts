@@ -220,7 +220,10 @@ export function buildShooting(
       const py = (window.innerHeight || 1) / 2;
       let best = -1;
       let bestD = HIT_PX;
+      // only stars that are drawn (the step-down can draw half of them)
+      const drawn = Math.min(sky.count, sky.stars.geometry.drawRange.count);
       for (const i of sky.brightest) {
+        if (i >= drawn) continue;
         const s = ndcOf(starDir(i, tmp));
         if (!s) continue;
         const d = Math.hypot((s.x - ndc.x) * px, (s.y - ndc.y) * py);

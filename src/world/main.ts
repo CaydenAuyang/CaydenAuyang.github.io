@@ -17,10 +17,13 @@ const snapshot = html.hasAttribute('data-snapshot');
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const motion = !reduced && !snapshot && html.dataset.motion !== 'off';
 
+/** Whether WebGL works here. The probe's context is released at once: V4.md 8.8 allows two on the page (the world and the intro phone). */
 function webglAvailable(): boolean {
   try {
     const probe = document.createElement('canvas');
-    return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'));
+    const gl = (probe.getContext('webgl2') || probe.getContext('webgl')) as WebGLRenderingContext | null;
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(gl);
   } catch {
     return false;
   }

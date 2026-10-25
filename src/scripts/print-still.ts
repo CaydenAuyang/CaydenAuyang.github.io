@@ -19,10 +19,12 @@ const INTRO_MS = 4000;
 // Kept, so the fetched images stay in the page's memory cache until a print needs them.
 const kept: HTMLImageElement[] = [];
 
+// Safari gives an unquoted url() back with its slashes and dots escaped (url(\/_astro\/a\.svg)),
+// so the escapes come off before the path is used.
 function stillUrls(el: HTMLElement): string[] {
   const style = getComputedStyle(el);
   return ['--still-desktop', '--still-phone', '--still-fade']
-    .map((name) => /url\(\s*['"]?([^'")]+)['"]?\s*\)/.exec(style.getPropertyValue(name))?.[1])
+    .map((name) => /url\(\s*['"]?([^'")]+)['"]?\s*\)/.exec(style.getPropertyValue(name))?.[1]?.replace(/\\(.)/g, '$1'))
     .filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
 }
 
@@ -38,8 +40,10 @@ function warm() {
 }
 
 function whenIdle(fn: () => void) {
-  if ('requestIdleCallback' in window) window.requestIdleCallback(fn, { timeout: 3000 });
-  else window.setTimeout(fn, 200);
+  // A typeof test, not `in window`: TypeScript's DOM types always have it, so the other branch
+  // would type window as never.
+  if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(fn, { timeout: 3000 });
+  else setTimeout(fn, 200);
 }
 
 if (fallback && !html.hasAttribute('data-snapshot')) {

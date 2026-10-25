@@ -24,6 +24,11 @@ uniform vec3 uWarm;
 uniform vec4 uSpill; // video spill color, amount (0..0.2)
 uniform vec4 uSpillAt; // video center (device px), falloff radius (px), brightness drive
 uniform vec4 uShow; // light show: strength, seconds in, seconds per beat
+uniform float uFragScale; // canvas px per drawn px (2 while the water draws at half resolution)
+#ifdef HALF_COPY
+uniform sampler2D uHalf; // the water drawn at half resolution
+uniform vec2 uRes; // that target's size in canvas px
+#endif
 varying vec3 vWorld;
 
 float h12(vec2 p) {
@@ -42,6 +47,8 @@ float vnoise(vec2 p) {
 //#NS_SHOW
 
 void main() {
+  // this pixel in canvas px, whatever resolution the water is drawn at
+  vec2 fragXY = gl_FragCoord.xy * uFragScale;
   vec3 C = cameraPosition;
   float dist = length(vWorld - C);
   float fogF = 1.0 - exp(-max(0.0, dist - uFog.z) * uFog.y);
@@ -53,6 +60,12 @@ void main() {
     return;
   }
 
+#ifdef HALF_COPY
+  // The half-resolution copy (the land above stays at full resolution). It reads 2 canvas px
+  // lower, so it only blends texels at or below this pixel: above the shoreline that target holds
+  // the land the towers hide here, which would bleed into a bright seam along the waterline.
+  gl_FragColor = texture2D(uHalf, (gl_FragCoord.xy - vec2(0.0, 2.0)) / uRes);
+#else
   float t = uTime * uMotion;
   float zp = uProfRange.w;
   float k = (C.z - zp) / max(C.z - vWorld.z, 0.5);
@@ -133,10 +146,10 @@ void main() {
         vec4 Bq = uPulseB[i];
         // An ellipse on screen around the ring's center (device px), squashed to lie on the
         // water, with a little wobble so it isn't perfect, and thin (about 3 px) all the way round.
-        vec2 dq = gl_FragCoord.xy - Bq.xy;
+        vec2 dq = fragXY - Bq.xy;
         // the near half (below the center) a little deeper than the far half, as in perspective
         float d = length(vec2(dq.x, dq.y / (Bq.w * (dq.y < 0.0 ? 1.2 : 0.8))));
-        d += (vnoise(vec2(gl_FragCoord.x * 0.01, gl_FragCoord.y * 0.05 - t * 0.6)) - 0.5) * 0.006 * uPulseRes.x;
+        d += (vnoise(vec2(fragXY.x * 0.01, fragXY.y * 0.05 - t * 0.6)) - 0.5) * 0.006 * uPulseRes.x;
         float r = uPulseRes.x * (0.01 + 0.42 * P.w);
         float wR = max(fwidth(d), 1e-3) * 1.6;
         float fade = exp(-P.w / 0.9) * (1.0 - smoothstep(2.4, 3.0, P.w));
@@ -149,7 +162,7 @@ void main() {
   }
 
   // Video spill: the reflections take on a little of the playing video's color, most under it.
-  if (uSpill.w > 0.0) refl = nsSpill(refl, 0.6 + 0.4 * nsSpillNear(vec2(gl_FragCoord.x, uSpillAt.y)));
+  if (uSpill.w > 0.0) refl = nsSpill(refl, 0.6 + 0.4 * nsSpillNear(vec2(fragXY.x, uSpillAt.y)));
 
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);
@@ -164,4 +177,5 @@ void main() {
   vec3 col = uNight + skyRefl * uSkyFade + refl + ringL;
   col = mix(col, uGlow * 0.8, fogF * 0.3);
   gl_FragColor = vec4(col, 1.0);
+#endif
 }

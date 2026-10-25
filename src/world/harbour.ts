@@ -8,6 +8,11 @@
 // One profile per camera stop (BAKE_SLOTS), so oblique stops reflect the right towers. The
 // renderer bakes the hero first and the rest in idle time, and blends the two stops either side
 // of the camera.
+//
+// The water's shader is the heaviest per pixel in the scene, so the step-down (V4.md 8.5, step 3)
+// can draw it at half resolution: setHalf(true) draws the water alone into a target half the
+// canvas's size each frame (prerender), and the harbour mesh in the scene then only copies it
+// (the land under the city it still shades itself, at full resolution).
 
 import {
   ClampToEdgeWrapping,
@@ -16,12 +21,16 @@ import {
   Mesh,
   PlaneGeometry,
   RGBAFormat,
+  Scene,
   ShaderMaterial,
   UnsignedByteType,
   Vector2,
   Vector3,
   Vector4,
+  WebGLRenderTarget,
+  type Camera,
   type IUniform,
+  type WebGLRenderer,
 } from 'three';
 import { SEG_SOLID, type CityLayout } from './city';
 import { PALETTE } from './palette';
@@ -65,6 +74,15 @@ export interface Harbour {
   stats: { p50: number; p98: number; lift: number }[];
   /** Blend slots a and b by t for the current frame. */
   setBlend(a: number, b: number, t: number): void;
+  /** The water's own material (the mesh carries a copy pass instead while drawn at half resolution). */
+  water: ShaderMaterial;
+  /** Whether the water is drawn at half resolution. */
+  readonly half: boolean;
+  /** Draw the water at half resolution (true) or full (false). */
+  setHalf(on: boolean): void;
+  /** Before each frame's render: at half resolution, draws the water into its half-size target. */
+  prerender(renderer: WebGLRenderer, camera: Camera): void;
+  dispose(): void;
 }
 
 export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour {
@@ -209,43 +227,63 @@ export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour
   const hiRange = new Vector4(0, 0, 0, 0);
   const plane = new PlaneGeometry(26000, 16000, 1, 1);
   plane.rotateX(-Math.PI / 2);
-  const mesh = new Mesh(
-    plane,
-    new ShaderMaterial({
-      vertexShader: waterVert,
-      fragmentShader: waterFrag.replace('//#NS_PULSE', PULSE_GLSL).replace('//#NS_SPILL', SPILL_GLSL).replace('//#NS_SHOW', SHOW_GLSL),
-      defines: { PROFILE_ROWS: rows.toFixed(1), PULSES },
-      uniforms: {
-        uTime: shared.uTime,
-        uMotion: shared.uMotion,
-        uSkyFade: shared.uSkyFade,
-        uWake: shared.uWake,
-        uProfile: { value: tex },
-        uProfRange: { value: new Vector4(x0, xSpan, ySpan, zp) },
-        uBake: { value: blend },
-        // how bright a full-strength streak gets
-        uProfGain: { value: 0.95 },
-        uNight: { value: new Vector3(...PALETTE.night) },
-        uSky: { value: new Vector3(...PALETTE.sky) },
-        uGlow: { value: new Vector3(...PALETTE.glow) },
-        uHiRange: { value: hiRange },
-        uCityX: { value: new Vector2(city.xMin, city.width) },
-        uFog: { value: cityFog(city) },
-        uPulse: shared.uPulse,
-        uPulseB: shared.uPulseB,
-        uPulseOn: shared.uPulseOn,
-        uPulseRes: shared.uPulseRes,
-        uSpill: shared.uSpill,
-        uSpillAt: shared.uSpillAt,
-        uShow: shared.uShow,
-        uWarm: { value: new Vector3(...PALETTE.window) },
-      },
-    }),
-  );
+  const water = new ShaderMaterial({
+    vertexShader: waterVert,
+    fragmentShader: waterFrag.replace('//#NS_PULSE', PULSE_GLSL).replace('//#NS_SPILL', SPILL_GLSL).replace('//#NS_SHOW', SHOW_GLSL),
+    defines: { PROFILE_ROWS: rows.toFixed(1), PULSES },
+    uniforms: {
+      uTime: shared.uTime,
+      uMotion: shared.uMotion,
+      uSkyFade: shared.uSkyFade,
+      uWake: shared.uWake,
+      uProfile: { value: tex },
+      uProfRange: { value: new Vector4(x0, xSpan, ySpan, zp) },
+      uBake: { value: blend },
+      // how bright a full-strength streak gets
+      uProfGain: { value: 0.95 },
+      uNight: { value: new Vector3(...PALETTE.night) },
+      uSky: { value: new Vector3(...PALETTE.sky) },
+      uGlow: { value: new Vector3(...PALETTE.glow) },
+      uHiRange: { value: hiRange },
+      uCityX: { value: new Vector2(city.xMin, city.width) },
+      uFog: { value: cityFog(city) },
+      uPulse: shared.uPulse,
+      uPulseB: shared.uPulseB,
+      uPulseOn: shared.uPulseOn,
+      uPulseRes: shared.uPulseRes,
+      uSpill: shared.uSpill,
+      uSpillAt: shared.uSpillAt,
+      uShow: shared.uShow,
+      uWarm: { value: new Vector3(...PALETTE.window) },
+      // canvas px per drawn px: 2 while drawn at half resolution, so screen-space effects (the
+      // pulse ring, the spill) stay where they are
+      uFragScale: { value: 1 },
+    },
+  });
+  const mesh = new Mesh(plane, water);
   // The plane spans the harbour toward the camera and the land under the city (z < 0).
   mesh.position.set(city.centralX, 0, 16000 / 2 - 3200);
   mesh.frustumCulled = false;
   mesh.name = 'harbour';
+
+  // ---- Half resolution: the water alone into a half-size target, copied into the scene ----
+  let half = false;
+  const halfTarget = new WebGLRenderTarget(1, 1, { depthBuffer: false, minFilter: LinearFilter, magFilter: LinearFilter, generateMipmaps: false });
+  const halfScene = new Scene();
+  const halfMesh = new Mesh(plane, water);
+  halfMesh.position.copy(mesh.position);
+  halfMesh.frustumCulled = false;
+  halfScene.add(halfMesh);
+  const halfRes = new Vector2(1, 1);
+  // The copy is the water's own shader cut down (HALF_COPY): the land under the city at full
+  // resolution, the water read from the target.
+  const copyPass = new ShaderMaterial({
+    vertexShader: waterVert,
+    fragmentShader: water.fragmentShader,
+    defines: { ...water.defines, HALF_COPY: 1 },
+    uniforms: { ...water.uniforms, uHalf: { value: halfTarget.texture }, uRes: { value: halfRes } },
+  });
+
   return {
     mesh,
     hiRange,
@@ -254,6 +292,32 @@ export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour
     copy,
     setBlend(a: number, b: number, t: number) {
       blend.set(a, b, t);
+    },
+    water,
+    get half() {
+      return half;
+    },
+    setHalf(on: boolean) {
+      half = on;
+      mesh.material = on ? copyPass : water;
+      water.uniforms.uFragScale.value = on ? 2 : 1;
+    },
+    prerender(renderer: WebGLRenderer, camera: Camera) {
+      if (!half) return;
+      const { width, height } = renderer.domElement;
+      const w = Math.max(1, Math.ceil(width / 2));
+      const h = Math.max(1, Math.ceil(height / 2));
+      if (halfTarget.width !== w || halfTarget.height !== h) halfTarget.setSize(w, h);
+      halfRes.set(w * 2, h * 2);
+      const prev = renderer.getRenderTarget();
+      renderer.setRenderTarget(halfTarget);
+      renderer.render(halfScene, camera);
+      renderer.setRenderTarget(prev);
+    },
+    dispose() {
+      halfTarget.dispose();
+      copyPass.dispose();
+      water.dispose();
     },
   };
 }

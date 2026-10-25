@@ -270,6 +270,9 @@ export interface Beams {
   setKeepOut(boxes: readonly ScreenBox[]): void;
   /** Each frame. now in ms; wake is the intro's window wake (the searchlight starts when it is done). */
   update(now: number, dt: number, motion: boolean, wake: number): void;
+  /** How many beams draw, the searchlight first (V4.md 8.5 step-down: five to two). */
+  setMaxBeams(n: number): void;
+  readonly maxBeams: number;
 }
 
 export function buildBeams(
@@ -279,6 +282,8 @@ export function buildBeams(
   camera: PerspectiveCamera,
   view: () => { w: number; h: number },
   requestRender: () => void,
+  /** The canvas in CSS px (it can run below the window on phones; see World.viewSize). */
+  cssView: () => { w: number; h: number } = () => ({ w: window.innerWidth, h: window.innerHeight }),
 ): Beams {
   // The searchlight: the tallest roof in the Central cluster. The show's lamps: the next tallest
   // roofs at least 5% of the city apart and away from it, left to right.
@@ -321,6 +326,8 @@ export function buildBeams(
   g.setAttribute('aAlong', new BufferAttribute(aAlong, 1));
   g.setAttribute('aSide', new BufferAttribute(aSide, 1));
   g.setIndex(idx);
+  // Beams past maxBeams are left out of the draw (the step-down), not just switched off.
+  let maxBeams = BEAMS;
 
   const mask = new Uint8Array(MASK_W * MASK_H);
   const maskTex = new DataTexture(mask, MASK_W, MASK_H, RedFormat, UnsignedByteType);
@@ -370,8 +377,9 @@ export function buildBeams(
   const refreshMask = () => {
     mask.fill(0);
     if (typeof document !== 'undefined') {
-      const vw = window.innerWidth || 1;
-      const vh = window.innerHeight || 1;
+      const css = cssView();
+      const vw = css.w || 1;
+      const vh = css.h || 1;
       const els = document.querySelectorAll<HTMLElement>(TEXT_BLOCKS);
       const range = document.createRange();
       for (const el of Array.from(els)) {
@@ -856,6 +864,14 @@ export function buildBeams(
       show = on;
       requestRender();
     },
+    get maxBeams() {
+      return maxBeams;
+    },
+    setMaxBeams(n) {
+      maxBeams = Math.max(1, Math.min(BEAMS, Math.round(n)));
+      g.setDrawRange(0, maxBeams * SEG * 6);
+      requestRender();
+    },
     setKeepOut(boxes) {
       const n = Math.min(KEEP_OUT, boxes.length);
       let changed = n !== keepN.value;
@@ -975,7 +991,7 @@ export function buildBeams(
       // the show's beams: like the searchlight, brightest where they come into view (the bottom
       // edge) and fading all the way to nothing at their far ends
       for (let b = 1; b < BEAMS; b++) {
-        if (shEase <= 0) {
+        if (shEase <= 0 || b >= maxBeams) {
           K[b].x = 0;
           continue;
         }

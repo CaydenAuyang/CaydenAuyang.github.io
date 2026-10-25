@@ -26,6 +26,7 @@ import { site, ui } from '../data/site';
 import Header from '../components/Header.astro';
 import WorldBoot from '../components/WorldBoot.astro';
 import Lift from '../components/Lift.astro';
+import { MOUSE, SHORT, STACK } from '../world/layout';
 
 interface Props {
   // The full page title for the browser tab. Defaults to the site's name.
@@ -57,6 +58,25 @@ const exists = (path: string) => existsSync(join(process.cwd(), 'public', path))
 const stillDesktop = exists(STILL_DESKTOP) ? STILL_DESKTOP : exists(STILL_PHONE) ? STILL_PHONE : null;
 const stillPhone = exists(STILL_PHONE) ? STILL_PHONE : stillDesktop;
 const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --still-phone: url('${stillPhone}')` : undefined;
+
+// The layout and input modes on <html> (V4.md section 8.1), from the same queries as media.css and
+// layout.ts, set before the first paint and kept current as the window turns or resizes.
+const layoutScript = `(function () {
+  var html = document.documentElement;
+  if (!window.matchMedia) return;
+  var stack = matchMedia(${JSON.stringify(STACK)});
+  var short = matchMedia(${JSON.stringify(SHORT)});
+  var mouse = matchMedia(${JSON.stringify(MOUSE)});
+  function set() {
+    html.setAttribute('data-layout', stack.matches ? 'stack' : short.matches ? 'short' : 'wide');
+    html.setAttribute('data-input', mouse.matches ? 'mouse' : 'touch');
+  }
+  set();
+  [stack, short, mouse].forEach(function (q) {
+    if (q.addEventListener) q.addEventListener('change', set);
+    else q.addListener(set);
+  });
+})();`;
 ---
 
 <!doctype html>
@@ -117,6 +137,7 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
         js-ignite           the same condition: section headlines strike like neon tubes the first
                             time they enter view (src/scripts/ignite.ts). Until that script splits
                             their letters (or if it never runs) they are plain lit text.
+      The second sets data-layout (stack, short or wide) and data-input (mouse or touch).
     -->
     <script is:inline>
       (function () {
@@ -129,6 +150,7 @@ const stillStyle = stillDesktop ? `--still-desktop: url('${stillDesktop}'); --st
         if (!reduce && !snap) html.classList.add('js-intro', 'js-ignite');
       })();
     </script>
+    <script is:inline set:html={layoutScript} />
   </head>
   <body>
     <a class="skip-link" href="#main">{ui.skip}</a>

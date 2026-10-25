@@ -1,11 +1,10 @@
 // camera-path.ts: where the camera stands at each scene key, and the spline between them.
 //
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
-// spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
-// never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
-// the camera settles into every key, except the moves into the Mission, Experience, the first
-// work stop, More work and Contact, which the timeline eases on its own. No roll, ever: the camera
-// always looks at a point with world up.
+// spline; yaw and pitch go straight from key to key. Nothing is eased here: the timeline eases
+// every move once (power2.inOut), so the camera settles into every key without the double easing
+// that packed each move into the middle of its scroll. No roll, ever: the camera always looks at a
+// point with world up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
 // that put the tallest tower tops and the waterline exactly at HERO_FRAMING. Every other key is
@@ -164,7 +163,7 @@ export interface CameraPath {
   poses: Record<SceneKey, KeyPose>;
   heroDistance: number;
   pose(u: number, out?: { pos: Vector3; yaw: number; pitch: number }): KeyPose;
-  /** Which segment of SCENE_ORDER u falls in (keys i and i + 1), and the eased share s along it. */
+  /** Which segment of SCENE_ORDER u falls in (keys i and i + 1), and the share s along it. */
   segment(u: number): { i: number; s: number };
 }
 
@@ -239,12 +238,9 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const posCurve = new CatmullRomCurve3(order.map((k) => poses[k].pos.clone()), false, 'centripetal');
   const yawK = order.map((k) => poses[k].yaw);
   const pitchK = order.map((k) => poses[k].pitch);
-  const yawM = limitedTangents(yawK);
-  const pitchM = limitedTangents(pitchK);
   const us = order.map((k) => KEY_U[k]);
   const n = order.length;
 
-  const ease = (s: number) => (s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2);
   // Segments between two identical poses hold still (the spline would loop through them).
   const hold = order.map((k, i) => {
     if (i >= n - 1) return false;
@@ -252,31 +248,33 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
     const b = poses[order[i + 1]];
     return a.pos.distanceTo(b.pos) < 1e-6 && a.yaw === b.yaw && a.pitch === b.pitch;
   });
-  // These moves are not eased or curved here: the timeline eases them already, and easing them
-  // twice packed each move into the middle of its scroll (the 55 degree turn into Work about 9.5
-  // degrees per 20 px, and two thirds of the dolly to the Mission in one wheel notch). Experience,
-  // More work and Contact joined them in v4, when Civic Exchange's columns had to stand by its
-  // hold and the cut sections left the last two moves less scroll: eased once, at 1440 x 900 they
-  // peak at about 5, 12 and 10 degrees per 100px (v3: 6, 20 and 9).
-  const linear = order.map((_, i) => i < n - 1 && ['question', 'experience', 'och', 'more', 'contact'].includes(order[i + 1]));
-  const shape = (i: number, raw: number) => (linear[i] ? raw : ease(raw));
+  // No move is eased or curved here: the timeline eases every one already, and easing twice packed
+  // each move into the middle of its scroll (the 55 degree turn into Work about 9.5 degrees per
+  // 20 px, two thirds of the dolly to the Mission in one wheel notch, and up to v4 the 51 degree
+  // turn from OurCityHealth to AI Simply at 50 degrees per 100px at 1440 x 900; eased once, over
+  // the shorter v4 stops, it peaks at about 17).
+  let segI = 0;
+  let segS = 0;
+  const locate = (u: number) => {
+    const uu = Math.min(1, Math.max(0, u));
+    let i = 0;
+    while (i < n - 2 && uu > us[i + 1]) i++;
+    segI = i;
+    segS = Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i])));
+  };
 
   return {
     keys: { ...KEY_U },
     poses,
     heroDistance: hero.pos.z,
     segment(u: number) {
-      const uu = Math.min(1, Math.max(0, u));
-      let i = 0;
-      while (i < n - 2 && uu > us[i + 1]) i++;
-      return { i, s: shape(i, Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i])))) };
+      locate(u);
+      return { i: segI, s: segS };
     },
     pose(u: number, out?: KeyPose): KeyPose {
-      const uu = Math.min(1, Math.max(0, u));
-      let i = 0;
-      while (i < n - 2 && uu > us[i + 1]) i++;
-      const s = shape(i, Math.min(1, Math.max(0, (uu - us[i]) / (us[i + 1] - us[i]))));
-      const t = (i + s) / (n - 1);
+      locate(u);
+      const i = segI;
+      const s = segS;
       const o = out ?? { pos: new Vector3(), yaw: 0, pitch: 0 };
       if (hold[i]) {
         const k = poses[order[i]];
@@ -285,49 +283,13 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
         o.pitch = k.pitch;
         return o;
       }
-      posCurve.getPoint(t, o.pos);
-      if (linear[i]) {
-        // straight from key to key: the timeline's easing alone sets the pace
-        o.yaw = yawK[i] + (yawK[i + 1] - yawK[i]) * s;
-        o.pitch = pitchK[i] + (pitchK[i + 1] - pitchK[i]) * s;
-      } else {
-        o.yaw = hermite(yawK, yawM, i, s);
-        o.pitch = hermite(pitchK, pitchM, i, s);
-      }
+      posCurve.getPoint((i + s) / (n - 1), o.pos);
+      // straight from key to key: the timeline's easing alone sets the pace
+      o.yaw = yawK[i] + (yawK[i + 1] - yawK[i]) * s;
+      o.pitch = pitchK[i] + (pitchK[i + 1] - pitchK[i]) * s;
       return o;
     },
   };
-}
-
-/**
- * Tangents for a heading channel (one value per key, keys evenly spaced): Catmull-Rom tangents,
- * limited as Fritsch and Carlson do for monotone curves. Where the turn reverses at a key the
- * tangent is zero, and elsewhere it is at most three times the gentler of the two neighbouring
- * slopes, so a short segment next to a long swing doesn't overshoot its key and come back.
- */
-function limitedTangents(v: number[]): number[] {
-  const n = v.length;
-  const d: number[] = [];
-  for (let i = 0; i < n - 1; i++) d.push(v[i + 1] - v[i]);
-  const m: number[] = [d[0]];
-  for (let i = 1; i < n - 1; i++) {
-    if (d[i - 1] * d[i] <= 0) {
-      m.push(0);
-      continue;
-    }
-    const cr = 0.5 * (d[i - 1] + d[i]);
-    const cap = 3 * Math.min(Math.abs(d[i - 1]), Math.abs(d[i]));
-    m.push(Math.sign(cr) * Math.min(Math.abs(cr), cap));
-  }
-  m.push(d[n - 2]);
-  return m;
-}
-
-/** Cubic Hermite between keys i and i + 1 at s (0..1), with tangents m. */
-function hermite(v: number[], m: number[], i: number, s: number): number {
-  const s2 = s * s;
-  const s3 = s2 * s;
-  return (2 * s3 - 3 * s2 + 1) * v[i] + (s3 - 2 * s2 + s) * m[i] + (-2 * s3 + 3 * s2) * v[i + 1] + (s3 - s2) * m[i + 1];
 }
 
 const look = new Vector3();

@@ -68,6 +68,8 @@ const headline = ignite(contact.heading);
 </footer>
 
 <style>
+  @import '../../styles/media.css';
+
   .site-footer {
     position: relative;
     z-index: var(--z-content);
@@ -77,23 +79,27 @@ const headline = ignite(contact.heading);
      The margin is open sky after More work (V4 section 2: at least 60vh with this section's own
      sky above its text): the camera's move to More work gets that scroll before Contact enters,
      and the two lights start to gather once More work's last line has left the screen (phones
-     need a little more for that, below). Snapshot and print go straight on. */
+     need a little more for that, below). Snapshot and print go straight on.
+     Its heights never change while the page scrolls (V4.md 8.3), so the end of the page stays put
+     when a phone's toolbar hides or shows: at least one small viewport tall (svh), and the text
+     starts 128px under the lights, which the world draws at a share of the large viewport (lvh,
+     the canvas's height). At 360 x 640 the lights, their labels and clocks, the headline, the
+     email and the small print all fit in that one screen. */
   .contact {
     position: relative;
     overflow: clip;
     margin-top: 25vh;
     margin-top: round(nearest, 25vh, 8px);
     min-height: 100vh;
-    min-height: 100dvh;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    padding-top: calc(var(--lights-y) * 100vh + var(--space-9));
-    padding-top: calc(var(--lights-y) * 100dvh + var(--space-9));
-    padding-top: round(nearest, calc(var(--lights-y) * 100dvh + var(--space-9)), 8px);
+    padding-top: calc(var(--lights-y) * 100 * var(--lvh) + var(--space-9));
+    padding-top: round(nearest, calc(var(--lights-y) * 100 * var(--lvh) + var(--space-9)), 8px);
     padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   }
-  @media (max-width: 767px) {
+  @media (--stack) {
     .contact {
       margin-top: 35vh;
       margin-top: round(nearest, 35vh, 8px);
@@ -121,9 +127,13 @@ const headline = ignite(contact.heading);
     position: absolute;
     left: calc(var(--lx) * 100%);
     /* From the section's bottom, which meets the window's bottom at the end of the page, so the
-       labels stay under the lights even when the section is taller than the window. */
+       labels stay under the lights even when the section is taller than the window: up by the
+       window's height to its top (dvh: the window as it is now, toolbar or not), then down to the
+       light, which the world draws at --ly of the canvas, the large viewport (lvh). The dynamic
+       height only moves these two absolutely placed labels inside the clipped section, never the
+       end of the page. */
     top: calc(100% - (1 - var(--ly)) * 100vh + var(--space-5));
-    top: calc(100% - (1 - var(--ly)) * 100dvh + var(--space-5));
+    top: calc(100% - 100dvh + var(--ly) * 100lvh + var(--space-5));
     transform: translateX(-50%);
     white-space: nowrap;
     text-shadow: var(--halo);
@@ -150,8 +160,10 @@ const headline = ignite(contact.heading);
   .contact__email {
     display: inline-block;
     max-width: 100%;
-    /* At least a 44px target on phones (32px of text plus 8px above and below). */
-    padding-block: var(--space-2);
+    /* At least a 44px target: 8px above and below the line, more where the width (under about 352)
+       or the height (short) makes the text smaller, so the box never drops under 44px (the quarter
+       pixel each side covers the browsers' rounding of the line to 1/64 px). */
+    padding-block: max(var(--space-2), (var(--tap) - 1.15em) / 2 + 0.25px);
     font-size: var(--fs-email);
     font-weight: var(--fw-medium);
     line-height: 1.15;
@@ -163,8 +175,10 @@ const headline = ignite(contact.heading);
     overflow-wrap: anywhere;
     transition: text-decoration-color var(--dur-quick) var(--ease-out);
   }
-  .contact__email:hover {
-    text-decoration-color: var(--window);
+  @media (--mouse) {
+    .contact__email:hover {
+      text-decoration-color: var(--window);
+    }
   }
   /* The labels sit right under the two lights, and in Contact the harbour light show's beams sweep
      behind them too, so the pair carries a darker scrim of its own (night at 70% in the middle),
@@ -218,9 +232,12 @@ const headline = ignite(contact.heading);
       border-color var(--dur-quick) var(--ease-out),
       background var(--dur-quick) var(--ease-out);
   }
-  .contact__copy:hover {
-    border-color: var(--window);
-    background: rgb(var(--window-rgb) / 0.08);
+  /* Hover looks only with a mouse: on touch a tapped control would keep them (V4.md 8.4). */
+  @media (--mouse) {
+    .contact__copy:hover {
+      border-color: var(--window);
+      background: rgb(var(--window-rgb) / 0.08);
+    }
   }
   .contact__copy[data-copied] {
     border-color: var(--window);
@@ -228,6 +245,36 @@ const headline = ignite(contact.heading);
 
   .contact__small {
     margin-top: var(--space-6) !important;
+  }
+
+  /* Phones sideways (short): the lights take the top third of a window under 560px tall, so the
+     rest sits compact under them, side by side: the email with Copy email and GitHub beside it on
+     one line, tighter gaps, and all of it inside one window (at 852 x 393 the small print ends
+     about 30px above the bottom). */
+  @media (--short) {
+    .contact {
+      padding-top: calc(var(--lights-y) * 100 * var(--lvh) + var(--space-8));
+      padding-top: round(nearest, calc(var(--lights-y) * 100 * var(--lvh) + var(--space-8)), 8px);
+      padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    }
+    .contact__body {
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      column-gap: var(--space-5);
+    }
+    .contact__body > :global(.h2),
+    .contact__small {
+      flex-basis: 100%;
+    }
+    /* Still the largest link on the page, held to the window's height so the row fits. */
+    .contact__email {
+      font-size: min(var(--fs-email), 7 * var(--svh));
+    }
+    .contact__small {
+      margin-top: var(--space-3) !important;
+    }
   }
 </style>
 
