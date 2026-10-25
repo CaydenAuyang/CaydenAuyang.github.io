@@ -62,12 +62,12 @@ const FEATHER = 0.05;
 /** The searchlight: brightness, and how much wider it gets per meter (half that while the show runs). */
 const SEARCH_I = 0.16;
 const SEARCH_GROW = 0.06;
-/** The show's beams: how far ahead of the camera their aim points sit, how far past they run, how bright, how much wider per meter, and how fast they fade along their length (the exponent; under 1 holds them bright longer). */
+/** The show's beams: how far ahead of the camera their aim points sit, how far past they run, how bright, how much wider per meter, and how they fade along their length (0: held bright, then faded out over the last 30%; a power fade under 1 kept them bright to the very end, so they ended in blunt round tips). */
 const AIM_DIST = 4200;
 const OVERSHOOT = 1.35;
 const SHOW_I = 0.3;
 const SHOW_GROW = 0.028;
-const SHOW_FADE = 0.55;
+const SHOW_FADE = 0;
 /** Fades (s): the show in, the show out, the searchlight in after the intro. */
 const SHOW_IN = 1.2;
 const SHOW_OUT = 1;
@@ -102,7 +102,7 @@ export interface BeamUniforms {
   uBeamBase: IUniform<Vector3[]>;
   /** Direction times length. */
   uBeamDir: IUniform<Vector3[]>;
-  /** x: brightness (0: off), y: radius at the lamp (m), z: radius growth per meter, w: how fast it fades along its length (the exponent of the fade; 1 is even). */
+  /** x: brightness (0: off), y: radius at the lamp (m), z: radius growth per meter, w: how fast it fades along its length (the exponent of the fade; 1 is even; 0 holds it bright most of the way, then fades it out over its last 30%). */
   uBeamK: IUniform<Vector4[]>;
   /**
    * Per beam, as shares of its length: x where it comes into the frame (its brightness is
@@ -231,7 +231,10 @@ void main() {
   // off-frame), thinning out as the fog swallows it, and gone before a keep-out box it would come
   // out of (vSpan.y). It always reaches 0 at the far end, so no beam ends in a bright cap.
   float a = clamp((vAlong - vSpan.x) / max(1.0 - vSpan.x, 1e-3), 0.0, 1.0);
-  float along = pow(1.0 - a, vFade) * smoothstep(0.0, 0.01, vAlong);
+  // The show's beams (vFade 0) stay bright most of the way and fade out over their last 30%, so
+  // they read in a frame of sky far from their roofs.
+  float held = (1.0 - 0.45 * a) * (1.0 - smoothstep(0.7, 1.0, a));
+  float along = (vFade > 0.0 ? pow(1.0 - a, vFade) : held) * smoothstep(0.0, 0.01, vAlong);
   if (vSpan.y < 1.0) along *= 1.0 - smoothstep(vSpan.y - 0.05, vSpan.y, vAlong);
   // fog: slow drifting density along the beam (meters along it, and time), the same across its
   // width, so the shaft stays straight and never reads as a flat wedge
