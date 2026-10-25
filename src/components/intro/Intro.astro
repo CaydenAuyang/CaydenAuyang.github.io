@@ -1,0 +1,549 @@
+---
+// Intro.astro: section 1b, the intro module between the hero and the mission (V4.md 6, 8.2).
+// One unit on the night sky, with no section background: the folding phone (with its golden
+// halo), the greeting card, and the "Worked with" logo strip under the card (LogoStrip.astro). It
+// has no title and belongs to the hero's floor (G) on the lift.
+//
+// Layouts (media.css):
+//   - stack (phones and iPads upright): the phone's box at the full content width and
+//     min(56svh, 520px) tall, then the card (at most 34rem wide), then the logos.
+//   - short (phones sideways): the phone on the left (45%, its box at most 80svh tall), the card
+//     on the right with the logos under it. Nothing is held still.
+//   - wide (laptops, iPads sideways): the phone on the left (45% of the content width, square),
+//     the card and the logos on the right. With pins (wide and at least 600 tall), motion on and
+//     not snapshot, the module is a 100svh frame held still for --intro-hold (40vh) inside a taller
+//     track, the same CSS sticky frame Work uses, so the unfold plays out in view.
+//
+// The phone (src/intro/phone/, its own lazy chunk) is loaded by the script below once the module
+// is within 1.5 screens, and draws into a canvas in [data-intro-phone]. This file sizes that box
+// and holds what the canvas needs around it: the halo behind it (CSS, window at 22% fading out),
+// the idle float (a CSS animation on the canvas element, about 4 px and 2 degrees over 6 s, paused
+// off screen), and the still of the open phone (public/intro/photos/phone-open.webp), shown
+// without JavaScript, without WebGL, while a lost context is gone, in print, and with reduced
+// motion until the first frame (which matches it); the script below fetches it only for those.
+// The box becomes a tab stop only once the live phone (and its keyboard controls) is up.
+//
+// The card is transparent: a 1px border and nothing behind the words but a dark halo around the
+// letters (no blur on touch, V4.md 8.6). It can be pulled about and springs back
+// (src/intro/card-drag.ts); that is decoration only, its words and link sit in the normal reading
+// order.
+// Timeline hook: data-scene="intro" (the lead decides what the world does behind it).
+import { intro } from '../../data/content';
+import { ui } from '../../data/site';
+import LogoStrip from './LogoStrip.astro';
+
+// The greeting's paragraphs, with the bold phrase split out. Stop the build if a phrase marked bold
+// isn't in its paragraph, so a copy edit can't silently drop the highlight.
+const greeting = intro.greeting.map((p) => {
+  if (!p.bold) return { before: p.text, bold: '', after: '' };
+  const at = p.text.indexOf(p.bold);
+  if (at < 0) throw new Error(`Intro.astro: "${p.bold}" is not in "${p.text}".`);
+  return { before: p.text.slice(0, at), bold: p.bold, after: p.text.slice(at + p.bold.length) };
+});
+
+// The still of the open phone, rendered from the live scene (tools/intro/phone-still).
+const STILL = { src: '/intro/photos/phone-open.webp', width: 1200, height: 1200 };
+---
+
+<section id="intro" class="intro" data-scene="intro" aria-labelledby="intro-hi">
+  <div class="intro__frame">
+    <div class="wrap intro__grid">
+      <div class="intro__stage">
+        <div class="intro__phone" data-intro-phone data-no-world role="img" aria-label={intro.phoneLabel}>
+          <noscript><img class="intro__still" src={STILL.src} width={STILL.width} height={STILL.height} alt="" decoding="async" draggable="false" /></noscript>
+        </div>
+      </div>
+
+      <div class="intro__side">
+        <div class="intro__card" data-card data-no-world>
+          {
+            greeting.map((p, i) => (
+              <p id={i === 0 ? 'intro-hi' : undefined} class:list={['intro__line', { intro__hi: i === 0 }]}>
+                {p.before}
+                {p.bold && <strong>{p.bold}</strong>}
+                {p.after}
+              </p>
+            ))
+          }
+          <p class="intro__link-line">
+            <a class="action-link intro__email" href={`mailto:${intro.email.text}`} draggable="false"
+              ><svg class="intro__mail" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <rect x="1.5" y="3.25" width="13" height="9.5" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.25"></rect>
+                <path d="m2.25 4.25 5.75 4.5 5.75-4.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"></path>
+              </svg><span class="sr-only">{ui.emailLabel}: </span>{intro.email.text}</a
+            >
+          </p>
+        </div>
+
+        <LogoStrip />
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  @import '../../styles/media.css';
+
+  .intro {
+    /* Its height where it scrolls, and how long the pinned layout holds it still. */
+    --intro-h: 110vh;
+    --intro-hold: 40vh;
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: var(--intro-h);
+    padding-block: var(--space-8);
+  }
+  .intro__frame {
+    width: 100%;
+  }
+  .intro__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: var(--space-5);
+    row-gap: var(--space-5);
+    align-items: center;
+  }
+  .intro__stage,
+  .intro__side {
+    min-width: 0;
+  }
+  .intro__stage {
+    display: grid;
+    justify-items: center;
+  }
+
+  /* ---- The phone's box ---- */
+  .intro__phone {
+    position: relative;
+    width: 100%;
+    /* Drags on the phone turn it; vertical swipes still scroll the page, and a pinch still zooms
+       (pan-y also ends the browser's double-tap zoom here, so a double tap can fold the phone). */
+    touch-action: pan-y pinch-zoom;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    border-radius: var(--radius-frame);
+  }
+  /* The golden halo: window at 22% in the middle, holding near 18% to half way out, then fading to
+     nothing a little past the phone (a circle on the box's narrower side). It joins main's stacking
+     context under the words. */
+  .intro__phone::before {
+    content: '';
+    position: absolute;
+    inset: -10%;
+    z-index: -1;
+    background: radial-gradient(
+      circle closest-side,
+      rgb(var(--window-rgb) / 0.22) 0%,
+      rgb(var(--window-rgb) / 0.18) 40%,
+      rgb(var(--window-rgb) / 0.08) 68%,
+      rgb(var(--window-rgb) / 0.02) 88%,
+      rgb(var(--window-rgb) / 0) 100%
+    );
+    pointer-events: none;
+  }
+  /* The canvas: placed and sized by the phone's script, a little larger than the box so a turned
+     corner isn't cut off (so not held to the box by base.css's max-width). It takes no pointer
+     events (the box does), so the part past the box never covers the card. Hidden until its first
+     frame. */
+  .intro__phone :global(canvas) {
+    position: absolute;
+    display: block;
+    max-width: none;
+    max-height: none;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 400ms var(--ease-out);
+  }
+  .intro__phone:global(.is-live) :global(canvas) {
+    opacity: 1;
+  }
+  /* The idle float, from the entrance on: up and down 4 px, and a turn of 2 degrees the other way,
+     over 6 s, starting from the middle of the swing. The compositor moves the drawn canvas; the
+     phone isn't redrawn for it. */
+  .intro__phone:global(.is-floating) :global(canvas) {
+    animation:
+      intro-bob 6s var(--ease-in-out) -1.5s infinite,
+      intro-sway 6s var(--ease-in-out) -1.5s infinite;
+  }
+  .intro__phone:global(.is-away) :global(canvas) {
+    animation-play-state: paused;
+  }
+  @keyframes intro-bob {
+    0%,
+    100% {
+      translate: 0 -4px;
+    }
+    50% {
+      translate: 0 4px;
+    }
+  }
+  @keyframes intro-sway {
+    0%,
+    100% {
+      rotate: 2deg;
+    }
+    50% {
+      rotate: -2deg;
+    }
+  }
+  /* The still of the open phone. */
+  .intro__still {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    pointer-events: none;
+    -webkit-user-drag: none;
+  }
+  :global(html:not(.js)) .intro__still,
+  .intro__phone:global(.is-still) .intro__still,
+  :global(html[data-motion='off']) .intro__phone:not(:global(.is-live)) .intro__still,
+  :global(html[data-snapshot]) .intro__phone:not(:global(.is-live)) .intro__still {
+    opacity: 1;
+  }
+  .intro__phone:global(.is-still) :global(canvas) {
+    opacity: 0;
+  }
+  :global(html[data-motion='off']) .intro__phone :global(canvas) {
+    transition: none;
+  }
+
+  /* ---- The greeting card ---- */
+  .intro__card {
+    position: relative;
+    z-index: 2;
+    padding: var(--space-4);
+    border: 1px solid rgb(var(--text-rgb) / 0.18);
+    border-radius: 20px;
+    text-shadow: var(--halo);
+    /* Pulled by mouse, pen or a sideways swipe; a vertical swipe scrolls the page and a pinch
+       zooms. Its words stay selectable (double-click, long-press); only a drag doesn't select. */
+    touch-action: pan-y pinch-zoom;
+  }
+  @media (--mouse) {
+    .intro__card {
+      cursor: grab;
+    }
+  }
+  .intro__card:global(.is-dragging) {
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: grabbing;
+    will-change: transform;
+  }
+  /* Without WebGL (or without JavaScript) the hero's still stays behind the whole page, and its
+     figure can sit where the card is: the words carry the tighter dark halo too, and with a mouse
+     the spec's light backdrop blur (8px, never a fill) softens the dots behind them. On touch there
+     is no blur anywhere (V4.md 8.6): the halo alone keeps the words at 4.5:1. Over the live sky
+     they read without either. */
+  :global(html.no-webgl) .intro__card,
+  :global(html.world-lost) .intro__card,
+  :global(html:not(.js)) .intro__card {
+    text-shadow: var(--halo-strong), var(--halo);
+  }
+  @media (--mouse) {
+    :global(html.no-webgl) .intro__card,
+    :global(html.world-lost) .intro__card,
+    :global(html:not(.js)) .intro__card {
+      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(8px);
+    }
+  }
+  /* On touch, with no blur, a text shadow alone (even eight stacked layers) leaves the still's
+     figure showing between the words at 1.6:1 (measured at 852 x 393). So each paragraph also sits
+     on a band of night at 60%, the strength the site's text blocks and the logo strip use on
+     phones, feathered to nothing on all four sides past the words: no box and no fill on the card.
+     It measures 6:1 or better at every touch size. A radial scrim left the corners of a paragraph
+     in its fade. (Only in these fallbacks; over the live sky the card has nothing behind it.) */
+  @media (--touch) {
+    :global(html.no-webgl) .intro__line,
+    :global(html.world-lost) .intro__line,
+    :global(html:not(.js)) .intro__line {
+      position: relative;
+    }
+    :global(html.no-webgl) .intro__line::before,
+    :global(html.world-lost) .intro__line::before,
+    :global(html:not(.js)) .intro__line::before {
+      content: '';
+      position: absolute;
+      inset: calc(var(--space-3) * -1) calc(var(--space-4) * -1);
+      z-index: -1;
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0) 0,
+        rgb(var(--night-rgb) / 0.6) var(--space-3),
+        rgb(var(--night-rgb) / 0.6) calc(100% - var(--space-3)),
+        rgb(var(--night-rgb) / 0) 100%
+      );
+      -webkit-mask-image: linear-gradient(to right, transparent 0, black var(--space-4), black calc(100% - var(--space-4)), transparent 100%);
+      mask-image: linear-gradient(to right, transparent 0, black var(--space-4), black calc(100% - var(--space-4)), transparent 100%);
+      pointer-events: none;
+    }
+  }
+  /* The window-colored phrase is the darkest text there, so side by side (where the still's figure
+     sits behind the card) it also gets the small scrim that hugs the words, as the site's links
+     and labels do (the link already has its own). */
+  @media (--wide) {
+    :global(html.no-webgl) .intro__line strong,
+    :global(html:not(.js)) .intro__line strong {
+      position: relative;
+    }
+    :global(html.no-webgl) .intro__line strong::before,
+    :global(html:not(.js)) .intro__line strong::before {
+      content: '';
+      position: absolute;
+      inset: calc(var(--space-1) * -1) calc(var(--space-3) * -1);
+      z-index: -1;
+      background: var(--scrim-hug);
+      pointer-events: none;
+    }
+  }
+  .intro__line {
+    max-width: var(--measure);
+    font-size: var(--fs-lead);
+    line-height: var(--lh-lead);
+    text-wrap: pretty;
+  }
+  .intro__line + .intro__line {
+    margin-top: var(--space-3);
+  }
+  .intro__hi {
+    font-weight: var(--fw-medium);
+  }
+  /* The bold phrase: JetBrains Mono's heaviest loaded weight (500), in window. */
+  .intro__line strong {
+    font-weight: var(--fw-medium);
+    color: var(--window);
+  }
+  .intro__link-line {
+    margin-top: var(--space-3);
+  }
+  .intro__email {
+    -webkit-user-drag: none;
+    overflow-wrap: anywhere;
+  }
+  .intro__mail {
+    width: 16px;
+    height: 16px;
+    flex: none;
+  }
+
+  /* ---- Stack: phone, card, logos ---- */
+  @media (--stack) {
+    .intro__phone {
+      height: min(56vh, 520px);
+      height: min(56svh, 520px);
+    }
+    .intro__side {
+      justify-self: center;
+      width: 100%;
+      max-width: 34rem;
+    }
+  }
+
+  /* ---- Short: the phone on the left, the card and the logos on the right ---- */
+  @media (--short) {
+    .intro {
+      padding-block: var(--space-6);
+    }
+    .intro__grid {
+      grid-template-columns: minmax(0, 45fr) minmax(0, 55fr);
+    }
+    .intro__phone {
+      aspect-ratio: 1;
+      max-height: 80vh;
+      max-height: 80svh;
+    }
+    /* Less below the email: its 44px tap area already leaves room under the words. */
+    .intro__card {
+      padding: var(--space-3) var(--space-4) var(--space-2);
+    }
+    /* The words scale with the window's height, as short's titles do (V4.md 8.2), so the phone,
+       the card and the strip fit in one view under the header (15.7px at 852 x 393). */
+    .intro__line {
+      font-size: clamp(15px, 4vh, var(--fs-lead));
+      font-size: clamp(15px, 4svh, var(--fs-lead));
+    }
+    .intro__line + .intro__line {
+      margin-top: var(--space-2);
+    }
+    .intro__link-line {
+      margin-top: 0;
+    }
+  }
+
+  /* ---- Wide: the phone on the left, the card and the strip on the right ---- */
+  @media (--wide) {
+    .intro__grid {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+    .intro__stage {
+      grid-column: 1 / span 6;
+    }
+    /* The card and the strip stop at 33rem (about five of the twelve columns from 1280px up), so
+       the card's lines stay near 40 characters; six columns of a wide window left its paragraphs
+       ragged. */
+    .intro__side {
+      grid-column: 7 / span 6;
+      max-width: 33rem;
+    }
+    .intro__card {
+      padding: var(--space-5);
+    }
+    /* Square: about 45% of the content width, and never taller than the window leaves under the
+       header. */
+    .intro__phone {
+      width: min(100%, (min(100vw, var(--max-page)) - 2 * var(--gutter)) * 0.45, 100vh - var(--header-h) - var(--space-7));
+      width: min(100%, (min(100vw, var(--max-page)) - 2 * var(--gutter)) * 0.45, 100svh - var(--header-h) - var(--space-7));
+      aspect-ratio: 1;
+    }
+    /* Snapshot: one screen, like every other section. */
+    :global(html[data-snapshot]) .intro {
+      min-height: 100vh;
+      padding-block: var(--space-6);
+    }
+  }
+  /*
+    Held (pins, motion on, JavaScript on, not snapshot): a track --intro-hold taller than the window
+    whose frame stays still for that long, as Work's projects do. In the CSS from the first paint,
+    so reloads and #links land in the right place.
+  */
+  @media (--pin) {
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .intro {
+      height: calc(100vh + var(--intro-hold));
+      height: calc(100svh + var(--intro-hold));
+      min-height: 0;
+      padding-block: 0;
+      align-items: flex-start;
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .intro__frame {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      height: 100svh;
+      display: flex;
+      align-items: center;
+      padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+    }
+  }
+
+  /* ---- Print: a still on one page ---- */
+  @media print {
+    .intro {
+      display: block;
+      height: auto !important;
+      min-height: 0 !important;
+      padding-block: var(--space-6) 0 !important;
+      break-inside: avoid;
+    }
+    .intro__frame {
+      position: static !important;
+      height: auto !important;
+      padding: 0 !important;
+    }
+    /* The canvas holds a frame drawn for the screen; the still stands in. */
+    .intro__phone :global(canvas) {
+      display: none !important;
+    }
+    .intro__still {
+      opacity: 1 !important;
+    }
+    .intro__phone {
+      width: min(100%, 36vh * 4 / 3);
+      height: auto;
+      aspect-ratio: 4 / 3;
+      margin-inline: auto;
+    }
+    .intro__card {
+      transform: none !important;
+    }
+  }
+</style>
+
+<script>
+  import { cardDrag } from '../../intro/card-drag';
+
+  const card = document.querySelector<HTMLElement>('[data-card]');
+  if (card) cardDrag(card);
+
+  // The folding phone (src/intro/phone/): its code loads once the module is within 1.5 screens of
+  // the window, and only once; three comes from the world's chunks. Motion is off under reduced
+  // motion and in snapshot (the phone then shows open and still). If the code can't load, the box
+  // keeps the still.
+  const box = document.querySelector<HTMLElement>('[data-intro-phone]');
+  if (box) {
+    const html = document.documentElement;
+    const motion = html.dataset.motion !== 'off' && !html.hasAttribute('data-snapshot');
+
+    // The still of the open phone is fetched only when it is going to show: at once with reduced
+    // motion and in snapshot (it stands in until the first frame, which matches it), when the box
+    // falls back to it (is-still: no WebGL, a lost context, or the phone's code failed to load),
+    // and when printing starts. Otherwise, a while after the phone is up and once the page is
+    // idle, it is fetched at low priority and kept in memory, so a print finds it, as
+    // print-still.ts does for the hero's stills. Its markup is the <noscript> in the box: shown
+    // as it is without JavaScript, and with JavaScript only text, parsed here (into an inert
+    // template, which fetches nothing) and put in the box when it's needed.
+    const template = document.createElement('template');
+    template.innerHTML = box.querySelector('noscript')?.textContent ?? '';
+    const still = template.content.querySelector('img');
+    let kept: HTMLImageElement | null = null;
+    let warming = 0;
+    const showStill = () => {
+      if (still && !still.isConnected) box.prepend(still);
+    };
+    const warm = () => {
+      if (!still || still.isConnected || kept) return;
+      kept = new Image();
+      kept.fetchPriority = 'low';
+      // The attribute, not .src: in the template's own document that resolves against no page.
+      kept.src = still.getAttribute('src') ?? '';
+    };
+    const watch = new MutationObserver(() => {
+      if (box.classList.contains('is-still')) {
+        showStill();
+        watch.disconnect();
+      } else if (box.classList.contains('is-live') && !warming) {
+        warming = window.setTimeout(() => {
+          if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(warm, { timeout: 3000 });
+          else warm();
+        }, 4000);
+      }
+    });
+    watch.observe(box, { attributes: true, attributeFilter: ['class'] });
+    if (!motion) showStill();
+    window.addEventListener('beforeprint', showStill, { once: true });
+
+    const mount = () =>
+      import('../../intro/phone')
+        .then((m) => m.mountPhone(box, { motion }))
+        .catch((error) => {
+          console.error('The intro phone failed to load', error);
+          box.classList.add('is-still');
+        });
+    // The 1.5-screen watch starts once the page has loaded and gone idle. On a phone the module is
+    // already that close at the top, and starting at once put the phone's code and photos (about
+    // 280 KB) in the hero's first load, ahead of the name (Lighthouse LCP, V4.md 8.7).
+    const watchNear = () => {
+      if (!('IntersectionObserver' in window)) return mount();
+      const near = new IntersectionObserver(
+        (entries) => {
+          if (!entries.some((e) => e.isIntersecting)) return;
+          near.disconnect();
+          mount();
+        },
+        { rootMargin: '150% 0px' },
+      );
+      near.observe(box);
+    };
+    const whenIdle = () => {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(watchNear, { timeout: 1000 });
+      else window.setTimeout(watchNear, 200);
+    };
+    if (document.readyState === 'complete') whenIdle();
+    else window.addEventListener('load', whenIdle, { once: true });
+  }
+</script>

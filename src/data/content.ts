@@ -88,6 +88,106 @@ export const hero = {
   scrollCue: 'Scroll',
 };
 
+// ---- 1b. Intro module --------------------------------------------------------------------------
+
+// Between the hero and the mission (content.md section 1b, V4.md section 6): the folding phone, the
+// greeting card and the "Worked with" logo strip. It has no title; it belongs to the hero's floor.
+
+/**
+ * One of the strip's logos, in one flat text color (V4.md 6.3, 8.7): a symbol in the SVG sprite
+ * public/intro/logos/logos.svg (filled with the page's text color), or a WebP in public/intro/logos/.
+ */
+export interface Logo {
+  // The organisation's name: the image's alt text.
+  name: string;
+  // The sprite symbol's id, or the raster file's path: one or the other.
+  symbol?: string;
+  src?: string;
+  // The symbol's viewBox size, or the file's own size in px, for the width and height attributes
+  // (no layout shift).
+  width: number;
+  height: number;
+  // Its height on desktop in px, between 36 and 44, so wide wordmarks and tall marks carry the
+  // same weight (phones show 0.7 of it). Tuned by eye in the strip.
+  size: number;
+  // Where the logo came from. Never rendered.
+  source: string;
+}
+
+export const intro = {
+  // The phone is a picture to assistive tech: what its two screens show (content.md 1b alt texts).
+  phoneLabel:
+    'A folding phone showing two photos: Cayden, smiling in front of painted lanterns, and Civic AI Club members around a meeting table',
+  // The greeting card (Cayden approved option C). `bold` is the phrase inside `text` shown in window.
+  greeting: [
+    { text: "Hi, I'm Cayden." },
+    { text: "I'm a student and civic tech builder, hooked on passing know-how on.", bold: 'civic tech builder' },
+    { text: 'Building tools for nonprofits, schools and small businesses, then handing them over, clean.' },
+  ] as { text: string; bold?: string }[],
+  greetingSource: 'CEX §3; CLUB §4; OCH §5; "know-how" from Cayden\'s mission, Oct 24',
+  // The link line. Cayden may swap it for a CV PDF later.
+  email: { text: 'caydenauyang@gmail.com', source: 'POSTER' } satisfies Line,
+  logosLabel: 'Worked with',
+  // What the strip's pause button names (with ui.pause and ui.play): "Pause the logos".
+  logosName: 'the logos',
+  // In this order (content.md 1b). [CONFIRM in REVIEW.md: "Worked with" is accurate for all six.]
+  // Three of the four organisations' sites publish no SVG logo, so those three are traced from the
+  // largest official raster each site has (potrace, then hand-checked against the original).
+  logos: [
+    {
+      name: 'Changing Young Lives Foundation',
+      symbol: 'changing-young-lives',
+      width: 265,
+      height: 160,
+      size: 44,
+      source:
+        'Traced from https://www.changingyounglives.org.hk/wp-content/uploads/2016/12/logo.png (the site header, 400 x 242); the site has no SVG',
+    },
+    {
+      name: 'Civic Exchange',
+      symbol: 'civic-exchange',
+      width: 759,
+      height: 200,
+      size: 40,
+      source:
+        'Traced from https://civic-exchange.org/wp-content/uploads/2016/11/CE-logo_white.png (1353 x 406, the site media library; the header shows the same logo as ce-logo.png at 218 x 57); the site has no SVG',
+    },
+    {
+      name: 'Silver Pillars',
+      src: '/intro/logos/silver-pillars.webp',
+      width: 72,
+      height: 96,
+      size: 44,
+      source: 'site-handoff/hero-module/web/logos/silver-pillars.webp (from Cayden\'s file), recoloured to text',
+    },
+    {
+      name: 'Capstone',
+      symbol: 'capstone',
+      width: 639,
+      height: 120,
+      size: 36,
+      source:
+        'Traced from https://www.capstoneprep.com/wp/wp-content/uploads/2018/11/cap-logo.png (1481 x 474, the site media library): the CAPSTONE serif wordmark alone, as the white header logo (Captone_CTL_White.png) shows it on navy; the site has no SVG',
+    },
+    {
+      name: 'MAK Solicitors',
+      src: '/intro/logos/mak-solicitors.webp',
+      width: 196,
+      height: 96,
+      size: 42,
+      source: 'site-handoff/hero-module/web/logos/mak-solicitors.webp (from Cayden\'s file), recoloured to text',
+    },
+    {
+      name: 'Pomfret School',
+      symbol: 'pomfret',
+      width: 188,
+      height: 41,
+      size: 36,
+      source: 'https://resources.finalsite.net/images/v1710351085/pomfret/usyvkhpb3fbp3swt0it0/logo-white.svg (the site header), its path unchanged',
+    },
+  ] satisfies Logo[],
+};
+
 // ---- 2. The mission ----------------------------------------------------------------------------
 
 // One tracked change, from the Previously text to the Now text. Edits apply in order, left to

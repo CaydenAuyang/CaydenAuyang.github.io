@@ -1,0 +1,310 @@
+---
+// LogoStrip.astro: the "Worked with" strip under the greeting card (V4.md 6.3, 8.4, 8.7).
+//
+// Six logos in the order of content.md, all one flat color (text), at 70% rising to 100% on hover:
+// four are symbols in one SVG sprite (public/intro/logos/logos.svg, colored by the page through
+// currentColor), two are small WebPs already in the text color. Every one has width and height
+// attributes, so nothing shifts as they load. Desktop heights are each logo's `size` (36 to 44px,
+// so wide wordmarks and tall marks carry the same weight); stacked and short layouts show 0.7 of
+// it (28px on average).
+//
+// The strip slides slowly (40 s a loop) with soft fades at both ends; a second, hidden copy of the
+// list completes the loop. It pauses on hover, while it's off screen, and with its pause button:
+// a 44px button that is always visible on touch and, with a mouse, appears when it takes keyboard
+// focus (WCAG 2.2.2: moving content that runs longer than 5 s needs a way to stop it). A pause
+// the visitor makes sticks until they press play. Without JavaScript, with reduced motion, in
+// snapshot and in print: a still row that wraps, every logo whole, and no button.
+import { intro, type Logo } from '../../data/content';
+import { ui } from '../../data/site';
+
+const SPRITE = '/intro/logos/logos.svg';
+const pauseLabel = `${ui.pause} ${intro.logosName}`;
+const playLabel = `${ui.play} ${intro.logosName}`;
+
+// Stop the build if a logo names neither a symbol nor a file, or both.
+for (const logo of intro.logos as Logo[]) {
+  if (!logo.symbol === !logo.src) throw new Error(`LogoStrip.astro: "${logo.name}" needs a symbol or a src, not both.`);
+}
+const logos = intro.logos as Logo[];
+---
+
+<div class="logos" data-logos data-no-world>
+  <div class="logos__head">
+    <p id="intro-logos-label" class="t-label logos__label" aria-hidden="true">{intro.logosLabel}</p>
+    <button type="button" class="logos__pause" data-logos-pause data-needs-js data-snapshot-hide aria-label={pauseLabel} data-pause={pauseLabel} data-play={playLabel}>
+      <svg class="logos__icon logos__icon--pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <path d="M4 2.75h2.75v10.5H4zM9.25 2.75H12v10.5H9.25z" fill="currentColor"></path>
+      </svg>
+      <svg class="logos__icon logos__icon--play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+        <path d="M4.5 2.75v10.5l8.5-5.25z" fill="currentColor"></path>
+      </svg>
+    </button>
+  </div>
+  <div class="logos__viewport" role="group" aria-labelledby="intro-logos-label">
+    <div class="logos__mask">
+      <div class="logos__track">
+        {
+          [false, true].map((loop) => (
+            <ul class:list={['logos__list', { 'logos__list--loop': loop }]} aria-hidden={loop ? 'true' : undefined}>
+              {logos.map((logo) => (
+                <li style={`--size: ${logo.size}`}>
+                  {logo.symbol ? (
+                    <svg
+                      class="logos__img"
+                      viewBox={`0 0 ${logo.width} ${logo.height}`}
+                      width={logo.width}
+                      height={logo.height}
+                      role={loop ? undefined : 'img'}
+                      aria-label={loop ? undefined : logo.name}
+                      aria-hidden={loop ? 'true' : undefined}
+                      focusable="false"
+                    >
+                      <use href={`${SPRITE}#${logo.symbol}`} />
+                    </svg>
+                  ) : (
+                    <img class="logos__img" src={logo.src} alt={loop ? '' : logo.name} width={logo.width} height={logo.height} fetchpriority="low" decoding="async" draggable="false" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  @import '../../styles/media.css';
+
+  .logos {
+    position: relative;
+    margin-top: var(--space-5);
+    color: var(--text);
+    /* The still row's gaps: tight enough that the six logos sit in two rows. */
+    --still-gap: var(--space-3);
+  }
+  /* Stacked, the strip sits low in the window and scrolls across the lit skyline, so it carries a
+     band of night at 60% (feathered above and below, running past the screen's sides where main
+     clips it), as the site's text blocks do on phones. Elsewhere it sits over the sky. */
+  @media (--stack) {
+    .logos::before {
+      content: '';
+      position: absolute;
+      inset: calc(var(--space-5) * -1) -48px;
+      z-index: -1;
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0) 0,
+        rgb(var(--night-rgb) / 0.6) var(--space-5),
+        rgb(var(--night-rgb) / 0.6) calc(100% - var(--space-5)),
+        rgb(var(--night-rgb) / 0) 100%
+      );
+      pointer-events: none;
+    }
+  }
+  /* Short: closer under the card, so the module fits in one view. */
+  @media (--short) {
+    .logos {
+      margin-top: var(--space-3);
+    }
+  }
+  .logos__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+  }
+
+  /* The pause button: a 44px hit area around a 32px disc, like the videos' buttons. */
+  .logos__pause {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: var(--tap);
+    height: var(--tap);
+    margin-block: calc((var(--tap) - var(--fs-label)) / -2);
+    border-radius: 50%;
+    color: var(--text);
+    transition: color var(--dur-quick) var(--ease-out);
+  }
+  .logos__pause::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: rgb(var(--night-rgb) / 0.72);
+    box-shadow: 0 0 0 1px rgb(var(--text-rgb) / 0.22);
+    transition: background var(--dur-quick) var(--ease-out);
+  }
+  .logos__pause:hover {
+    color: var(--window);
+  }
+  .logos__pause:hover::before {
+    background: rgb(var(--night-rgb) / 0.9);
+  }
+  .logos__icon {
+    position: relative;
+    width: 14px;
+    height: 14px;
+  }
+  .logos__pause:focus-visible {
+    border-radius: 50%;
+  }
+  .logos:not(.is-paused) .logos__icon--play,
+  .logos.is-paused .logos__icon--pause {
+    display: none;
+  }
+  /* With a mouse the strip pauses on hover, so the button only shows when it has keyboard focus. */
+  @media (--mouse) {
+    .logos__pause:not(:focus-visible) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+    }
+  }
+
+  .logos__viewport {
+    border-radius: 4px;
+  }
+  /* Soft fades at both ends. */
+  .logos__mask {
+    overflow: hidden;
+    padding-block: var(--space-1);
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black 12%, black 88%, transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, black 12%, black 88%, transparent 100%);
+  }
+  /* Two copies of the list side by side; sliding left by one copy (half the track) loops without
+     a seam, as each list ends with the same gap that separates the logos. */
+  .logos__track {
+    --gap: var(--space-5);
+    display: flex;
+    width: max-content;
+    animation: logos-slide 40s linear infinite;
+  }
+  .logos__list {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--gap);
+    padding-right: var(--gap);
+  }
+  .logos__list li {
+    flex: none;
+  }
+  @keyframes logos-slide {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  .logos.is-paused .logos__track,
+  .logos.is-off .logos__track {
+    animation-play-state: paused;
+  }
+  @media (--mouse) {
+    .logos__viewport:hover .logos__track {
+      animation-play-state: paused;
+    }
+  }
+  /* Stacked and short: 0.7 of each logo's desktop height (28px on average). */
+  .logos__img {
+    display: block;
+    width: auto;
+    height: calc(var(--size) * 0.7px);
+    opacity: 0.7;
+    transition: opacity var(--dur-quick) var(--ease-out);
+  }
+  .logos__img:hover {
+    opacity: 1;
+  }
+  @media (--wide) {
+    .logos {
+      --still-gap: var(--space-4) var(--space-5);
+    }
+    .logos__track {
+      --gap: var(--space-6);
+    }
+    .logos__img {
+      height: calc(var(--size) * 1px);
+    }
+  }
+
+  /* Without JavaScript, with reduced motion (the head script's data-motion="off") and in
+     snapshot: a still row that wraps, every logo whole and unfaded, no button. Without JavaScript
+     the button can't work, so nothing may slide (WCAG 2.2.2). */
+  :global(html[data-motion='off']) .logos__pause {
+    display: none;
+  }
+  :global(html:not(.js)) .logos__mask,
+  :global(html[data-motion='off']) .logos__mask,
+  :global(html[data-snapshot]) .logos__mask {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  :global(html:not(.js)) .logos__track,
+  :global(html[data-motion='off']) .logos__track,
+  :global(html[data-snapshot]) .logos__track {
+    display: block;
+    width: auto;
+    animation: none;
+  }
+  :global(html:not(.js)) .logos__list,
+  :global(html[data-motion='off']) .logos__list,
+  :global(html[data-snapshot]) .logos__list {
+    flex-wrap: wrap;
+    gap: var(--still-gap);
+    padding-right: 0;
+  }
+  :global(html:not(.js)) .logos__list--loop,
+  :global(html[data-motion='off']) .logos__list--loop,
+  :global(html[data-snapshot]) .logos__list--loop {
+    display: none;
+  }
+
+  @media print {
+    .logos__pause {
+      display: none;
+    }
+    .logos__mask {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+    .logos__track {
+      display: block;
+      width: auto;
+      animation: none;
+    }
+    .logos__list {
+      flex-wrap: wrap;
+      gap: var(--still-gap);
+      padding-right: 0;
+    }
+    .logos__list--loop {
+      display: none;
+    }
+    .logos__img {
+      opacity: 1;
+    }
+  }
+</style>
+
+<script>
+  // The pause button, and no sliding while the strip is out of sight. Where the row stands still
+  // (reduced motion, snapshot, print) the button is hidden by the CSS and does nothing.
+  const strip = document.querySelector<HTMLElement>('[data-logos]');
+  const button = strip?.querySelector<HTMLButtonElement>('[data-logos-pause]');
+  if (strip && button) {
+    button.addEventListener('click', () => {
+      const paused = strip.classList.toggle('is-paused');
+      button.setAttribute('aria-label', (paused ? button.dataset.play : button.dataset.pause) ?? '');
+    });
+  }
+  if (strip && 'IntersectionObserver' in window) {
+    new IntersectionObserver(([entry]) => strip.classList.toggle('is-off', !entry.isIntersecting)).observe(strip);
+  }
+</script>
