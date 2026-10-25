@@ -1,16 +1,18 @@
 ---
 // Hero.astro: the name, one line, one small line, and the scroll cue, over the dark sky.
 //
-// The layout follows the world contract (src/world/contract.ts): the figure of light sits centered
-// in the sky (FIGURE_ANCHOR), the city is a band along the bottom (HERO_FRAMING.skylineTop), and the
-// text stands between them, its bottom 8px above the tower tops, so it never sits on the figure or
-// the skyline. The phone layout is usePhoneLayout(): phones, plus portrait screens under 1024px
-// wide (portrait tablets). Its CSS twin, used below and in base.css:
+// The layout follows the world contract (src/world/contract.ts): the figure of light sits in the
+// sky (FIGURE_ANCHOR: the right half on desktop, the top on phones) and the city is a band along
+// the bottom (HERO_FRAMING.skylineTop). On desktop the text is a column on the left, its bottom
+// 48px above the tower tops, its right edge 40px short of the figure; on phones it stands under
+// the figure, its bottom 8px above the tower tops. So it never sits on the figure or the skyline.
+// The phone layout is usePhoneLayout(): phones, plus portrait screens under 1024px wide
+// (portrait tablets). Its CSS twin, used below and in base.css:
 //   phone:    @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait)
 //   desktop:  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape)
-// The name fills the content width (one line on desktop, CAYDEN / AUYANG on phones), held down by
-// height on short screens. The anchors arrive as CSS custom properties; a soft scrim sits behind
-// the text.
+// The name is as large as its column allows (CAYDEN / AUYANG, or one line if that is bigger),
+// held down by height on short screens. The anchors arrive as CSS custom properties; a soft
+// scrim sits behind the text.
 //
 // Timeline hooks: data-intro="name|line|small" (masked under html.js-intro until the timeline
 // adds .is-in; revealed after 2.5 s regardless), data-scroll-cue (the timeline adds .is-gone on
@@ -104,14 +106,13 @@ const vars = [
   }
 
   /*
-    The text stack (NIGHT-SIGNAL.md 3 and 7, v3.1): the figure sits centered in the sky above it
-    (FIGURE_ANCHOR), the city is a band along the bottom (HERO_FRAMING), and the name, the line and
-    the small line stand between them, the stack's bottom 8px above the tower tops. The name fills
-    the content width: on one line in the desktop layout, on two lines (CAYDEN / AUYANG, each line
-    filling the width) in the phone layout. Its size is fitted with the words' measured widths in
-    Barlow Condensed 800 ("Cayden Auyang" 6.07em, "Cayden" 2.89em, "Auyang" 2.97em), so it doesn't
-    depend on the loaded font, and held down by height on short screens so the whole stack fits
-    between the figure (plus 16px) and the tower tops (minus 8px).
+    The text stack (NIGHT-SIGNAL.md 3 and 7, v3 item 12): the name, the line and the small line.
+    Phones (the base rules here): under the figure, the stack's bottom 8px above the tower tops,
+    the name on two lines (CAYDEN / AUYANG), each line filling the content width. Its size is
+    fitted with the words' measured widths in Barlow Condensed 800 ("Cayden Auyang" 6.07em,
+    "Cayden" 2.89em, "Auyang" 2.97em), so it doesn't depend on the loaded font, and held down by
+    height on short screens so the whole stack fits between the figure (plus 16px) and the tower
+    tops (minus 8px). The desktop column is further down.
   */
   .hero__text {
     position: absolute;
@@ -178,7 +179,14 @@ const vars = [
     }
   }
 
-  /* Desktop layout: the same stack, the name on one line, within the page's 1440px content width. */
+  /*
+    Desktop layout: the stack in a column on the left, its bottom 48px above the tower tops as
+    before v3, and the figure in the right half of the sky. The column runs from the gutter to
+    40px short of the figure's drawn left edge, which is 0.449 of the figure's height left of its
+    anchor (the figure is about 0.92 times as wide as it is tall, and widest at rest: turning it
+    only moves that edge right). The figure's place comes from the window (innerWidth and
+    innerHeight), so the column does too.
+  */
   @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape) {
     .hero__figure {
       left: calc(var(--fig-x-d) * 100%);
@@ -186,41 +194,63 @@ const vars = [
       height: calc(var(--fig-h-d) * 100%);
     }
     .hero__text {
-      left: max(var(--gutter), (100% - 1440px) / 2 + var(--gutter));
-      right: max(var(--gutter), (100% - 1440px) / 2 + var(--gutter));
-      bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-2));
-      --w: calc(min(100vw, 1440px) - 2 * var(--gutter));
-      /* From the name's cap tops (0.15em under its 0.9em line box) the stack is 0.75em plus about
-         74px (the line on one line, the small line, their gaps). It must fit between the figure's
-         box, plus 16px, and the tower tops, minus 8px. */
-      --name-cap: calc(((var(--sky-top-d) - var(--fig-y-d) - var(--fig-h-d) / 2) * 100vh - 98px) / 0.75);
+      right: auto;
+      bottom: calc((1 - var(--sky-top-d)) * 100% + var(--space-6));
+      width: var(--col);
+      --col: calc(var(--fig-x-d) * 100vw - 0.449 * var(--fig-h-d) * 100vh - 40px - var(--gutter));
+      /* The height from the stack's bottom up to 16px under the header (the hero is at least
+         520px tall). */
+      --room: calc(var(--sky-top-d) * max(100vh, 520px) - var(--space-6) - var(--header-h) - var(--space-3));
+      /* Under the name's cap tops (0.15em under its first 0.9em line box): the line (two lines of
+         at most 34 characters, 20.4em of mono; three where the column is narrower), the small
+         line (52 characters, 31.2em; two lines where the column is narrower) and their gaps. */
+      --lead-lh: calc(var(--fs-lead) * var(--lh-lead));
+      --small-lh: calc(var(--fs-small) * 1.5);
+      --rest: calc(
+        var(--space-4) + 2 * var(--lead-lh) + clamp(0px, (20.4 * var(--fs-lead) - var(--col)) * 1000, var(--lead-lh)) +
+          var(--space-3) + var(--small-lh) + clamp(0px, (31.2 * var(--fs-small) - var(--col)) * 1000, var(--small-lh))
+      );
     }
-    /* One line. The first word's box is its Barlow width (2.893em) and the gap the space's
-       (0.21em), so "Auyang" starts at the same place before and after the font arrives. */
+    /*
+      The bigger of the two fits: two lines (CAYDEN / AUYANG, "Auyang" filling the column; the
+      stack is 1.65em plus the rest) or one line (6.08em across; 0.75em plus the rest), each held
+      down by the room. The words are flex items in boxes of their Barlow widths, with the space's
+      width (0.21em) between, so they wrap to two lines exactly when one line doesn't fit, and
+      the same way before and after the font arrives.
+    */
     .hero__name {
       display: flex;
-      gap: 0.21em;
-      font-size: min(var(--w) / 6.1, var(--name-cap));
+      flex-wrap: wrap;
+      column-gap: 0.21em;
+      font-size: max(
+        min(var(--col) / 2.968, (var(--room) - var(--rest)) / 1.65),
+        min(var(--col) / 6.08, (var(--room) - var(--rest)) / 0.75),
+        40px
+      );
     }
     .hero__name-line {
       display: block;
+      flex: none;
     }
     .hero__name-line:first-child {
-      flex: none;
       width: 2.893em;
+    }
+    .hero__name-line:last-child {
+      width: 2.968em;
     }
     .hero__name-line:first-child,
     .hero__name-line:last-child {
       font-size: inherit;
     }
+    /* Two lines, as on the spec's diagram: the second ("people, and build tools that help.") is
+       34 characters. At exactly 34ch it fits with nothing to spare, and for one frame while the
+       font swaps it wrapped to three lines (a layout shift); any width up to 37ch wraps the same. */
     .hero__line {
-      max-width: none;
+      margin-top: var(--space-4);
+      max-width: 35ch;
     }
-  }
-  /* Landscape tablets under 1024px: the line wraps to two lines, 30px more to fit. */
-  @media (min-width: 768px) and (max-width: 1023px) and (orientation: landscape) {
-    .hero__text {
-      --name-cap: calc(((var(--sky-top-d) - var(--fig-y-d) - var(--fig-h-d) / 2) * 100vh - 128px) / 0.75);
+    .hero__small {
+      margin-top: var(--space-3);
     }
   }
 

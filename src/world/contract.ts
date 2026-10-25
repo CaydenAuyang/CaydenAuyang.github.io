@@ -60,12 +60,11 @@ export interface TierInfo {
 
 /**
  * The figure (target B) at the hero key: its center, and its height as a share of viewport height.
- * Spec v3.1 puts the name on one line filling the content width from 1024px up (two lines on
- * phones), so the figure sits centered in the sky above it, and the name, the line and the small
- * line stack between the figure's bottom and the tower tops.
+ * Desktop puts it in the right half of the sky, as before v3 (spec v3 item 12), so the hero text
+ * sits in a column to its left, ending above the tower tops; phones stack the figure above the text.
  */
 export const FIGURE_ANCHOR = {
-  desktop: { x: 0.5, y: 0.27, height: 0.38 },
+  desktop: { x: 0.64, y: 0.36, height: 0.5 },
   phone: { x: 0.5, y: 0.22, height: 0.26 },
 };
 
