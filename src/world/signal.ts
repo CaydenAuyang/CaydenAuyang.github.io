@@ -20,10 +20,11 @@
 // public/figure/figure-{hi|lo|phone}.bin (format in its .json; see site-handoff/figure-video).
 // Each file has exactly as many dots as its tier, so figure dot i is particle i: no resampling,
 // jitter or re-weighting. The shader places, turns (setFigureTurn: the head fully, the shoulders
-// at 0.85, the neck blended) and lights it (one colour, each dot's own brightness and a soft key
-// light; dots turning away fade), and assembles it as a scan from the crown down.
+// at 0.85, the neck blended) and lights it (gold or blue like the lit windows, picked by a stable
+// hash of each dot's position, about 80/20; each dot's own brightness and a soft key light; dots
+// turning away fade), and assembles it as a scan from the crown down.
 
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, LinearSRGBColorSpace, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, GLSL3, Matrix3, Points, RawShaderMaterial, Vector2, Vector3 } from 'three';
 import type { CameraPose, LitWindowSamples, Ndc, ScreenBox, Signal, SignalOptions, Target, World } from './contract';
 import { ARCHIVE, FIGURE_ANCHOR, LIGHT_ANCHORS, SHORT_PHONE_HEIGHT, usePhoneLayout, WISERS_ANCHOR } from './contract';
 import { AGENT, agentKnots, buildFeed, buildScreen, buildShoe, FEED, ROLE, type Picture } from './shapes/wisers';
@@ -63,11 +64,22 @@ const FIGURE_DOT = { perHeight: 0.0031, min: 1.6, max: 3.2 };
 /** The figure's brightness against the reference renders (figure-video/preview). */
 const FIGURE_GAIN = 1;
 /**
+ * The figure's two colours, the lit windows' gold and blue (V4 section 3), and the share of its
+ * dots that are blue, the same mix as the city's windows. Display values, as the windows take
+ * them: the canvas has no output conversion, so a Color made from the hex would be converted to
+ * linear and show darker (a dot at full brightness and key light must show the hex exactly).
+ */
+const FIGURE_GOLD = PALETTE.window;
+const FIGURE_BLUE = PALETTE.cool;
+const FIGURE_BLUE_SHARE = 0.2;
+/**
  * The figure's backing: opaque dark discs (the night colour) under its dots, so stars and haze
  * behind it don't show through. Each disc is this many times the mean spacing between the dots on
  * screen, so neighbouring discs overlap with no gaps (smaller near the outline; see the shader).
+ * A display value like the figure's colours (until v4 it went through Color('#05070D') and drew
+ * nearly black, 0, 1, 1).
  */
-const BACKING_COLOR = '#05070D';
+const BACKING_COLOR = PALETTE.night;
 const BACKING_DOT = 4;
 /** Scan assembly (figure-video/figure-loader.ts): how much of a morph into or out of the figure the scan takes, and its randomness. */
 const SCAN = 0.3;
@@ -152,7 +164,6 @@ interface FigureMeta {
   yChin: number;
   yNeckBase: number;
   torsoYawRatio: number;
-  color: string;
 }
 
 interface FigureData {
@@ -334,11 +345,18 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   const aFigPos = new Float32Array(N * 3);
   const aFigN = new Float32Array(N * 3);
   const aFigB = new Uint8Array(N);
+  // Each dot's colour hash (figure-loader.ts: fract(sin(dot(pos, (12.9898, 78.233, 37.719))) *
+  // 43758.5453); below uFigBlueShare is blue). It runs here once, in double precision, rather than
+  // in the shader: GPUs round that sin differently (on a Mac in v4 about 9% of the dots came out a
+  // different colour from the exact value), so every device now shows the same dots blue.
+  const aFigH = new Float32Array(N).fill(1);
   for (let i = 0; i < N; i++) {
     if (i < F) {
       aFigPos.set(fig.position.subarray(i * 3, i * 3 + 3), i * 3);
       aFigN.set(fig.normal.subarray(i * 3, i * 3 + 3), i * 3);
       aFigB[i] = fig.brightness[i];
+      const v = Math.sin(aFigPos[i * 3] * 12.9898 + aFigPos[i * 3 + 1] * 78.233 + aFigPos[i * 3 + 2] * 37.719) * 43758.5453;
+      aFigH[i] = v - Math.floor(v);
     } else {
       aFigPos[i * 3 + 1] = -10;
     }
@@ -488,12 +506,13 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uFigTorsoRatio: { value: fig.meta.torsoYawRatio },
     uFigDot: { value: FIGURE_DOT.min },
     uFigGain: { value: FIGURE_GAIN },
-    // #EEE9E1 exactly: the canvas has no output conversion, so the hex goes in as is (a plain
-    // Color would convert it to linear and show it darker and beige).
-    uFigColor: { value: new Color().setHex(parseInt((fig.meta.color || '#EEE9E1').slice(1), 16), LinearSRGBColorSpace) },
+    // Display values as they are (new Color(r, g, b) does no conversion; see FIGURE_GOLD).
+    uFigGold: { value: new Color(...FIGURE_GOLD) },
+    uFigBlue: { value: new Color(...FIGURE_BLUE) },
+    uFigBlueShare: { value: FIGURE_BLUE_SHARE },
     uBackDot: { value: 4 },
     uBackR: { value: 0.005 },
-    uBack: { value: new Color(BACKING_COLOR) },
+    uBack: { value: new Color(...BACKING_COLOR) },
     uScan: { value: 0 },
     uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
     uCarryMix: { value: (world.tier.tier === 'phone' ? CARRY_MIX.phone : CARRY_MIX.desktop).slice() },
@@ -835,6 +854,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   geometry.setAttribute('aFigPos', new BufferAttribute(aFigPos, 3));
   geometry.setAttribute('aFigN', new BufferAttribute(aFigN, 3));
   geometry.setAttribute('aFigB', new BufferAttribute(aFigB, 1, true));
+  geometry.setAttribute('aFigH', new BufferAttribute(aFigH, 1));
 
   const material = new RawShaderMaterial({
     glslVersion: GLSL3,
