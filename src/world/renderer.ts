@@ -102,7 +102,7 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
   // Reflection profiles per camera stop: the hero now, the others in idle time, a step at a
   // time (front faces, then side faces, then the bake), so oblique stops reflect the towers and
   // faces they actually see. Side faces only matter at the oblique stops.
-  const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, experience: 2, wisers: 2, och: 3, ais: 4, club: 5, more: 6, since: 6, people: 6, contact: 6 };
+  const SLOT: Record<SceneKey, number> = { hero: 0, question: 1, experience: 2, wisers: 2, och: 3, ais: 4, club: 5, more: 6, contact: 6 };
   const SLOT_KEYS: SceneKey[] = ['hero', 'question', 'experience', 'och', 'ais', 'club', 'more'];
   const OBLIQUE = new Set([2, 3, 4, 5]);
   let sideRight: FrontWindow[] | null = null;

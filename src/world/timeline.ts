@@ -67,15 +67,11 @@ const BEATS: Record<SceneKey, Beat> = {
   och: { key: 'och', arrive: 0, morph: { hold: 'A' }, highlight: 'och' },
   ais: { key: 'ais', arrive: 0.45, morph: { hold: 'A' }, highlight: 'ais' },
   club: { key: 'club', arrive: 0.45, morph: { hold: 'A' }, highlight: 'club' },
-  more: { key: 'more', arrive: 0.6, morph: { hold: 'A' } },
-  // People holds Since May's view (spec: "Holds on the sky"): the people key's pose is the since
-  // pose, and People is too short for a camera move of its own. Since May must arrive at its own
-  // key in one segment; lerping through two keys stalls at the middle one (each segment eases).
-  since: { key: 'since', arrive: 0.8, morph: { from: 'A', to: 'S', over: [0.05, 0.7] } },
-  people: { key: 'people', arrive: 0, morph: { hold: 'S' } },
-  // The lights gather once People's text has scrolled away (Contact starts as it enters the window).
-  // The harbour light show runs while Contact is the current scene (spec v3, 11b.9).
-  contact: { key: 'contact', arrive: 0.5, morph: { from: 'S', to: 'E', over: [0.35, 0.9] } },
+  more: { key: 'more', arrive: 0.7, morph: { hold: 'A' } },
+  // Straight from Work to Contact (V4 section 2): Contact starts as it enters the window, after the
+  // open sky below More work, and the city's lights gather into the two lights while the camera
+  // rises. The harbour light show runs while Contact is the current scene (spec v3, 11b.9).
+  contact: { key: 'contact', arrive: 0.5, morph: { from: 'A', to: 'E', over: [0.35, 0.9] } },
 };
 
 /**
@@ -105,8 +101,6 @@ function sceneElements(): Scene[] {
   add('ais', pick('[data-stop="ais"]'));
   add('club', pick('[data-stop="club"]'));
   add('more', pick('[data-stop="more"]'));
-  add('since', pick('[data-scene="since"]'));
-  add('people', pick('[data-scene="people"]'));
   add('contact', pick('[data-scene="contact"]'));
   return out;
 }

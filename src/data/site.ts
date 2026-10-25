@@ -32,11 +32,8 @@ export const ui = {
   scrubStruck: (words: string) => `"${words}" struck`,
   scrubInserted: (words: string) => `"${words}" inserted`,
   scrubReplaced: (from: string, to: string) => `"${from}" replaced with "${to}"`,
-  scrubNote: (n: number) => `, note ${n}`,
   deleted: 'deleted',
   inserted: 'inserted',
-  note: 'note',
-  notesLabel: 'Notes',
   moreAbout: (name: string) => `about ${name}`,
   emailLabel: 'Email',
   // Contact (NIGHT-SIGNAL.md 11b.7, content.md Interface labels).

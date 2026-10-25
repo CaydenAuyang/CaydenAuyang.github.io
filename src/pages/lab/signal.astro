@@ -5,8 +5,8 @@
 // world (src/world/renderer.ts, the default once it exists).
 //
 // Query options, so screenshots can set any state:
-//   from, to (A, B, C, D, E, S; F1, F2 and G stay in the city until they are built), t (0..1),
-//   cam (auto | hero | question | experience | wisers | since | people | contact | a number 0..1 on
+//   from, to (A, B, C, D, E, F1, F2, G), t (0..1),
+//   cam (auto | hero | question | experience | wisers | contact | a number 0..1 on
 //   the camera path), motion (0 or 1), tier (high | low | phone; mock world only, the real world
 //   picks its own), world (real | mock), hud (0 hides the panel), yaw and pitch (the figure's turn
 //   in degrees; the site's interact.ts drives it from the pointer instead).
@@ -47,8 +47,6 @@
             <option value="experience">experience</option>
             <option value="wisers">wisers</option>
             <option value="och">och</option>
-            <option value="since">since</option>
-            <option value="people">people</option>
             <option value="contact">contact</option>
           </select>
         </label>
@@ -126,7 +124,7 @@
         return { tier, dprCap: 1.75, stars: 4000, towers: 260, points: 60000 };
       }
 
-      const KEYS: Record<SceneKey, number> = { hero: 0, question: 0.1, experience: 0.2, wisers: 0.26, och: 0.32, ais: 0.42, club: 0.52, more: 0.62, since: 0.76, people: 0.88, contact: 1 };
+      const KEYS: Record<SceneKey, number> = { hero: 0, question: 0.1, experience: 0.2, wisers: 0.26, och: 0.32, ais: 0.42, club: 0.52, more: 0.62, contact: 1 };
 
       function createMockWorld(canvas: HTMLCanvasElement, tier: TierInfo, opts: { motion: boolean }): World {
         const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
@@ -282,10 +280,6 @@
               return pose(new Vector3(-700, 20, d * 0.6), 4 * deg, 5 * deg, 38);
             case 'more':
               return pose(new Vector3(-400, 24, d * 0.7), 0, 8 * deg, 38);
-            case 'since':
-              return pose(new Vector3(0, 24, d * 0.8), 0, 40 * deg, 38);
-            case 'people':
-              return pose(new Vector3(0, 24, d * 0.8), 0, 44 * deg, 38);
             case 'contact':
               return pose(new Vector3(0, 24, d * 0.92), 0, 42 * deg, 40);
           }
@@ -401,9 +395,9 @@
 
       // ---- The lab -------------------------------------------------------------------------------
 
-      const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'G', 'S'];
-      const NAMES: Record<Target, string> = { A: 'A city', B: 'B figure', C: 'C current', D: 'D archive', E: 'E two lights', F1: 'F1 feed', F2: 'F2 shoe', G: 'G screen agent', S: 'S star field' };
-      const HOME: Record<Target, SceneKey> = { A: 'more', B: 'hero', C: 'question', D: 'experience', E: 'contact', F1: 'wisers', F2: 'wisers', G: 'wisers', S: 'since' };
+      const TARGETS: Target[] = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'G'];
+      const NAMES: Record<Target, string> = { A: 'A city', B: 'B figure', C: 'C current', D: 'D archive', E: 'E two lights', F1: 'F1 feed', F2: 'F2 shoe', G: 'G screen agent' };
+      const HOME: Record<Target, SceneKey> = { A: 'more', B: 'hero', C: 'question', D: 'experience', E: 'contact', F1: 'wisers', F2: 'wisers', G: 'wisers' };
 
       const fromSel = $<HTMLSelectElement>('[data-from]');
       const toSel = $<HTMLSelectElement>('[data-to]');

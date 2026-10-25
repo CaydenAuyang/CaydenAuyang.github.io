@@ -40,7 +40,7 @@ export interface HarbourUniforms extends PulseUniforms, SpillUniforms, ShowUnifo
   uWake: IUniform<number>;
 }
 
-/** Profile slots: hero, question, experience, och, ais, club, more (since, people, contact reuse more). */
+/** Profile slots: hero, question, experience, och, ais, club, more (contact reuses more). */
 export const BAKE_SLOTS = 7;
 const PW = 4096;
 

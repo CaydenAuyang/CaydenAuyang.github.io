@@ -1,12 +1,12 @@
 // signal.ts: the particle system that moves between the city and the pictures (NIGHT-SIGNAL.md
 // section 5). Owned by the Signal agent.
 //
-// One THREE.Points, one draw call. Every point has a base position in each of the nine targets
-// (A city, B figure, C current, D archive, E two lights, S star field, and the Wisers pictures F1
-// feed, F2 shoe and G screen agent, authored as SVG paths in shapes/), built once on the CPU here
-// and again only when the viewport changes shape. The vertex shader does everything per frame:
-// each target's live motion (the current flows, the columns rise, the field drifts, the feed
-// scrolls, the screen agent runs its loop), and the morph
+// One THREE.Points, one draw call. Every point has a base position in each of the eight targets
+// (A city, B figure, C current, D archive, E two lights, and the Wisers pictures F1 feed, F2 shoe
+// and G screen agent, authored as SVG paths in shapes/), built once on the CPU here and again
+// only when the viewport changes shape. The vertex shader does everything per frame: each
+// target's live motion (the current flows, the columns rise, the lights swirl, the feed scrolls,
+// the screen agent runs its loop), and the morph
 // between two targets with a per-point delay of up to 30%, a curved path and curl noise that
 // peaks mid-flight. No per-frame loops over points on the CPU.
 //
@@ -30,10 +30,11 @@ import { AGENT, agentKnots, buildFeed, buildScreen, buildShoe, FEED, ROLE, type 
 import fragmentShader from './shaders/signal.frag.glsl?raw';
 import vertexShader from './shaders/signal.vert.glsl?raw';
 import { createArc } from './arc';
+import { PALETTE } from './palette';
 
 /** Every target has its own positions on the geometry; the shader knows them by these ids. */
-const BUILT: Target[] = ['A', 'B', 'C', 'D', 'E', 'S', 'F1', 'F2', 'G'];
-const ID: Record<Target, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, S: 5, F1: 6, F2: 7, G: 8 };
+const BUILT: Target[] = ['A', 'B', 'C', 'D', 'E', 'F1', 'F2', 'G'];
+const ID: Record<Target, number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F1: 5, F2: 6, G: 7 };
 const isPicture = (t: Target) => t === 'F1' || t === 'F2' || t === 'G';
 
 /** Share of the lit windows the signal lifts: the lowest ranks. Raised only if the city is thin. */
@@ -90,8 +91,9 @@ const ARC_RISE = 0.17;
 const ARC_HALF_WIDTH = 6;
 /**
  * The light a lifted window gives to the points that leave it, shared among them, so the light
- * that rises matches what the city loses (measured at Since May: carried / lost 0.8 to 1.6 while
- * the city is in view). Phone windows are smaller on screen next to the points, so less.
+ * that rises matches what the city loses (measured in v3 on the way into the star field: carried
+ * / lost 0.8 to 1.6 while the city is in view). Phone windows are smaller on screen next to the
+ * points, so less.
  */
 const CARRY_WINDOW = { desktop: 1.6, phone: 0.5 };
 /**
@@ -101,9 +103,6 @@ const CARRY_WINDOW = { desktop: 1.6, phone: 0.5 };
  * spray would read as a few extra stars.
  */
 const CARRY_MIX = { desktop: [0.25, 3.2, 0.27, 1], phone: [0.5, 8, 0.3, 1.45] };
-/** Star field (S): the share of points that are clear lights, and of points lit at all (clear or faint). */
-const FIELD_CLEAR = 0.025;
-const FIELD_LIT = 0.12;
 /**
  * The Wisers pictures (F1 feed, F2 shoe, G screen agent): the share of the particles each uses
  * (about 6,000 on the high tier; the rest stay in their windows), their depth as a share of the
@@ -389,7 +388,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     return lo;
   };
 
-  // Screen x each point ends up at in the field (follows where its window is), shared by F and E.
+  // Screen x each point heads for (follows where its window is): E's two lights split by it.
   const fieldX = new Float32Array(N);
   for (let i = 0; i < N; i++) fieldX[i] = clamp(wAcross[winOf[i]] + gauss() * 0.12, -0.08, 1.08);
 
@@ -533,8 +532,6 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const hero = frameOf(world.getCameraPose(keys.hero), aspect);
     const question = frameOf(world.getCameraPose(keys.question), aspect);
     const experience = frameOf(world.getCameraPose(keys.experience), aspect);
-    const since = frameOf(world.getCameraPose(keys.since), aspect);
-    const people = frameOf(world.getCameraPose(keys.people), aspect);
     const contact = frameOf(world.getCameraPose(keys.contact), aspect);
     const cluster = lm.centralCluster;
 
@@ -777,17 +774,15 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       });
     }
 
-    // Depth of the sky pictures: the same distance as the figure.
-    const skyDepth = (f: Frame) => Math.max(depthOf(f, cluster), S * 0.6);
-
-    // ---- E: two lights at LIGHT_ANCHORS through the contact pose. Pomfret takes the points whose
-    // field position is on the left, Hong Kong the right. 30% of the points are lit here: every
-    // lit point of the field and some of its dark ones, which brighten as they gather; the rest
-    // fade out, because thousands of points stacked on one spot add nothing a saturated core
-    // doesn't show and cost a lot of blending.
+    // ---- E: two lights at LIGHT_ANCHORS through the contact pose, in the sky at the same distance
+    // as the figure. Pomfret takes the points whose windows are on the left of the city, Hong Kong
+    // the right, so the light rises from each side to its own light. 30% of the points are lit
+    // here; the rest carry their window's light up and fade out as they arrive, because thousands
+    // of points stacked on one spot add nothing a saturated core doesn't show and cost a lot of
+    // blending.
     {
       const c = contact;
-      const De = skyDepth(c);
+      const De = Math.max(depthOf(c, cluster), S * 0.6);
       const viewH = 2 * c.tanHalf * De;
       const R = Math.min(0.075 * viewH, 0.12 * viewH * c.aspect);
       uniforms.uLightR.value = R;
@@ -818,32 +813,6 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
     }
 
-    // ---- S: a sparse drifting field among the stars around the since and people poses: per view,
-    // about 1.3% of all the points are clear lights (as bright as the sky's bright stars, never
-    // the much brighter ones), 4.7% faint ones (like the faintest stars), and the rest are dark,
-    // so the field reads as a few more lights among the stars rather than a speckle over them.
-    {
-      const r = fixed[5];
-      const t = T[5];
-      // When People holds Since May's view, the whole field is in that one view: half the share
-      // lit keeps the same number of lights on screen, spread evenly from top to bottom.
-      const oneView = since.fwd.dot(people.fwd) > 0.9995 && since.pos.distanceTo(people.pos) < S * 0.01;
-      const clear = FIELD_CLEAR * (oneView ? 0.5 : 1);
-      const lit = FIELD_LIT * (oneView ? 0.5 : 1);
-      for (let i = 0; i < N; i++) {
-        const f = r[i * 4] < 0.5 ? since : people;
-        const De = skyDepth(f);
-        const depth = De * (0.7 + 0.8 * r[i * 4 + 1]);
-        const sy = oneView ? 0.03 + 0.9 * r[i * 4 + 2] : 0.03 + 0.8 * Math.pow(r[i * 4 + 2], 1.25);
-        const p = unproject(f, fieldX[i], sy, depth, _v);
-        t[i * 4] = p.x;
-        t[i * 4 + 1] = p.y;
-        t[i * 4 + 2] = p.z;
-        const k = r[i * 4 + 3];
-        t[i * 4 + 3] = k < clear ? 0.45 + 0.4 * (1 - k / clear) : k < lit ? 0.05 + 0.09 * ((lit - k) / (lit - clear)) : 0;
-      }
-    }
-
     for (const a of attrs) a.needsUpdate = true;
     if (infoAttr) infoAttr.needsUpdate = true;
     if (shapeAttr) shapeAttr.needsUpdate = true;
@@ -853,7 +822,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   build();
 
   const geometry = new BufferGeometry();
-  // All nine targets stay on the geometry so they upload once; position and aTo point at the two
+  // All eight targets stay on the geometry so they upload once; position and aTo point at the two
   // the current morph uses.
   BUILT.forEach((k, i) => geometry.setAttribute(`t${k}`, attrs[i]));
   geometry.setAttribute('position', attrs[ID.B]);

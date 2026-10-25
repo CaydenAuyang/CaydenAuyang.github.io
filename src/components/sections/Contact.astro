@@ -73,10 +73,16 @@ const headline = ignite(contact.heading);
     z-index: var(--z-content);
   }
   /* overflow: clip so the body's scrim can't extend the page past the footer: the page must end
-     exactly where this section does, or the labels miss their lights (and print adds a page). */
+     exactly where this section does, or the labels miss their lights (and print adds a page).
+     The margin is open sky after More work (V4 section 2: at least 60vh with this section's own
+     sky above its text): the camera's move to More work gets that scroll before Contact enters,
+     and the two lights start to gather once More work's last line has left the screen (phones
+     need a little more for that, below). Snapshot and print go straight on. */
   .contact {
     position: relative;
     overflow: clip;
+    margin-top: 25vh;
+    margin-top: round(nearest, 25vh, 8px);
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
@@ -86,6 +92,20 @@ const headline = ignite(contact.heading);
     padding-top: calc(var(--lights-y) * 100dvh + var(--space-9));
     padding-top: round(nearest, calc(var(--lights-y) * 100dvh + var(--space-9)), 8px);
     padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  }
+  @media (max-width: 767px) {
+    .contact {
+      margin-top: 35vh;
+      margin-top: round(nearest, 35vh, 8px);
+    }
+  }
+  :global(html[data-snapshot]) .contact {
+    margin-top: 0;
+  }
+  @media print {
+    .contact {
+      margin-top: 0 !important;
+    }
   }
 
   /* Under each light: centered on its x, a little below its y. */

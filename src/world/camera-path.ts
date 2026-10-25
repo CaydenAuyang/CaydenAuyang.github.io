@@ -3,9 +3,9 @@
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
 // spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
 // never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
-// the camera settles into every key, except the moves into the Mission, Since May and the first
-// work stop, which the timeline eases on its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
-// world up.
+// the camera settles into every key, except the moves into the Mission, Experience, the first
+// work stop, More work and Contact, which the timeline eases on its own. No roll, ever: the camera
+// always looks at a point with world up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
 // that put the tallest tower tops and the waterline exactly at HERO_FRAMING. Every other key is
@@ -30,8 +30,6 @@ export const KEY_U: Record<SceneKey, number> = {
   ais: 0.54,
   club: 0.66,
   more: 0.74,
-  since: 0.83,
-  people: 0.91,
   contact: 1,
 };
 
@@ -230,20 +228,13 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   const mPos = new Vector3(lb.x + 0.18 * Dh, 48, lDist + 0.35 * Dh);
   const more: KeyPose = { pos: mPos, yaw: 10 * DEG, pitch: pitchForWaterline(mPos, phone ? 0.9 : 0.88) + 1 * DEG };
 
-  // since: tilt up from the city into the stars (no tower or ridge in the frame, so Since May's
-  // and People's text both sit over sky).
-  const sincePos = mPos.clone().add(new Vector3(0, 30, 0));
-  const since: KeyPose = { pos: sincePos, yaw: 16 * DEG, pitch: 36 * DEG };
-  // people: holds Since May's view exactly (spec: "Holds on the sky"); People is too short for a
-  // move of its own. The segment between the two keys is a hold (see pose()).
-  const people: KeyPose = { pos: sincePos.clone(), yaw: since.yaw, pitch: since.pitch };
-  // contact: hold on the sky and pull back, pitched high enough that no tower or ridge shows
-  // anywhere in the frame (the Contact text sits low; the two lights sit at y 0.30).
-  const cPos = sincePos.clone().add(new Vector3(140, 60, 1400));
+  // contact: up from the city into the sky and pulled back, pitched high enough that no tower or
+  // ridge shows anywhere in the frame (the Contact text sits low; the two lights sit at y 0.30).
+  const cPos = mPos.clone().add(new Vector3(140, 90, 1400));
   const contact: KeyPose = { pos: cPos, yaw: 18 * DEG, pitch: 20 * DEG };
   contact.pitch = clearOfSkyline(city, contact, aspect, 0.05);
 
-  const poses: Record<SceneKey, KeyPose> = { hero, question, experience, wisers, och, ais, club, more, since, people, contact };
+  const poses: Record<SceneKey, KeyPose> = { hero, question, experience, wisers, och, ais, club, more, contact };
   const order = SCENE_ORDER;
   const posCurve = new CatmullRomCurve3(order.map((k) => poses[k].pos.clone()), false, 'centripetal');
   const yawK = order.map((k) => poses[k].yaw);
@@ -261,11 +252,13 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
     const b = poses[order[i + 1]];
     return a.pos.distanceTo(b.pos) < 1e-6 && a.yaw === b.yaw && a.pitch === b.pitch;
   });
-  // The moves into the Mission, Since May and the first work stop are not eased or curved here:
-  // the timeline eases them already, and easing them twice packed each move into the middle of
-  // its scroll (Since May about 3.4 degrees per 20 px, the 55 degree turn into Work about 9.5,
-  // and two thirds of the dolly to the Mission in one wheel notch).
-  const linear = order.map((_, i) => i < n - 1 && ['question', 'since', 'och'].includes(order[i + 1]));
+  // These moves are not eased or curved here: the timeline eases them already, and easing them
+  // twice packed each move into the middle of its scroll (the 55 degree turn into Work about 9.5
+  // degrees per 20 px, and two thirds of the dolly to the Mission in one wheel notch). Experience,
+  // More work and Contact joined them in v4, when Civic Exchange's columns had to stand by its
+  // hold and the cut sections left the last two moves less scroll: eased once, at 1440 x 900 they
+  // peak at about 5, 12 and 10 degrees per 100px (v3: 6, 20 and 9).
+  const linear = order.map((_, i) => i < n - 1 && ['question', 'experience', 'och', 'more', 'contact'].includes(order[i + 1]));
   const shape = (i: number, raw: number) => (linear[i] ? raw : ease(raw));
 
   return {

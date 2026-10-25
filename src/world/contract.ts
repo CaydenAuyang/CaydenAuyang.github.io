@@ -23,11 +23,9 @@ export type SceneKey =
   | 'ais' // work stop 2: AI Simply
   | 'club' // work stop 3: Civic AI Club (the compact low-rise block at the far left)
   | 'more' // the More work cards
-  | 'since' // tilted up from the city into the stars
-  | 'people' // holding on the sky
-  | 'contact'; // holding on the sky, pulled back slightly
+  | 'contact'; // up from the city into the sky, pulled back
 
-export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'experience', 'wisers', 'och', 'ais', 'club', 'more', 'since', 'people', 'contact'];
+export const SCENE_ORDER: SceneKey[] = ['hero', 'question', 'experience', 'wisers', 'och', 'ais', 'club', 'more', 'contact'];
 
 export interface CameraPose {
   position: THREE.Vector3;
@@ -238,11 +236,9 @@ export interface World {
  * A city (points sit on lit windows, invisible), B figure (built from Cayden's video, spec v3),
  * C current over the water, D archive (twelve columns of light above Central), E two lights
  * (Pomfret left, Hong Kong right), F1 and F2 the Wisers 2024 pictures (a social feed, then a
- * running shoe), G the Wisers 2025 picture (a screen agent reading and clicking), and S the
- * sparse drifting field among the stars for Since May and People (it was F before v3; the spec
- * calls it "A lifts into a sparse drifting field").
+ * running shoe), and G the Wisers 2025 picture (a screen agent reading and clicking).
  */
-export type Target = 'A' | 'B' | 'C' | 'D' | 'E' | 'F1' | 'F2' | 'G' | 'S';
+export type Target = 'A' | 'B' | 'C' | 'D' | 'E' | 'F1' | 'F2' | 'G';
 
 export interface SignalOptions {
   world: World;

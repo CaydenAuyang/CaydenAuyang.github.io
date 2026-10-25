@@ -50,8 +50,6 @@ export const titleColors: Record<string, TitleColor[]> = {
   'AI Simply': ['window', 'cool'],
   'Civic AI Club': ['cool', 'window', 'cool'],
   'More work': ['text', 'window'],
-  'Since May': ['cool', 'window'],
-  People: ['window'],
   'Reach out': ['window', 'cool'],
 };
 
@@ -61,8 +59,6 @@ export const nav: Link[] = [
   { label: 'Mission', href: '#mission' },
   { label: 'Experience', href: '#experience' },
   { label: 'Work', href: '#work' },
-  { label: 'Since May', href: '#since' },
-  { label: 'People', href: '#people' },
   { label: 'Contact', href: '#contact' },
 ];
 
@@ -73,8 +69,6 @@ export const floors: { floor: string; name: string; href: string }[] = [
   { floor: '1', name: 'Mission', href: '#mission' },
   { floor: '2', name: 'Experience', href: '#experience' },
   { floor: '3', name: 'Work', href: '#work' },
-  { floor: '4', name: 'Since May', href: '#since' },
-  { floor: '5', name: 'People', href: '#people' },
   { floor: 'R', name: 'Contact', href: '#contact' },
 ];
 
@@ -187,6 +181,11 @@ export const experience = {
     meta: {
       text: 'Intern (voluntary), June 9 to August 28, 2026',
       source: 'CEX §1, Agr; C4 p6',
+    } satisfies Line,
+    // Moved here from the People section (cut in v4).
+    supervisor: {
+      text: 'Supervised by Lawrence Iu, Executive Director, who pushed me to build a model other nonprofits could follow.',
+      source: 'CEX §2, J6tx, J15',
     } satisfies Line,
     lead: {
       text: 'A Hong Kong think tank had 25 years of research nobody could search. I listened first, then built the fix.',
@@ -402,82 +401,6 @@ export const work = {
       },
     ],
   },
-};
-
-// ---- 5. Since May ------------------------------------------------------------------------------
-
-export interface Strand {
-  label: string;
-  status: string;
-  text: Line;
-  // From the long copy: what May proposed, and where it stands now.
-  proposed: Line;
-  now: Line;
-}
-
-export const since = {
-  heading: 'Since May',
-  lead: { text: "In May I proposed three things. Here's where they stand.", source: 'POSTER' } satisfies Line,
-  strands: [
-    {
-      label: 'Build.',
-      status: 'Changed course.',
-      text: {
-        text: "Both funding bids were declined, so I'm testing OurCityHealth's core signal before scaling it.",
-        source: 'OCH §1 Funding; OCH §2',
-      },
-      proposed: { text: 'OurCityHealth v3, with 1,000+ cities, a public API and a funding decision.', source: 'POSTER' },
-      now: {
-        text: "both funding applications were declined, HKSTP Ideation in March and Cyberport's CCMF in May. The demo still runs on saved data, and my own analysis covers three cities. I've moved from scaling it to testing whether its core signal is real.",
-        source: 'OCH §1 Funding; OCH §1, E44; OCH §2',
-      },
-    },
-    {
-      label: 'Apply.',
-      status: 'Under way.',
-      text: {
-        text: '8 school cases, 2 handed over. Outside organizations are at the discovery stage.',
-        source: 'CLUB §8',
-      },
-      proposed: {
-        text: '5 to 10 school cases and 5 to 10 outside organizations, each with measured outcomes.',
-        source: 'POSTER',
-      },
-      now: {
-        text: "eight school cases, two delivered and handed over in October. Three outside organizations are at the discovery stage. Outcomes haven't been measured yet.",
-        source: 'CLUB §8',
-      },
-    },
-    {
-      label: 'Reflect.',
-      status: 'Growing.',
-      text: { text: 'The summer added a third case: a nonprofit.', source: 'CEX §8' },
-      proposed: {
-        text: 'a 15 to 20 page thesis comparing a city-scale case and a school-scale case.',
-        source: 'POSTER',
-      },
-      now: { text: 'the summer added a third case between them, a nonprofit.', source: 'CEX §8' },
-    },
-  ] satisfies Strand[] as Strand[],
-  proposedLabel: 'Proposed:',
-  nowLabel: 'Now:',
-  moreLabel: 'about the May proposal',
-};
-
-// ---- 6. People ---------------------------------------------------------------------------------
-
-export const people = {
-  heading: 'People',
-  list: [
-    {
-      name: 'Lawrence Iu',
-      role: { text: 'Executive Director, Civic Exchange.', source: 'title confirmed by Cayden' },
-      text: {
-        text: 'He supervised my summer and pushed me to build a model other nonprofits could follow.',
-        source: 'CEX §2, J6tx, J15',
-      },
-    },
-  ],
 };
 
 // ---- 7. Contact (footer) -----------------------------------------------------------------------

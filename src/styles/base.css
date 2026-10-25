@@ -944,7 +944,7 @@ html[data-snapshot] .skip-link {
     text shadow prints its text again under the text, so copying gave each word four times. The
     plain night behind the later pages needs no halo. A headline split for the neon ignition
     keeps only its letters, so its words print once.
-  - Paper flows: the screen-height spacing (scenes 60 to 140vh tall, held frames, Contact's room
+  - Paper flows: the screen-height spacing (scenes 120 to 140vh tall, held frames, Contact's room
     for its two lights) would print near-empty pages. Only the hero keeps its page, for the still.
     Blocks get space above them only: a bottom padding that didn't fit at the foot of a page
     spilled onto a page of its own before the next section's forced break, leaving it blank.
@@ -1091,8 +1091,7 @@ html[data-snapshot] .world-fallback[data-still]::after {
   /* A section that starts a page needs only a little room above it (the page has its margin). */
   #experience,
   #work,
-  .more-work,
-  #since {
+  .more-work {
     padding-top: var(--space-4) !important;
   }
   /* Selected work's first page holds its title and the first project's preview, title and first
@@ -1134,14 +1133,9 @@ html[data-snapshot] .world-fallback[data-still]::after {
   .vf,
   .xp__where,
   .wisers__block,
-  .people__block,
   .more-work,
   .card,
-  .strand,
-  .since__detail,
-  .person,
-  .qp__panel,
-  .qp__note,
+  .qp,
   .wisers__summer,
   .facts > li,
   .contact__body {
