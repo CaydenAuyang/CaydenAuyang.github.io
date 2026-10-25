@@ -359,6 +359,14 @@
             windowMat.uniforms.uLiftAmount.value = amount;
           },
           setHighlight() {},
+          // The lab has no harbour interactions: these keep the World interface whole.
+          setPointer() {},
+          pulse: () => false,
+          setSpill() {},
+          shootingStar: () => false,
+          lightShow() {},
+          lightShowOn: false,
+          setBeamKeepOut() {},
           sampleLitWindows(count: number, maxRank: number): LitWindowSamples {
             const idx: number[] = [];
             for (let i = 0; i < W.count; i++) if (W.rank[i] < maxRank) idx.push(i);

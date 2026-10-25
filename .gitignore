@@ -3,6 +3,9 @@ node_modules/
 dist/
 .astro/
 
+# Screenshots from the device check (npm run check:devices -- --shots).
+.devices/
+
 # Secrets. This site needs none.
 .env*
 

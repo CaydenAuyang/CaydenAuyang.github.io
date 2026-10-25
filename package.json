@@ -8,7 +8,11 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "check": "node scripts/check.mjs",
+    "check:types": "astro check && tsc -p tsconfig.client.json",
     "check:a11y": "node scripts/check-a11y.mjs",
+    "check:devices": "node scripts/devices.mjs",
+    "check:budgets": "node scripts/budgets.mjs",
     "stills": "node scripts/stills.mjs",
     "perf": "node scripts/perf.mjs"
   },
@@ -22,8 +26,12 @@
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@astrojs/check": "0.9.10",
     "@axe-core/playwright": "4.13.0",
+    "@types/node": "24.19.2",
     "@types/three": "0.186.0",
-    "playwright-core": "1.59.1"
+    "playwright-core": "1.59.1",
+    "postcss-custom-media": "12.0.3",
+    "typescript": "6.0.3"
   }
 }

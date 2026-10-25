@@ -1,13 +1,15 @@
 // check-a11y.mjs: an automatic accessibility check of every page, using axe inside a real browser.
 //
-// Run it with the site built and previewed in another terminal:
+// "npm run check" runs it for you against a fresh build. To run it alone, with the site built and
+// previewed in another terminal:
 //   npm run build && npm run preview          (terminal 1)
 //   npm run check:a11y                        (terminal 2)
 // It drives the Chromium that Playwright keeps in ~/Library/Caches/ms-playwright. If that is
 // missing, download it once with:  npx playwright-core install chromium
 //
 // For every page, at a laptop size (1440 x 900) and a phone size (390 x 844), each with motion on
-// and with the device asking for reduced motion, it:
+// and with the device asking for reduced motion, and at an upright iPad (820 x 1180, the stack
+// layout) and a phone held sideways (852 x 393, the short layout) with motion on, it:
 //   1. opens the page, waits for the hero intro to finish (it reveals by 2.5 s at the latest),
 //      and runs axe with the WCAG 2.2 A and AA rules at the top of the page,
 //   2. scrolls to the bottom a screen at a time, so every pin and scene has played and all text
@@ -15,7 +17,7 @@
 //      contrast; text over the night gradient or the canvas comes back as "needs review", which
 //      the measured ratios in src/styles/tokens.css cover),
 //   3. lists every problem. "Serious" and "critical" ones end the script with exit code 1 (they
-//      block the deploy); "moderate" and "minor" ones are listed as warnings.
+//      fail "npm run check" and CI); "moderate" and "minor" ones are listed as warnings.
 // Another address can be checked with:  BASE=http://localhost:4411 npm run check:a11y
 
 import { chromium } from 'playwright-core';
@@ -30,6 +32,8 @@ const setups = [
   { name: 'laptop, reduced motion', viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' },
   { name: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' },
   { name: 'phone, reduced motion', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' },
+  { name: 'tablet', viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' },
+  { name: 'phone sideways', viewport: { width: 852, height: 393 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, reducedMotion: 'no-preference' },
 ];
 
 // Scroll to the bottom a screen at a time, then wait, so every pin and scene has played.

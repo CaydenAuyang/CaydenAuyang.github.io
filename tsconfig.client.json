@@ -1,0 +1,15 @@
+{
+  // The code that runs in the browser, type-checked on its own without Node's types, so a
+  // process.env, Buffer or require there fails "npm run check:types" instead of crashing the page.
+  // (tsconfig.json has Node's types everywhere, for the build-time frontmatter, scripts/ and
+  // tools/; TypeScript can't scope global types to some files of one program, so this is a second
+  // program.) Vite's client types cover the shaders' ?raw imports and import.meta.glob; Astro's
+  // would bring Node's back. The <script> blocks inside .astro files are checked by astro check
+  // only; keep what they do in these folders.
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "moduleDetection": "force"
+  },
+  "include": ["src/scripts", "src/world", "src/intro", "src/data"]
+}

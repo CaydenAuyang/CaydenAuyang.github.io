@@ -1,21 +1,54 @@
-# ci.yml: checks every pull request and every push to main.
+# ci.yml: checks every push and every pull request with "npm run check".
 #
-# A fresh computer downloads the project, installs the exact package versions from
-# package-lock.json, and builds the site. If the build fails, the check shows a red cross.
+# A fresh Linux computer downloads the project, installs the exact package versions from
+# package-lock.json and Playwright's Chromium, then runs the checks against a production build
+# (scripts/check.mjs builds, serves the build itself and stops the server after). Three machines
+# share the work, so each should finish in well under 10 minutes:
+#   - site: the build, the TypeScript checks, the accessibility check (axe) and the budgets
+#   - devices-1 and devices-2: the build and half the 15-size device check each
+#     (scripts/devices.mjs --shard=1/2 and 2/2: every second size, so each gets phones, iPads
+#     and laptops). A size takes about 15 s, most of it fixed waits; drawn in software on a Mac,
+#     8 sizes took 2 minutes and 630 CPU-seconds, but the world draws as fast as the CPU lets it,
+#     so a 4-core runner draws fewer frames rather than taking 4 times as long. Expect about 3
+#     to 5 minutes for each half, plus about 3 for setup and the build (not yet timed on GitHub).
+# Any failure shows a red cross. If a device check fails, its screenshots are kept for a week
+# under the run's Artifacts.
+#
+# Linux runners have no GPU, so Chromium draws WebGL in software (SwiftShader): the world and the
+# intro phone run, slowly, on the low tier. Everything the device check measures still holds;
+# frame rates don't, which is why perf (npm run perf) stays a local check. WebKit isn't run here
+# (npm run check -- --webkit does it on a Mac).
 
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: ['**']
 
 permissions:
   contents: read
 
+# A newer push to the same branch cancels the run still going.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
+    name: ${{ matrix.part }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: site
+            args: --skip=devices
+          - part: devices-1
+            args: --skip=types,a11y,budgets --shard=1/2 --shots
+          - part: devices-2
+            args: --skip=types,a11y,budgets --shard=2/2 --shots
     steps:
       - name: Get the code
         uses: actions/checkout@v7
@@ -29,5 +62,17 @@ jobs:
       - name: Install exact package versions
         run: npm ci
 
-      - name: Build the site
-        run: npm run build
+      - name: Install Chromium for the browser checks
+        run: npx playwright-core install --with-deps chromium
+
+      - name: npm run check (${{ matrix.part }})
+        run: npm run check -- ${{ matrix.args }}
+
+      - name: Keep the device screenshots
+        if: failure() && startsWith(matrix.part, 'devices')
+        uses: actions/upload-artifact@v7
+        with:
+          name: device-screenshots-${{ matrix.part }}
+          path: .devices/
+          retention-days: 7
+          if-no-files-found: ignore

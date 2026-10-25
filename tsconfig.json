@@ -1,5 +1,13 @@
 {
   "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    // TypeScript 6 loads no @types packages unless they're named. Node's are for the
+    // build-time code in frontmatter (reading public/ at build) and for scripts/ and tools/.
+    // They reach the browser code too, so tsconfig.client.json checks that again without them.
+    "types": ["node"],
+    // Every file is its own module, so two page scripts can each have a top-level `html`.
+    "moduleDetection": "force"
+  },
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", "node_modules"]
+  "exclude": ["dist", "node_modules", ".devices"]
 }
