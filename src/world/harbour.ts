@@ -42,7 +42,7 @@ export interface HarbourUniforms extends PulseUniforms, SpillUniforms, ShowUnifo
 
 /** Profile slots: hero, question, experience, och, ais, club, more (since, people, contact reuse more). */
 export const BAKE_SLOTS = 7;
-const PW = 2048;
+const PW = 4096;
 
 export interface WindowSet {
   wins: FrontWindow[];
@@ -69,8 +69,9 @@ export interface Harbour {
 
 export function buildHarbour(city: CityLayout, shared: HarbourUniforms): Harbour {
   const zp = city.zFront;
-  const x0 = city.xMin - 400;
-  const xSpan = city.width + 800;
+  // the whole north shore, flank districts included
+  const x0 = city.fullMin - 400;
+  const xSpan = city.fullMax - city.fullMin + 800;
   const ySpan = city.maxTip * 1.05;
   const binX = xSpan / PW;
   const rows = BAKE_SLOTS * 2;

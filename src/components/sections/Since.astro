@@ -31,7 +31,7 @@ const headline = ignite(since.heading);
         {
           since.strands.map((strand) => (
             <div class="since__detail">
-              <p>
+              <p class="since__detail-label">
                 <strong>{strand.label}</strong>
               </p>
               <p>
@@ -100,5 +100,22 @@ const headline = ignite(since.heading);
   }
   .since :global(.since__detail > * + *) {
     margin-top: var(--space-2);
+  }
+  /* Desktop: the details sit in three columns right under Build, Apply and Reflect, so their own
+     labels would only repeat them; screen readers still hear them. Phones stack the details under
+     all three, so the labels stay. */
+  @media (min-width: 1024px) {
+    .since .since__detail-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    .since :global(.since__detail-label + *) {
+      margin-top: 0;
+    }
   }
 </style>

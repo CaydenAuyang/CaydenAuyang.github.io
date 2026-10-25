@@ -98,7 +98,7 @@ void main() {
     vec3 q = w0 + sd * sc - D * uc;
     float r = K.y + uc * K.z;
     float inside = exp(-dot(q, q) / (r * r) * 2.2) * (1.0 - uc / L);
-    b *= 1.0 + 3.5 * K.x * inside;
+    b *= 1.0 + min(0.5, 2.5 * K.x) * inside;
   }
   float size = aStar.x * uPixelRatio * (0.75 + 0.25 * haze) * (1.0 + 1.4 * flash);
   // A core narrower than a pixel changes shape as the star drifts across the pixel grid, so the

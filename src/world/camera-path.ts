@@ -35,6 +35,9 @@ export const KEY_U: Record<SceneKey, number> = {
   contact: 1,
 };
 
+/** The hero framing the other stops were placed from (tower tops and waterline, share of the height). */
+const REF_FRAMING = { desktop: { skylineTop: 0.66, horizon: 0.86 }, phone: { skylineTop: 0.76, horizon: 0.9 } };
+
 /** The wisers key's drift from the experience pose: sideways (share of the distance), up (m), and turns (radians). */
 const WISERS_DRIFT = { side: 0.03, rise: 6, yaw: 1.5 * DEG, pitch: 7.5 * DEG, pitchPhone: 1.5 * DEG };
 
@@ -81,8 +84,8 @@ function aimAt(pos: Vector3, p: Vector3, sx: number, sy: number, aspect: number)
 }
 
 /** Hero: distance and pitch so the tallest tops and the waterline sit at HERO_FRAMING. */
-function solveHero(city: CityLayout, aspect: number, phone: boolean): KeyPose {
-  const fr = phone ? HERO_FRAMING.phone : HERO_FRAMING.desktop;
+function solveHero(city: CityLayout, aspect: number, phone: boolean, framing = HERO_FRAMING): KeyPose {
+  const fr = phone ? framing.phone : framing.desktop;
   const h = 12;
   const nW = 1 - 2 * fr.horizon;
   const nTop = 1 - 2 * fr.skylineTop;
@@ -169,12 +172,15 @@ export interface CameraPath {
 
 export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean): CameraPath {
   const hero = solveHero(city, aspect, phone);
-  const Dh = hero.pos.z;
+  // The later stops are placed from the distance of the earlier, closer hero framing, so moving the
+  // hero (the city now a band along the bottom of the first screen) leaves every other stop as it was.
+  const heroRef = solveHero(city, aspect, phone, REF_FRAMING);
+  const Dh = heroRef.pos.z;
   const W = city.width;
   const fitW = (width: number, share: number) => width / share / (2 * T * aspect);
 
   // question: dolly forward and down toward the water; more water in frame.
-  const qPos = new Vector3(hero.pos.x + 0.02 * Dh, 5, Dh * 0.8);
+  const qPos = new Vector3(heroRef.pos.x + 0.02 * Dh, 5, Dh * 0.8);
   const question: KeyPose = { pos: qPos, yaw: 0, pitch: pitchForWaterline(qPos, phone ? 0.64 : 0.6) };
 
   // experience: truck right and in, turning back toward the Central cluster, with sky above it for
@@ -264,7 +270,7 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
   return {
     keys: { ...KEY_U },
     poses,
-    heroDistance: Dh,
+    heroDistance: hero.pos.z,
     segment(u: number) {
       const uu = Math.min(1, Math.max(0, u));
       let i = 0;

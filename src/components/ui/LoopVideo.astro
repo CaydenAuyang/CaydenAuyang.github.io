@@ -10,8 +10,9 @@
 //   - muted, playsinline, loop, no autoplay attribute. preload="none" until the video is within
 //     one viewport of the screen; then it may start loading.
 //   - Plays while at least half of it is visible, pauses otherwise.
-//   - A visible 44px Pause / Play button, labelled with the project's name. A pause the visitor
-//     makes sticks until they press Play.
+//   - A visible Pause / Play button, labelled with the project's name, at the right end of the
+//     caption row under the frame, so it covers nothing in the recording: a 32px disc with a 44px
+//     hit area. A pause the visitor makes sticks until they press Play.
 //   - Reduced motion: the poster and a Play button; it plays only if asked.
 //   - Snapshot mode: the poster only, no button.
 //   - If the browser refuses to play (Low Power Mode, data saver) the poster stays and the button
@@ -55,22 +56,6 @@ const height = src?.height ?? 800;
               {src.webm && <source src={src.webm} type="video/webm" />}
               <source src={src.mp4} type="video/mp4" />
             </video>
-            <button
-              type="button"
-              class="vf__btn"
-              data-vf-btn
-              data-needs-js
-              data-snapshot-hide
-              data-label={label}
-              aria-label={`${ui.play} ${label}`}
-            >
-              <svg class="vf__icon vf__icon--play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-                <path d="M4.5 2.75v10.5l8.5-5.25z" fill="currentColor" />
-              </svg>
-              <svg class="vf__icon vf__icon--pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-                <path d="M4 2.75h2.75v10.5H4zM9.25 2.75H12v10.5H9.25z" fill="currentColor" />
-              </svg>
-            </button>
           </>
         ) : (
           <p class="vf__empty">{ui.previewPending}</p>
@@ -78,6 +63,26 @@ const height = src?.height ?? 800;
       }
     </div>
   </div>
+  {
+    src && (
+      <button
+        type="button"
+        class="vf__btn"
+        data-vf-btn
+        data-needs-js
+        data-snapshot-hide
+        data-label={label}
+        aria-label={`${ui.play} ${label}`}
+      >
+        <svg class="vf__icon vf__icon--play" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+          <path d="M4.5 2.75v10.5l8.5-5.25z" fill="currentColor" />
+        </svg>
+        <svg class="vf__icon vf__icon--pause" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+          <path d="M4 2.75h2.75v10.5H4zM9.25 2.75H12v10.5H9.25z" fill="currentColor" />
+        </svg>
+      </button>
+    )
+  }
   <figcaption class="vf__cap">{caption}</figcaption>
 </figure>
 
@@ -120,29 +125,39 @@ const height = src?.height ?? 800;
     object-fit: cover;
   }
 
+  /* The button: in the caption row, at the frame's right edge, off the picture. A 44px hit area
+     around a 32px disc. */
   .vf__btn {
     position: absolute;
-    right: var(--space-3);
-    bottom: var(--space-3);
+    right: -6px;
+    bottom: calc((var(--tap) - 1.5 * var(--fs-small)) / -2);
     display: grid;
     place-items: center;
     width: var(--tap);
     height: var(--tap);
     border-radius: 50%;
-    background: rgb(var(--night-rgb) / 0.72);
     color: var(--text);
-    box-shadow:
-      0 0 0 1px rgb(var(--text-rgb) / 0.22),
-      0 4px 16px rgb(var(--night-rgb) / 0.4);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
-    transition:
-      background var(--dur-quick) var(--ease-out),
-      color var(--dur-quick) var(--ease-out);
+    transition: color var(--dur-quick) var(--ease-out);
+  }
+  .vf__btn::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: rgb(var(--night-rgb) / 0.72);
+    box-shadow: 0 0 0 1px rgb(var(--text-rgb) / 0.22);
+    transition: background var(--dur-quick) var(--ease-out);
   }
   .vf__btn:hover {
-    background: rgb(var(--night-rgb) / 0.9);
     color: var(--window);
+  }
+  .vf__btn:hover::before {
+    background: rgb(var(--night-rgb) / 0.9);
+  }
+  .vf__btn :global(svg) {
+    position: relative;
+    width: 14px;
+    height: 14px;
   }
   .vf__btn:focus-visible {
     border-radius: 50%;
@@ -171,6 +186,7 @@ const height = src?.height ?? 800;
   .vf__cap {
     position: relative;
     justify-self: start;
+    margin-right: calc(var(--tap) + var(--space-2));
     font-size: var(--fs-small);
     line-height: 1.5;
     color: var(--text);

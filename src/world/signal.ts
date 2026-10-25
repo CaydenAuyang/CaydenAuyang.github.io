@@ -53,8 +53,6 @@ const MAX_YAW = (30 * Math.PI) / 180;
 const MAX_PITCH = (5 * Math.PI) / 180;
 /** Figure points sampled for figureBox (an even sample, so the box follows the outline). */
 const BOX_SAMPLES = 1500;
-/** The figure is never shorter than this on desktop (CSS px). */
-const FIGURE_MIN_PX = 350;
 /**
  * Every figure dot is one size. The reference renders use about 1.6 to 2 px on a 600 px tall
  * figure, so the dot scales with the figure's height on the canvas to keep that density on
@@ -63,6 +61,12 @@ const FIGURE_MIN_PX = 350;
 const FIGURE_DOT = { perHeight: 0.0031, min: 1.6, max: 3.2 };
 /** The figure's brightness against the reference renders (figure-video/preview). */
 const FIGURE_GAIN = 1;
+/**
+ * The figure's backing: dark discs (the night colour) under its dots, so stars and haze behind it
+ * don't show through. Each disc is this many times the mean spacing between the dots on screen.
+ */
+const BACKING_COLOR = '#05070D';
+const BACKING_DOT = 2.0;
 /** Scan assembly (figure-video/figure-loader.ts): how much of a morph into or out of the figure the scan takes, and its randomness. */
 const SCAN = 0.3;
 const SCAN_JITTER = 0.1;
@@ -104,7 +108,6 @@ const PICTURE_DOT = { k: 0.62, min: 1.5, max: 2.8 };
 const PICTURE_GAIN = 2;
 /** The screen agent's loop with motion off: every box drawn, the path drawn, the cursor at the last box. */
 const AGENT_STILL = 5.35;
-const NEON = '#FF4F8B';
 /** Share of archive points that drift loose instead of joining a column. */
 const STRAYS = 0.04;
 /** The archive columns: one per notebook, each count / largest count of the full height. */
@@ -481,6 +484,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     // #EEE9E1 exactly: the canvas has no output conversion, so the hex goes in as is (a plain
     // Color would convert it to linear and show it darker and beige).
     uFigColor: { value: new Color().setHex(parseInt((fig.meta.color || '#EEE9E1').slice(1), 16), LinearSRGBColorSpace) },
+    uBackDot: { value: 4 },
+    uBack: { value: new Color(BACKING_COLOR) },
     uScan: { value: 0 },
     uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
     uCarryMix: { value: (world.tier.tier === 'phone' ? CARRY_MIX.phone : CARRY_MIX.desktop).slice() },
@@ -492,7 +497,6 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uFeed: { value: [-FEED.loop / 2, FEED.loop, FEED.speed, FEED.fade] },
     uAgentPhase: { value: AGENT_STILL },
     uAgentKnots: { value: Array.from({ length: 5 }, () => new Vector2()) },
-    uNeon: { value: new Color(NEON) },
     uColAmt: { value: new Float32Array(COLS) },
     uColDim: { value: 0 },
   };
@@ -546,14 +550,15 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     }
 
     // ---- B: the figure at FIGURE_ANCHOR through the hero pose, facing the camera, at its true
-    // depth, never under FIGURE_MIN_PX tall on desktop. Only its frame is set here; the shader
+    // depth, filling exactly its anchor box (the hero's one-line name sits right under it, so it
+    // never grows past the box on short screens). Only its frame is set here; the shader
     // places each dot from its own attributes. tB holds the unturned positions (for reference).
     // Perspective makes the parts nearer the camera (the shirt, the face) a little larger, so the
     // frame is fitted until the figure's outline on screen, facing front, spans the anchor exactly.
     {
       const anchor = phone ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
       const D = S;
-      const heightPx = phone ? anchor.height * H : Math.max(anchor.height * H, FIGURE_MIN_PX);
+      const heightPx = anchor.height * H;
       const want = { top: anchor.y - (heightPx / H) / 2, bottom: anchor.y + (heightPx / H) / 2 };
       let cy = anchor.y;
       let hs = heightPx / H;
@@ -596,6 +601,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       // uFigDot is in CSS px (the shader multiplies by the pixel ratio); the size is set in canvas px.
       const ratio = world.renderer.getPixelRatio();
       uniforms.uFigDot.value = clamp(FIGURE_DOT.perHeight * heightPx * ratio, FIGURE_DOT.min, FIGURE_DOT.max) / ratio;
+      // The dots' mean spacing on screen (the bust covers about half of its height squared).
+      const spacing = Math.sqrt((0.5 * heightPx * heightPx) / Math.max(1, F));
+      uniforms.uBackDot.value = Math.max(2, BACKING_DOT * spacing);
       const t = T[1];
       const o = figFrame.origin;
       for (let i = 0; i < N; i++) {
@@ -742,8 +750,9 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
           t[i * 4] = origin.x + X.x * q.u + Y.x * q.v;
           t[i * 4 + 1] = origin.y + X.y * q.u + Y.y * q.v;
           t[i * 4 + 2] = origin.z + X.z * q.u + Y.z * q.v;
-          // w: 4 * (offset + 512) + the colour class + the brightness (0 to 0.99), where the offset
-          // (the feed only) is the point's height above its card's centre in thousandths of the box.
+          // w: 4 * (offset + 512) + the colour class (0 window, 1 cool, 2 white) + the brightness
+          // (0 to 0.99), where the offset (the feed only) is the point's height above its card's
+          // centre in thousandths of the box.
           const offset = n === 0 ? clamp(Math.round(q.p1 * 1000), -500, 500) + 512 : 0;
           t[i * 4 + 3] = 4 * offset + q.cls + (own ? Math.min(0.99, q.alpha) : 0);
           if (ID.F1 + n === ID.G) {
@@ -863,10 +872,31 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
   points.name = 'signal';
   world.scene.add(points);
 
+  // The figure's backing: the same points, drawn just before the light as dark discs (normal
+  // blending), only while the figure shows, so stars and haze behind him don't shine through.
+  const backMaterial = new RawShaderMaterial({
+    glslVersion: GLSL3,
+    vertexShader,
+    fragmentShader,
+    uniforms,
+    defines: { BACKING: '' },
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+  });
+  const backing = new Points(geometry, backMaterial);
+  backing.frustumCulled = false;
+  backing.renderOrder = 9.5;
+  backing.name = 'signal-backing';
+  backing.visible = false;
+  world.scene.add(backing);
+
   // Compile the program now so the first frame that shows the signal doesn't stall.
   world.scene.add(arc.mesh);
   arc.mesh.visible = true;
+  backing.visible = true;
   world.renderer.compile(world.scene, world.camera);
+  backing.visible = false;
   arc.mesh.visible = false;
 
   // ---- Morph state ----
@@ -987,6 +1017,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     const cut = !motion;
     const home = (from === 'A' && (to === 'A' || (cut ? t < 0.5 : t <= 0))) || (to === 'A' && (cut ? t >= 0.5 : t >= 1));
     points.visible = !home;
+    backing.visible = points.visible && (from === 'B' || to === 'B');
     lift(from, to, t);
     // The screen agent's loop starts over whenever G comes into play.
     const agentNow = from === 'G' || to === 'G';
@@ -1224,6 +1255,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       window.removeEventListener('resize', onResize);
       window.clearTimeout(resizeTimer);
       world.scene.remove(points);
+      world.scene.remove(backing);
+      backMaterial.dispose();
       world.scene.remove(arc.mesh);
       arc.dispose();
       geometry.dispose();

@@ -36,22 +36,23 @@ export const meta = {
 // ---- Title colors -----------------------------------------------------------------------------
 
 // Every title's words in their own color (content.md, Interface labels, Title colors). Keys are the
-// titles as written in this file; one color per word, in order. Tokens: tokens.css.
-export type TitleColor = 'window' | 'cool' | 'neon' | 'text';
+// titles as written in this file; one color per word, in order, only window, cool and text (no
+// pink). Tokens: tokens.css.
+export type TitleColor = 'window' | 'cool' | 'text';
 export const titleColors: Record<string, TitleColor[]> = {
   'Cayden Auyang': ['window', 'cool'],
   'The mission': ['cool', 'window'],
   Experience: ['cool'],
   'Civic Exchange': ['window', 'text'],
-  Wisers: ['neon'],
-  'Selected work': ['window', 'neon'],
+  Wisers: ['window'],
+  'Selected work': ['window', 'cool'],
   OurCityHealth: ['cool'],
-  'AI Simply': ['neon', 'cool'],
-  'Civic AI Club': ['cool', 'neon', 'cool'],
+  'AI Simply': ['window', 'cool'],
+  'Civic AI Club': ['cool', 'window', 'cool'],
   'More work': ['text', 'window'],
   'Since May': ['cool', 'window'],
-  People: ['neon'],
-  'Say hello': ['window', 'cool'],
+  People: ['window'],
+  'Reach out': ['window', 'cool'],
 };
 
 // ---- Navigation --------------------------------------------------------------------------------
@@ -482,7 +483,7 @@ export const people = {
 // ---- 7. Contact (footer) -----------------------------------------------------------------------
 
 export const contact = {
-  heading: 'Say hello',
+  heading: 'Reach out',
   email: { text: 'caydenauyang@gmail.com', source: 'POSTER' } satisfies Line,
   github: { label: 'GitHub', href: 'https://github.com/CaydenAuyang' } satisfies Link,
   smallPrint: 'Cayden Auyang. Pomfret School, Class of 2027.',

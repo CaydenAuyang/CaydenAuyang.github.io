@@ -7,8 +7,8 @@
 //   F2 (Summer 2024): one generic running shoe in side profile (upper, heel tab, six lace dots in
 //      window; midsole and outsole in cool). No stripes, logos or brand marks.
 //   G  (Summer 2025): a laptop screen (16:10, rounded corners, thin bezel) with faint interface
-//      blocks, and the screen agent's loop: five neon boxes, a dotted path through them, a small
-//      arrow cursor and a click ripple at each box (the shader runs the loop).
+//      blocks, and the screen agent's loop: five boxes in cool, a dotted path through them, a small
+//      arrow cursor and a click ripple at each box, in white (the shader runs the loop).
 //
 // Units: the picture's box (WISERS_ANCHOR) is 1 tall and `aspect` wide, centred on 0. Paths are
 // authored with y down, as in SVG; the points come out with v up. Each picture picks one line
@@ -17,7 +17,7 @@
 import { circle, rect, roundRect, sampleFill, sampleLine, type Pt } from './svg';
 
 /** Point classes (the colour the shader gives them). */
-export const CLS = { window: 0, cool: 1, neon: 2, white: 3 } as const;
+export const CLS = { window: 0, cool: 1, white: 2 } as const;
 
 /** G's roles for the screen agent loop (the shader's aShape.x). */
 export const ROLE = { still: 0, box: 1, path: 2, cursor: 3, ripple: 4 } as const;
@@ -38,8 +38,12 @@ export interface Picture {
   spacing: number; // line spacing, in box heights
 }
 
-/** F1's loop: its height (the feed repeats every `loop` box heights) and scroll speed (box heights a second). */
-export const FEED = { loop: 1.54, speed: 0.028, fade: 0.08 };
+/**
+ * F1's loop: its height (the feed repeats every `loop` box heights), scroll speed (box heights a
+ * second), and the band over which a card fades in and out as a whole by where its centre is (at
+ * least half the tallest card, so no card is ever cut by the box's edge).
+ */
+export const FEED = { loop: 1.54, speed: 0.028, fade: 0.16 };
 
 /** G's loop length in seconds, and the knots of the cursor's path (box centres, filled in by screen()). */
 export const AGENT = { seconds: 6 };
@@ -56,6 +60,8 @@ const push = (out: PicPoint[], pts: Pt[], cls: number, alpha: number, role = 0, 
 const COL_A = [0.24, 0.19, 0.27, 0.2, 0.23, 0.17];
 const COL_B = [0.2, 0.26, 0.18, 0.25, 0.19, 0.22];
 const CARD_GAP = 0.04;
+/** The spacing from a card's last image row to its first text line, and between its two text lines (box heights). */
+const TEXT_GAP = 0.028;
 
 function feed(aspect: number, s: number): PicPoint[] {
   const out: PicPoint[] = [];
@@ -70,15 +76,27 @@ function feed(aspect: number, s: number): PicPoint[] {
     heights.forEach((h) => {
       const draw = (yy: number) => {
         const pad = 0.022;
-        push(out, sampleLine(roundRect(x, yy, cw, h, 0.022), s).pts, CLS.window, 0.85);
+        // p1 of every point of the card: its height above the card's centre (v up), so the shader
+        // can fade the card as a whole.
+        const vc = -(yy + h / 2);
+        const card = (pts: Pt[], cls: number, alpha: number) => push(out, pts, cls, alpha, 0, (k) => [-pts[k][1] - vc, 0, 0]);
+        card(sampleLine(roundRect(x, yy, cw, h, 0.022), s).pts, CLS.window, 0.85);
+        // The image block: whole rows of a regular grid from the block's top, over about 60% of
+        // the card; then the two text lines at one fixed spacing below the last row, the same in
+        // every card.
         const innerH = h - 2 * pad;
-        const imgH = innerH * 0.6;
-        push(out, sampleFill(rect(x + pad, yy + pad, cw - 2 * pad, imgH), s * 1.7), CLS.cool, 0.42);
-        const rest = innerH - imgH;
-        const y1 = yy + pad + imgH + rest * 0.38;
-        const y2 = yy + pad + imgH + rest * 0.78;
-        push(out, sampleLine(`M ${x + pad} ${y1} H ${x + pad + (cw - 2 * pad) * 0.72}`, s).pts, CLS.window, 0.6);
-        push(out, sampleLine(`M ${x + pad} ${y2} H ${x + pad + (cw - 2 * pad) * 0.44}`, s).pts, CLS.window, 0.6);
+        const gs = s * 1.7;
+        const rows = Math.max(1, Math.floor((innerH * 0.6) / gs) + 1);
+        const cols = Math.max(1, Math.floor((cw - 2 * pad) / gs) + 1);
+        const gx = x + cw / 2 - ((cols - 1) * gs) / 2;
+        const grid: Pt[] = [];
+        for (let j = 0; j < rows; j++) for (let k = 0; k < cols; k++) grid.push([gx + k * gs, yy + pad + j * gs]);
+        card(grid, CLS.cool, 0.42);
+        const last = yy + pad + (rows - 1) * gs;
+        const y1 = last + TEXT_GAP;
+        const y2 = y1 + TEXT_GAP;
+        card(sampleLine(`M ${x + pad} ${y1} H ${x + pad + (cw - 2 * pad) * 0.72}`, s).pts, CLS.window, 0.6);
+        card(sampleLine(`M ${x + pad} ${y2} H ${x + pad + (cw - 2 * pad) * 0.44}`, s).pts, CLS.window, 0.6);
       };
       // The loop wraps, so a card that runs past the bottom also draws from the top.
       draw(y);
@@ -99,7 +117,8 @@ const SHOE = {
   midsole:
     'M 114 340 C 330 364 620 362 860 340 C 905 335 940 322 952 302 C 978 310 988 338 970 360 C 920 392 720 404 470 410 C 310 414 180 424 122 420 C 98 412 98 362 114 340 Z',
   outsole: 'M 138 434 C 310 432 660 424 918 398 C 944 394 962 384 972 370',
-  tab: 'M 176 114 C 168 92 176 72 194 70 C 212 70 216 90 208 118',
+  // Both ends sit on the topline, so the loop closes.
+  tab: 'M 176 117 C 167 93 176 72 194 70 C 213 70 217 94 208 131',
   laces: Array.from({ length: 6 }, (_, k) => [460 + k * 36, 158 + k * 10.2] as Pt),
 };
 
@@ -206,10 +225,10 @@ function screen(aspect: number, s: number): PicPoint[] {
   const knots: Pt[] = boxes.map(([x, y, bw, bh2]) => [x + bw / 2, y + bh2 / 2]);
   boxes.forEach(([x, y, bw, bh2], k) => {
     const line = sampleLine(rect(x, y, bw, bh2), s * 1.4);
-    push(out, line.pts, CLS.neon, 0.95, ROLE.box, (j) => [line.at[j], k, 0]);
+    push(out, line.pts, CLS.cool, 0.95, ROLE.box, (j) => [line.at[j], k, 0]);
   });
   const path = sampleLine(knotPath(knots), s * 2.4);
-  push(out, path.pts, CLS.neon, 0.5, ROLE.path, (j) => [path.at[j], 0, 0]);
+  push(out, path.pts, CLS.white, 0.5, ROLE.path, (j) => [path.at[j], 0, 0]);
   // The cursor, about 30 points, as offsets from its tip (v up).
   const cursor = sampleLine(CURSOR, 0.27 / 30).pts;
   push(out, cursor.map(() => knots[0]), CLS.white, 1, ROLE.cursor, (j) => [cursor[j][0], -cursor[j][1], 0]);
@@ -217,7 +236,7 @@ function screen(aspect: number, s: number): PicPoint[] {
   knots.forEach((c, k) => {
     for (let ring = 0; ring < 2; ring++) {
       const pts: Pt[] = Array.from({ length: 12 }, () => c);
-      push(out, pts, CLS.neon, 0.9, ROLE.ripple, (j) => [(j / 12) * Math.PI * 2 + ring * 0.26, k, ring]);
+      push(out, pts, CLS.white, 0.9, ROLE.ripple, (j) => [(j / 12) * Math.PI * 2 + ring * 0.26, k, ring]);
     }
   });
   agentKnots.length = 0;

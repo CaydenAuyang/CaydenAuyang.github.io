@@ -13,6 +13,8 @@
 //   const ig = ignite(question.heading);
 //   <h2 id="question-title" class="h2" {...ig.attrs}>{question.heading}</h2>
 
+import { titleWall, titleWmax } from './title';
+
 export const SEQ_MS = 320;
 export const TOTAL_MS = 700;
 const MAX_STAGGER = 50;
@@ -22,6 +24,10 @@ export function ignite(text: string) {
   const stagger = count > 1 ? Math.min(MAX_STAGGER, (TOTAL_MS - SEQ_MS) / (count - 1)) : 0;
   const total = Math.round((count - 1) * stagger + SEQ_MS);
   return {
-    attrs: { 'data-ignite': '', 'data-ignite-ms': String(total), style: `--stagger: ${stagger.toFixed(1)}ms` },
+    attrs: {
+      'data-ignite': '',
+      'data-ignite-ms': String(total),
+      style: `--stagger: ${stagger.toFixed(1)}ms; --wmax: ${titleWmax(text)}; --wall: ${titleWall(text)}`,
+    },
   };
 }

@@ -98,11 +98,12 @@ vec4 windowAt(vec2 c, vec2 fw, float across, uint seed, uint faceSeg, int L, int
   }
   if (state <= 0.0) return vec4(0.0, 0.0, 0.0, cover);
 
-  if (uLift.y > 0.0 && vFace < 0.5 && nsRank(wh) < uLift.x) b *= 1.0 - uLift.y;
+  // (the flank districts give no windows to the signal, so they never dim for it)
+  if (uLift.y > 0.0 && vFace < 0.5 && group != 5 && nsRank(wh) < uLift.x) b *= 1.0 - uLift.y;
 
   // Wake: windows switch on left to right, with a little per-window noise.
   float wn = float((wh >> 4u) & 255u) / 255.0;
-  float wakeT = across * 0.86 + wn * 0.12;
+  float wakeT = clamp(across, 0.0, 1.0) * 0.86 + wn * 0.12;
   float on = smoothstep(wakeT - 0.015, wakeT + 0.015, uWake * 1.06 - 0.02);
 
   vec3 lc = nsWarm(wh, T) ? uWarm : uCool;
@@ -147,7 +148,7 @@ void main() {
     fin = mix(fin, 0.3, smoothstep(0.5, 1.5, fw2));
     float hfrac = clamp(vCell.y / max(1.0, vSeg.y), 0.0, 1.0);
     float wash = 0.25 + 0.75 * hfrac * hfrac;
-    float wakeT = across * 0.86 + 0.06;
+    float wakeT = clamp(across, 0.0, 1.0) * 0.86 + 0.06;
     float on = smoothstep(wakeT - 0.02, wakeT + 0.02, uWake * 1.06 - 0.02);
     light = cc * 0.5 * fin * wash * on * (1.0 + 0.6 * gWave + 0.5 * gShow);
   } else {
@@ -179,7 +180,7 @@ void main() {
     float mini = max(miniX, miniY);
     if (mini > 0.0) {
       float area = (1.0 - 2.0 * g.x) * (g.z - g.y);
-      float wakeT = across * 0.86 + 0.06;
+      float wakeT = clamp(across, 0.0, 1.0) * 0.86 + 0.06;
       float on = smoothstep(wakeT - 0.02, wakeT + 0.02, uWake * 1.06 - 0.02);
       float cy = floor(vCell.y);
       vec3 floorMean = vec3(0.0);
@@ -196,7 +197,7 @@ void main() {
       float segShare = clamp(float(Ts) / 256.0, 0.0, 1.0) * 0.76 + 0.06;
       vec3 segMean = (uWarm * 0.8 + uCool * 0.2) * (0.92 * hs * segShare * area);
       vec3 mean = mix(floorMean, segMean, miniY) * on;
-      if (uLift.y > 0.0 && face < 0.5) mean *= 1.0 - uLift.y * uLift.x;
+      if (uLift.y > 0.0 && face < 0.5 && group != 5) mean *= 1.0 - uLift.y * uLift.x;
       acc.rgb = mix(acc.rgb, mean, mini);
       acc.a = mix(acc.a, area, mini);
     }

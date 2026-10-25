@@ -19,6 +19,8 @@ export const SEG_SOLID = 3; // a spire or mast, no windows
 export const GROUP_NONE = 0;
 export const GROUP_LOW_BLOCK = 4; // the compact low-rise block at the far left (Civic AI Club)
 // groups 1, 2, 3 are the three small low clusters (AI Simply)
+/** The flank districts west and east of the main skyline (Sheung Wan and Wan Chai to North Point). */
+export const GROUP_FLANK = 5;
 
 export interface Segment {
   /** Center x, base y, center z, and size. */
@@ -66,8 +68,12 @@ export interface Tower {
 
 export interface CityLayout {
   towers: Tower[];
+  /** The main skyline (the stops, highlights and the signal's windows all live here). */
   xMin: number;
   xMax: number;
+  /** The whole city including the flank districts either side. */
+  fullMin: number;
+  fullMax: number;
   width: number;
   /** z of the frontmost face, roughly where window samples sit. */
   zFront: number;
@@ -324,6 +330,75 @@ export function generateCity(towerCount: number, seed: number): CityLayout {
     };
   };
 
+  // ---- Flank districts, west and east of the main skyline ----
+  // Lower and sparser than the main skyline (mostly 40 to 140 m, a few up to about 200 m, always
+  // well under the Central cluster and the 20 tallest towers that carry the aviation lights), so
+  // the north shore reads as one continuous city across a wide first screen, densest and tallest
+  // left of centre. They come after everything else and draw from their own random stream, so no
+  // tower, landmark or group of the main skyline changes. Never in front of the main skyline's
+  // front faces (zFront).
+  const fr = mulberry32(seed ^ 0xf1a4c3);
+  const flankW = Math.round(width * 0.64);
+  const aviationFloor = [...towers].sort((a, b) => b.tip - a.tip)[19]?.roof ?? 240;
+  const flankTop = Math.min(205, aviationFloor * 0.85);
+  let flankId = towers.reduce((m, t) => Math.max(m, t.id), 0) + 1;
+  const flank = (side: -1 | 1) => {
+    const x0 = side < 0 ? xMin - flankW : xMax;
+    // the main rows' density, a little over half of it
+    const rowsF = [
+      { row: 0, z: ROWS[0].z, zJ: ROWS[0].zJitter, n: Math.round(regular * ROWS[0].share * 0.55 * (flankW / width)), hs: ROWS[0].heightScale },
+      { row: 1, z: ROWS[1].z, zJ: ROWS[1].zJitter, n: Math.round(regular * ROWS[1].share * 0.55 * (flankW / width)), hs: ROWS[1].heightScale },
+      { row: 2, z: ROWS[2].z, zJ: ROWS[2].zJitter, n: Math.round(regular * ROWS[2].share * 0.55 * (flankW / width)), hs: ROWS[2].heightScale },
+      { row: 1, z: -128, zJ: 18, n: Math.round(towerCount * 0.24 * 0.6 * (flankW / width)), hs: 0 },
+      { row: 2, z: -292, zJ: 24, n: Math.round(towerCount * 0.2 * 0.6 * (flankW / width)), hs: 0 },
+    ];
+    for (const rf of rowsF) {
+      const spacing = flankW / Math.max(1, rf.n);
+      let prev: { h: number; form: number; w: number } | null = null;
+      for (let i = 0; i < rf.n; i++) {
+        const x = x0 + (i + 0.5) * spacing + (fr() - 0.5) * spacing * 0.4;
+        // 0 at the main skyline's edge, 1 at the far end of the flank
+        const out = side < 0 ? (xMin - x) / flankW : (x - xMax) / flankW;
+        const fade = 1 - 0.45 * smooth01(out);
+        let h: number;
+        let form: number;
+        if (rf.hs === 0) {
+          // fill blocks between the rows
+          h = (26 + 62 * Math.pow(fr(), 1.2)) * fade;
+          form = [F_SLAB, F_PODIUM, F_LOW][pick(fr, [0.55, 0.2, 0.25])];
+        } else {
+          h = 40 + 100 * Math.pow(fr(), 1.5);
+          if (fr() < 0.06 * (1 - out)) h = 150 + 55 * fr();
+          h *= rf.hs * fade;
+          form = h > 120 ? [F_SLAB, F_SETBACK, F_CROWN, F_SLIM][pick(fr, [0.34, 0.26, 0.2, 0.2])] : [F_SLAB, F_SLIM, F_WIDE, F_PODIUM, F_CROWN][pick(fr, [0.34, 0.2, 0.14, rf.row === 0 ? 0.18 : 0.06, 0.14])];
+        }
+        let w = clamp(spacing * between(fr, 0.6, 1.0), 16, 62);
+        let d = between(fr, 18, 38);
+        if (form === F_SLIM) {
+          w = between(fr, 14, 22);
+          d = between(fr, 14, 22);
+        } else if (form === F_WIDE) {
+          w = clamp(spacing * between(fr, 1.1, 1.5), 40, 88);
+          d = between(fr, 28, 48);
+          h = between(fr, 36, 76) * fade;
+        }
+        if (prev) {
+          if (form === prev.form) form = form === F_SLAB ? F_PODIUM : F_SLAB;
+          if (Math.abs(h - prev.h) < Math.max(h, prev.h) * 0.13) h *= fr() < 0.5 ? 0.8 : 1.24;
+          if (Math.abs(w - prev.w) < 4) w += fr() < 0.5 ? -6 : 6;
+        }
+        h = clamp(h, 22, flankTop);
+        prev = { h, form, w };
+        let z = rf.z + (fr() - 0.5) * 2 * rf.zJ;
+        z = Math.min(z, zFront - 1 - d / 2);
+        const t = makeTower(fr, { id: flankId++, row: rf.row, x, z, w, d, h, form, group: GROUP_FLANK });
+        towers.push(t);
+      }
+    }
+  };
+  flank(-1);
+  flank(1);
+
   // Rows sorted by x keep neighbours together for anything that walks the city.
   towers.sort((a, b) => a.row - b.row || a.x - b.x);
 
@@ -331,6 +406,8 @@ export function generateCity(towerCount: number, seed: number): CityLayout {
     towers,
     xMin,
     xMax,
+    fullMin: xMin - flankW,
+    fullMax: xMax + flankW,
     width,
     zFront,
     zBack,
@@ -372,7 +449,7 @@ function makeTower(r: Rng, s: TowerSpec): Tower {
   const office = glazing === 1 || glazing === 2;
   let L = Math.round(between(r, office ? 88 : 74, office ? 160 : 148));
   if (r() < 0.12) L = Math.round(between(r, 30, 60)); // a few mostly dark towers
-  if (group) L = Math.round(between(r, 70, 120));
+  if (group && group !== GROUP_FLANK) L = Math.round(between(r, 70, 120));
 
   const t: Tower = {
     id: s.id,

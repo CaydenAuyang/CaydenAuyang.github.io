@@ -265,9 +265,27 @@ const START_STOP = LAST_STOP;
     box-shadow: 0 0 0 6px var(--focus-halo);
   }
 
+  /* Inside the glass, a soft night ellipse under the text (the glass alone is night at 45%): the dim
+     struck words are small text now and need 4.5:1 where the panel sits over the lit city. */
+  .qp__views {
+    position: relative;
+  }
+  .qp__views::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--space-3) * -1) calc(var(--space-4) * -1);
+    z-index: -1;
+    background: radial-gradient(
+      closest-side,
+      rgb(var(--night-rgb) / 0.5) 0%,
+      rgb(var(--night-rgb) / 0.5) 78%,
+      rgb(var(--night-rgb) / 0) 100%
+    );
+    pointer-events: none;
+  }
   .qp__text {
     font-size: var(--fs-mission);
-    line-height: 1.45;
+    line-height: 1.55;
     max-width: 34ch;
     text-wrap: pretty;
   }
@@ -306,8 +324,11 @@ const START_STOP = LAST_STOP;
     1px background, so it can draw left to right as the scrubber passes; forced colors get a real
     line-through.
   */
+  /* Struck words are dim at lead size (small text, 4.5:1): the strong halo keeps them clear where
+     the glass sits over the lit city. */
   .qp__text :global(.qp__del) {
     color: var(--dim);
+    text-shadow: var(--halo-strong);
     text-decoration: none;
     background: linear-gradient(var(--strike), var(--strike)) no-repeat 0 58% / 100% 1px;
     transition:

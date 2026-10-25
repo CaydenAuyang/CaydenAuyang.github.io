@@ -21,7 +21,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import type { CityLayout, Segment, Tower } from './city';
-import { SEG_WINDOWS } from './city';
+import { GROUP_FLANK, SEG_WINDOWS } from './city';
 import { mulberry32 } from './random';
 
 // ---- The rule (TypeScript) ------------------------------------------------------------------
@@ -179,8 +179,8 @@ export function visibleFrom(city: CityLayout, wins: FrontWindow[], cx: number, c
   const segs: { s: Segment; t: Tower }[] = [];
   for (const t of city.towers) for (const s of t.segs) segs.push({ s, t });
   const B = 40;
-  const x0 = city.xMin - 400;
-  const nb = Math.ceil((city.width + 800) / B);
+  const x0 = city.fullMin - 400;
+  const nb = Math.ceil((city.fullMax - city.fullMin + 800) / B);
   const buckets: number[][] = Array.from({ length: nb }, () => []);
   segs.forEach(({ s }, i) => {
     const a = Math.max(0, Math.floor((s.x - s.w / 2 - x0) / B));
@@ -254,7 +254,9 @@ export function sampleWindows(
 ): SampleResult {
   const mr = Math.fround(maxRank);
   const idx: number[] = [];
-  for (let i = 0; i < wins.length; i++) if (vis[i] && liftRank(wins[i].wh) < mr) idx.push(i);
+  // The flank districts give no windows to the signal: the samples are the main skyline's, the same
+  // set and order as before the flanks existed.
+  for (let i = 0; i < wins.length; i++) if (vis[i] && wins[i].tower.group !== GROUP_FLANK && liftRank(wins[i].wh) < mr) idx.push(i);
   // Fixed shuffle so every visit and every call picks the same windows.
   const r = mulberry32(0x51c4a1 ^ city.seed);
   for (let i = idx.length - 1; i > 0; i--) {

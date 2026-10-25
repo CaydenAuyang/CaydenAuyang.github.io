@@ -20,7 +20,7 @@ import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { archive, experience } from '../../data/content';
 import { ignite } from '../ui/ignite';
-import { titleHtml } from '../ui/title';
+import { titleHtml, titleWmax } from '../ui/title';
 
 const { civic, wisers } = experience;
 const headline = ignite(experience.heading);
@@ -33,7 +33,14 @@ const headline = ignite(experience.heading);
         <h2 id="experience-title" class="h2" {...headline.attrs} set:html={titleHtml(experience.heading)} />
         <div class="xp__civic stack">
           <div class="xp__where">
-            <h3 class="t-project xp__org" set:html={titleHtml(civic.name, 'Civic Exchange')} />
+            <!-- "CIVIC EXCHANGE" whole (5.96em), not just its longest word: it sits right at the
+                 column's width, so fitting the whole phrase keeps it on one line in the stand-in
+                 font and in Barlow alike (no reflow when the font arrives). -->
+            <h3
+              class="t-project xp__org"
+              style="--wmax: 5.958"
+              set:html={titleHtml(civic.name, 'Civic Exchange')}
+            />
             <p class="t-meta">{civic.meta.text}</p>
           </div>
           <p class="t-lead">{civic.lead.text}</p>
@@ -88,7 +95,11 @@ const headline = ignite(experience.heading);
     <div class="wisers__frame">
       <div class="wrap grid">
         <div class="wisers__block scrim">
-          <h3 class="t-project xp__org" set:html={titleHtml(wisers.name, 'Wisers')} />
+          <h3
+            class="t-project xp__org"
+            style={`--wmax: ${titleWmax('Wisers')}`}
+            set:html={titleHtml(wisers.name, 'Wisers')}
+          />
           <p class="t-meta">{wisers.meta.text}</p>
           <ol class="wisers__summers">
             {
@@ -189,8 +200,7 @@ const headline = ignite(experience.heading);
      Central and of the Wisers pictures (WISERS_ANCHOR, left sky, x 0.1 to 0.5). Each block's scrim
      stops short of the pictures: it is masked off from 13% of the block's width left of the text
      (about 0.54 of the window at 1024 to 1440, 0.53 at 1920; the columns end near 0.51) and fades
-     in to full by the text's edge, so it never dims some columns and not others. Titles are capped
-     to the column's width (--col-right), so a long single word never overflows it. */
+     in to full by the text's edge, so it never dims some columns and not others. */
   @media (min-width: 1024px) {
     .xp__block,
     .wisers__block {
@@ -202,13 +212,10 @@ const headline = ignite(experience.heading);
       -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
-    .xp__block .h2 {
-      /* "EXPERIENCE" is 4.47em wide in Barlow Condensed 700. */
-      font-size: min(var(--fs-h2), var(--col-right) / 4.6);
-    }
-    .xp__org {
-      /* "CIVIC EXCHANGE," is 6.18em. */
-      font-size: min(var(--fs-project), var(--col-right) / 6.3);
+    .xp__block,
+    .wisers__block {
+      /* Titles here fit their longest word to the right column (base.css --wmax). */
+      --fit-w: var(--col-right);
     }
   }
 
@@ -241,9 +248,6 @@ const headline = ignite(experience.heading);
     }
     .wisers__block > .t-meta {
       margin-top: var(--space-1);
-    }
-    .wisers__block :global(.t-tail) {
-      margin-top: 0.15em;
     }
   }
   .wisers__summer {
@@ -291,13 +295,14 @@ const headline = ignite(experience.heading);
     box-shadow: 0 0 10px rgb(var(--window-rgb) / 0.7);
   }
 
-  /* Held (motion on): a 260vh track whose one-screen frame stays still for 160vh of scroll, like the
-     work stops. Desktop: the text centered in the right column. Phones: the text at the bottom of
+  /* Held (with JavaScript, motion on or off: holding still isn't motion): a 260vh track whose
+     one-screen frame stays still for 160vh of scroll, like the work stops, so each picture gets
+     its time. Desktop: the text centered in the right column. Phones: the text at the bottom of
      the screen, below the pictures (WISERS_ANCHOR.phone ends at 0.48 of the height). */
-  :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers {
+  :global(html.js:not([data-snapshot])) .wisers {
     height: 260vh;
   }
-  :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers__frame,
+  :global(html.js:not([data-snapshot])) .wisers__frame,
   :global(html[data-snapshot]) .wisers__frame {
     position: sticky;
     top: 0;
@@ -306,11 +311,22 @@ const headline = ignite(experience.heading);
     padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
   }
   @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait) {
-    :global(html.js:not([data-motion='off']):not([data-snapshot])) .wisers__frame,
+    :global(html.js:not([data-snapshot])) .wisers__frame,
     :global(html[data-snapshot]) .wisers__frame {
       justify-content: flex-end;
       padding-top: calc(48vh + var(--space-3));
       padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    }
+  }
+  /* Printing: no held track (it would print an empty page); the frame is one screen in the flow. */
+  @media print {
+    .wisers {
+      height: auto !important;
+    }
+    .wisers__frame {
+      position: static !important;
+      height: auto !important;
+      min-height: 100vh;
     }
   }
   /* Snapshot: two screens, the frame held across both (2024, then 2025). */
@@ -318,7 +334,7 @@ const headline = ignite(experience.heading);
     height: 200vh;
     margin-top: 0;
   }
-  /* Reduced motion and no JavaScript: one screen of its own in the flow. */
+  /* No JavaScript: one screen of its own in the flow. */
   @media (min-width: 768px) {
     .wisers__frame {
       min-height: 100vh;

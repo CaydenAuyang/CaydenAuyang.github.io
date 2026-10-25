@@ -48,9 +48,9 @@ const headline = ignite(people.heading);
     .people__block {
       grid-column: 8 / span 5;
     }
-    /* "PEOPLE" is 2.77em: capped so it fits the column at the widest screens. */
-    .people__block .h2 {
-      font-size: min(var(--fs-h2), var(--col-right) / 2.9);
+    /* The headline fits its word to the column (base.css --wmax). */
+    .people__block {
+      --fit-w: var(--col-right);
     }
   }
 </style>

@@ -201,6 +201,13 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     path = buildCameraPath(city, camera.aspect, isPhoneFrame());
+    // Distance haze starts a kilometre short of the hero camera, so the city band along the bottom
+    // of the first screen keeps the clarity it had when the hero stood closer.
+    const fogStart = Math.max(city.width * 0.55, path.heroDistance - 1000);
+    for (const m of [skyline, harbour.mesh, peak, lights.points]) {
+      const f = (m.material as { uniforms?: { uFog?: { value: Vector3 } } }).uniforms?.uFog?.value;
+      if (f) f.z = fogStart;
+    }
     placeCamera();
     scheduleBakes();
     requestRender();
@@ -357,6 +364,9 @@ export async function createWorld(opts: WorldOptions): Promise<World> {
     },
     lightShow(on: boolean) {
       beams.setShow(on);
+    },
+    setBeamKeepOut(boxes) {
+      beams.setKeepOut(boxes);
     },
     get lightShowOn() {
       return beams.showOn;

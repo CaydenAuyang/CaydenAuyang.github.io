@@ -67,6 +67,7 @@ const { menu = false } = Astro.props;
 
 <script>
   import '../scripts/menu';
+  import '../scripts/header';
 </script>
 
 <style>
@@ -88,7 +89,11 @@ const { menu = false } = Astro.props;
   }
   /* Text scrolls right under the name and Menu, so the header's own 64px are solid night
      (nothing runs into its words or ghosts through beside them), then the backing fades out over
-     the next 48px. The sky's top is night too, so the band doesn't show as a bar. */
+     the next 48px. At the very top of the page it is clear, so it never dims the figure's crown;
+     it fades in over the first scroll (src/scripts/header.ts adds .is-scrolled after 16px, long
+     before any hero text could reach the header). Without JavaScript it simply stays on. With
+     reduced motion it switches without a transition (base.css). The name and Menu keep their own
+     text-shadow, so they read over the sky. */
   .site-header::before {
     content: '';
     position: absolute;
@@ -102,6 +107,10 @@ const { menu = false } = Astro.props;
       rgb(var(--night-rgb) / 0) 100%
     );
     pointer-events: none;
+    transition: opacity 300ms var(--ease-out);
+  }
+  :global(html.js) .site-header:not(:global(.is-scrolled))::before {
+    opacity: 0;
   }
 
   .site-header__name,

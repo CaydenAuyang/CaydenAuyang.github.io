@@ -60,22 +60,23 @@ export interface TierInfo {
 
 /**
  * The figure (target B) at the hero key: its center, and its height as a share of viewport height.
- * Desktop puts it right of center so the hero text (a wide two-line name plus two short lines)
- * sits to its left over dark sky; phones stack the figure above the text.
+ * Spec v3.1 puts the name on one line filling the content width from 1024px up (two lines on
+ * phones), so the figure sits centered in the sky above it, and the name, the line and the small
+ * line stack between the figure's bottom and the tower tops.
  */
 export const FIGURE_ANCHOR = {
-  desktop: { x: 0.64, y: 0.36, height: 0.5 },
-  phone: { x: 0.5, y: 0.27, height: 0.3 },
+  desktop: { x: 0.5, y: 0.27, height: 0.38 },
+  phone: { x: 0.5, y: 0.22, height: 0.26 },
 };
 
 /**
  * Hero framing the world's camera must hit at the hero key: the tallest tower tops sit at
  * skylineTop and the waterline at horizon (fractions of viewport height from the top). Hero text
- * stays above skylineTop, over dark sky.
+ * stays above skylineTop, over dark sky, with the skyline and harbour as a band along the bottom.
  */
 export const HERO_FRAMING = {
-  desktop: { skylineTop: 0.66, horizon: 0.86 },
-  phone: { skylineTop: 0.76, horizon: 0.9 },
+  desktop: { skylineTop: 0.82, horizon: 0.92 },
+  phone: { skylineTop: 0.83, horizon: 0.92 },
 };
 
 /** Phones use the phone anchors and framing below this width (CSS px). */

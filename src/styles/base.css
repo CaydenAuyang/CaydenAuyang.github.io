@@ -306,17 +306,27 @@ html[data-snapshot] .world-canvas {
   font-weight: var(--fw-name);
   color: var(--c-headline);
 }
+/*
+  A title keeps its spec size (--s) unless its longest word (--wmax, in em, from title.ts) would run
+  past its block (--fit-w: the content width, or the right column on desktop), with 3% to spare.
+  One more rule keeps a title from wrapping differently in the stand-in font than in Barlow: where
+  the whole title (--wall) only just fits on one line, or only just doesn't (between 93% and 105%
+  of the block, --a being the size at which it exactly fits), it is set at 93% of --a, so it sits on
+  one line with room in both fonts. Everywhere else the first two terms leave --s alone.
+*/
 .h2 {
-  font-size: var(--fs-h2);
+  --s: min(var(--fs-h2), var(--fit-w, var(--content-w)) / (var(--wmax, 4.5) * 1.03));
+  --a: calc(var(--fit-w, var(--content-w)) / var(--wall, 99));
+  font-size: max(min(var(--s), var(--a) * 0.93), clamp(0px, (var(--s) - var(--a) * 1.05) * 1000, var(--s)));
   color: var(--c-headline);
 }
 .t-project {
   position: relative;
-  font-size: var(--fs-project);
+  font-size: min(var(--fs-project), var(--fit-w, var(--content-w)) / (var(--wmax, 6) * 1.03));
   color: var(--c-sub);
 }
-/* Organisation and project names often sit over the lit skyline, and some of their words are neon
-   (the darkest title color): a soft scrim of their own, under the block's. */
+/* Organisation and project names often sit over the lit skyline: a soft scrim of their own, under
+   the block's. */
 .t-project::before {
   content: '';
   position: absolute;
@@ -336,9 +346,10 @@ html[data-snapshot] .world-canvas {
   color: var(--c-label);
 }
 /*
-  Title words, each in its own color (src/components/ui/title.ts, content.ts titleColors). The
-  color travels as custom properties, so the neon ignition can strike each letter in its word's
-  color: --tc the color, --tc-rgb its channels, --tc-hot the white-hot flash of a tube striking.
+  Title words, each in its own color, only window, cool or text (src/components/ui/title.ts,
+  content.ts titleColors). The color travels as custom properties, so the neon ignition can strike
+  each letter in its word's color: --tc the color, --tc-rgb its channels, --tc-hot the white-hot
+  flash of a tube striking.
 */
 .tw {
   color: var(--tc);
@@ -353,11 +364,6 @@ html[data-snapshot] .world-canvas {
   --tc-rgb: var(--cool-rgb);
   --tc-hot: #f2f8ff;
 }
-.tw--neon {
-  --tc: var(--neon);
-  --tc-rgb: var(--neon-rgb);
-  --tc-hot: #ffc8dc;
-}
 .tw--text {
   --tc: var(--text);
   --tc-rgb: var(--text-rgb);
@@ -369,20 +375,11 @@ html[data-snapshot] .world-canvas {
     0 0 22px rgb(var(--tc-rgb) / 0.28),
     var(--halo);
 }
-/* Neon is the darkest title color: over the lit city it keeps the tighter, darker halo. */
-.tw--neon {
-  text-shadow: var(--halo-strong);
-}
-.h2 .tw--neon {
-  text-shadow:
-    0 0 22px rgb(var(--tc-rgb) / 0.28),
-    var(--halo-strong);
-}
 /* The rest of a long organisation name ("Hong Kong", "Information Limited, Hong Kong"): a
    smaller line of its own under the colored name, in the same heading. */
 .t-tail {
   display: block;
-  margin-top: 0.3em;
+  margin-top: var(--space-2);
   font-size: var(--fs-summer);
   color: var(--c-meta);
 }
@@ -409,7 +406,7 @@ html[data-snapshot] .world-canvas {
   line-height: 1.5;
   color: var(--c-meta);
 }
-/* Small neon and dim text: the city (or the figure in the still shown without WebGL) can pass
+/* Small labels and dim text: the city (or the figure in the still shown without WebGL) can pass
    behind it on scroll, and a 60% scrim isn't enough for small text over a lit window. So it
    carries the tight strong halo and a small scrim of its own that hugs the words: night at 60%
    under the block plus 60% under the line leaves the light at 16% (tokens.css). */
@@ -464,6 +461,35 @@ html.js-ignite .is-lit .ign__l {
   color: inherit;
   text-shadow: inherit;
   animation: none;
+}
+/* Still alive after the ignition: a letter (or a word) blinks off and back on, over --flick
+   (80 to 200 ms), set by src/scripts/ignite.ts. Only color and glow change. */
+html.js-ignite .is-lit .ign__l.is-flicker {
+  animation: ign-flick var(--flick, 140ms) linear;
+}
+@keyframes ign-flick {
+  0%,
+  40% {
+    color: rgb(var(--tc-rgb) / 0.16);
+    text-shadow: var(--halo);
+  }
+  41%,
+  55% {
+    color: rgb(var(--tc-rgb) / 0.6);
+    text-shadow: var(--halo);
+  }
+  56%,
+  75% {
+    color: rgb(var(--tc-rgb) / 0.16);
+    text-shadow: var(--halo);
+  }
+  76%,
+  100% {
+    color: var(--tc);
+    text-shadow:
+      0 0 22px rgb(var(--tc-rgb) / 0.28),
+      var(--halo);
+  }
 }
 /* One flicker: strike, drop out, strike again and hold. */
 @keyframes ign-a {
@@ -782,7 +808,7 @@ main,
 .action-link:hover {
   text-decoration-color: var(--window);
 }
-/* Like the small neon and dim lines, a link carries a small scrim of its own: the lit skyline or
+/* Like the small labels and dim lines, a link carries a small scrim of its own: the lit skyline or
    the harbour's reflections can sit right behind it. */
 .action-link {
   position: relative;

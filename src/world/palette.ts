@@ -8,7 +8,7 @@ export const PALETTE = {
   glow: srgb('#2B2140'), // light-pollution haze along the horizon, fog color
   window: srgb('#FFB65C'), // lit windows (80%)
   cool: srgb('#CFE3FF'), // lit windows (20%), stars
-  neon: srgb('#FF4F8B'), // aviation lights only
+  aviation: srgb('#E5483B'), // the blinking aviation lights only (nothing else in the world is red or pink)
   peak: srgb('#0A0F1F'), // the Peak: navy one step lighter than night
   facade: srgb('#070A14'), // tower walls
 };

@@ -120,12 +120,26 @@ export function buildLights(city: CityLayout, shared: PeakUniforms, density: num
   }
   // Aviation lights on the 20 tallest towers.
   const aviation = aviationPoints(city, 20);
-  for (const a of aviation) add(a.x, a.y, a.z, PALETTE.neon, 1.25, 6.5, 1, r(), 0.7);
+  for (const a of aviation) add(a.x, a.y, a.z, PALETTE.aviation, 1.25, 6.5, 1, r(), 0.7);
   // The ferry: a row of warm cabin lights, a green starboard light, a white masthead light.
   const fz = 700 + r() * 300;
   for (let k = 0; k < 6; k++) add(-12 + k * 4.5, 4.5, fz, warm, 0.75, 2.0, 2, 0, 0);
   add(-15, 5.5, fz + 2, [0.25, 1.0, 0.55], 0.9, 2.6, 2, 0, 0);
   add(4, 13, fz, [1, 1, 1], 0.8, 2.0, 2, 0, 0);
+
+  // The promenade under the flank districts, from its own random stream (so the lights above keep
+  // their places).
+  const rf = mulberry32(city.seed ^ 0x51f7);
+  for (const [a, b] of [
+    [city.fullMin - 200, city.xMin - 200],
+    [city.xMax + 200, city.fullMax + 200],
+  ]) {
+    for (let x = a; x < b; x += 16 + rf() * 12) {
+      if (rf() < 0.3) continue;
+      const col = rf() < 0.7 ? warm : cool;
+      add(x, 3 + rf() * 2, 6 + rf() * 4, col, 0.3 + 0.3 * rf(), 1.3 + rf() * 0.7, 0, 0, across(x));
+    }
+  }
 
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(P), 3));

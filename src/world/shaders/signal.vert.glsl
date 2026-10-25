@@ -4,8 +4,8 @@
 // flows between the two along a curved path with a per-point delay and curl noise that peaks
 // mid-flight. Target ids: 0 A city, 1 B figure, 2 C current, 3 D archive, 4 E two lights, 5 S star
 // field, 6 F1 feed, 7 F2 shoe, 8 G screen agent. The figure (B) places itself from its own
-// attributes (the video-built point set). In the Wisers pictures (6 to 8) w is the colour class
-// (0 window, 1 cool, 2 neon, 3 white) plus the brightness (0 to 0.99).
+// attributes (the video-built point set). In the Wisers pictures (6 to 8) w packs the colour class
+// (0 window, 1 cool, 2 white) and the brightness (see live()).
 
 precision highp float;
 precision highp int;
@@ -73,6 +73,7 @@ uniform float uFigTorsoRatio;
 uniform float uFigDot;
 uniform float uFigGain;
 uniform vec3 uFigColor;
+uniform float uBackDot; // the backing disc's size (CSS px), wide enough to close the gaps between dots
 uniform float uScan;
 // The Wisers pictures (F1, F2, G): the box's centre and its axes in the world (one box height
 // each), the point size of each picture (CSS px), their brightness, the feed's loop (its lowest v,
@@ -86,7 +87,6 @@ uniform float uPicGain;
 uniform vec4 uFeed;
 uniform float uAgentPhase;
 uniform vec2 uAgentKnots[5];
-uniform vec3 uNeon;
 // Brightness a point carries up from its window in flight, and how it is shared out: x the share
 // of points that carry most of it, y their multiple of uCarry, z everyone else's, w how much
 // larger the carriers draw in flight toward a dark target (the field).
@@ -194,7 +194,6 @@ vec3 picWorld(vec2 uv) {
 vec3 classColor(float cls) {
   if (cls < 0.5) return uWarm;
   if (cls < 1.5) return uCool;
-  if (cls < 2.5) return uNeon;
   return vec3(1.0, 0.97, 0.92);
 }
 
@@ -243,7 +242,19 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out ve
     p += (uFlowDir * c.x * uFlowAmp.x + vec3(0.0, c.y * uFlowAmp.y, 0.0) + uFlowFwd * c.z * uFlowAmp.z) * dep;
     p.y = max(p.y, uWaterY + 0.002 * dep);
     fade = smoothstep(0.0, 0.1, s) * (1.0 - smoothstep(0.9, 1.0, s));
-    alpha = (0.2 + 0.5 * aRand.y) * fade;
+    // The band is laid out for the question view. Seen from farther back (the camera still
+    // dollying in), the water foreshortens and the band packs into a thin line that additive
+    // light turns into a hot white bar; dim it by how much smaller the band's patch of water looks
+    // from here than from the question view, so its light per pixel stays the same.
+    vec3 eye = -transpose(mat3(modelViewMatrix)) * modelViewMatrix[3].xyz;
+    float hc = max(eye.y - uWaterY, 0.5);
+    float hq = max(uFlowEye.y - uWaterY, 0.5);
+    vec3 dcv = p - eye;
+    vec3 dqv = p - uFlowEye;
+    float dc2 = dot(dcv.xz, dcv.xz);
+    float dq2 = dot(dqv.xz, dqv.xz);
+    float area = (hc / (dc2 + hc * hc)) / (hq / (dq2 + hq * hq)) * sqrt((dq2 + hq * hq) / (dc2 + hc * hc));
+    alpha = (0.2 + 0.5 * aRand.y) * fade * clamp(area, 0.12, 1.0);
     return p;
   }
   if (k == 3) {
@@ -275,30 +286,31 @@ vec3 live(int k, vec4 b, out float alpha, out float fade, out float size, out ve
     return p;
   }
   if (k >= 6) {
-    // The Wisers pictures: w is 4 * (offset + 512) + the colour class + the brightness, where the
-    // offset (feed only) is the point's height above its card's centre in thousandths of the box.
+    // The Wisers pictures: w is 4 * (offset + 512) + the colour class (0 window, 1 cool, 2 white)
+    // + the brightness, where the offset (feed only) is the point's height above its card's centre
+    // in thousandths of the box.
     float fw = floor(b.w + 1e-4);
     float cls = mod(fw, 4.0);
     col = classColor(cls);
     alpha = (b.w - fw) * uPicGain;
     vec3 p = b.xyz;
     if (k == 6) {
-      // F1, the feed: it scrolls up like a feed, looping. Each card fades in and out as a whole
-      // by where its centre is (so no stray edge of a card floats alone at the top or bottom),
-      // and nothing draws outside the box.
+      // F1, the feed: it scrolls up like a feed, looping. Each card moves and fades in and out
+      // as a whole by where its centre is (over a band at least half the tallest card), so no
+      // card is ever cut by the box's edge and no stray edge of one floats alone.
       float v = dot(b.xyz - uPicOrigin, uPicY) / dot(uPicY, uPicY);
       float dv = (floor(fw / 4.0) - 512.0) / 1000.0;
       float vc = v - dv;
       float vc2 = uFeed.x + mod(vc + t * uFeed.z - uFeed.x, uFeed.y);
       float v2 = vc2 + dv;
       p = b.xyz + uPicY * (v2 - v);
-      float card = smoothstep(-0.5, -0.5 + uFeed.w, vc2) * (1.0 - smoothstep(0.5 - uFeed.w, 0.5, vc2));
-      fade = card * step(-0.5, v2) * step(v2, 0.5);
+      fade = smoothstep(-0.5, -0.5 + uFeed.w, vc2) * (1.0 - smoothstep(0.5 - uFeed.w, 0.5, vc2)) * step(-0.5, v2) * step(v2, 0.5);
       alpha *= fade;
     } else if (k == 8) {
       // G, the screen agent's 6 s loop: five boxes draw in one after another (the screen being
       // read), a dotted path through them (the plan), then the cursor travels it with a click
-      // ripple at each box (the action); everything but the screen fades out at the end.
+      // ripple at each box (the action); everything but the screen fades out at the end. Boxes in
+      // cool, the path, cursor and ripples in white.
       int role = int(aShape.x + 0.5);
       float ph = uAgentPhase;
       float endFade = 1.0 - smoothstep(5.6, 5.95, ph);
@@ -388,6 +400,12 @@ void main() {
     float nb = snoise(P0 * (1.4 / uScale) + vec3(5.2), gb);
     float ang = TAU * (0.5 * nb + 0.12 * aRand.z);
     vec3 ctrl = 0.5 * (P0 + P1) + (s1 * cos(ang) + s2 * sin(ang)) * L * (0.12 + 0.16 * aRand.z);
+    // The current lies on the water, nearer the camera than anything it comes from or goes to: a
+    // straight path would skim the water far out and bunch every point into one bright line at
+    // the horizon. So points come forward first and drop onto it from above (and leave it rising
+    // first).
+    if (uTo == 2 && uFrom != 2) ctrl = mix(ctrl, vec3(P1.x, P0.y, P1.z), 0.8);
+    if (uFrom == 2 && uTo != 2) ctrl = mix(ctrl, vec3(P0.x, P1.y, P0.z), 0.8);
     float u = 1.0 - e;
     pos = u * u * P0 + 2.0 * u * e * ctrl + e * e * P1;
     flight = sin(3.14159265 * e);
@@ -438,6 +456,24 @@ void main() {
   vCore = mix(uFrom == 1 ? 0.0 : tidyF ? 0.3 : core, uTo == 1 ? 0.0 : tidyT ? 0.3 : core, e);
   vDot = mix(tidyF ? 1.0 : 0.0, tidyT ? 1.0 : 0.0, e);
 
+
+#ifdef BACKING
+  // The figure's backing (signal.ts): a dark disc under every figure dot, drawn before the light,
+  // so the stars and the searchlight's haze behind him don't show through. The figure's own
+  // colour is untouched (it adds on top, as on the references' dark ground). Only the B end
+  // counts, and only once a dot has landed (or before it leaves), so nothing dark flies.
+  float onB = clamp((uTo == 1 ? smoothstep(0.8, 1.0, e) : 0.0) + (uFrom == 1 ? 1.0 - smoothstep(0.0, 0.2, e) : 0.0), 0.0, 1.0);
+  onB *= step(0.5, uTo == 1 ? aTo.w : position.w);
+  vAlpha = onB;
+  if (onB < 0.01) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 0.0;
+    return;
+  }
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  gl_PointSize = uBackDot * uPixelRatio;
+  return;
+#endif
 
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   if (alpha < 0.002) {
