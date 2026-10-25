@@ -1,7 +1,12 @@
 ---
-// Experience.astro: section 3. Civic Exchange first with the full block (place, meta, lead, four
-// facts, and the full summer section from the long copy behind More), then Wisers: one entry with
-// two summers, 2024 first.
+// Experience.astro: section 3. Civic Exchange first with the full block (place, meta, the
+// supervisor line, lead, four facts, and the full summer section from the long copy behind More),
+// then Wisers: one entry with two summers, 2024 first.
+//
+// Civic Exchange (`.xp__track`): on desktop with motion on, a track whose one-screen frame
+// (`.xp__wrap`) holds still for about 70vh once the twelve columns stand, so the whole block can be
+// read with the columns still beside it (V4 section 1). The timeline lets go (`.is-tall`) while an
+// open More panel makes the block taller than the window.
 //
 // The archive (NIGHT-SIGNAL.md 11b.3): the twelve columns of light the signal raises over Central
 // are sized by the notebooks' real document counts. Screen readers get the same data as a
@@ -20,74 +25,70 @@ import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { archive, experience } from '../../data/content';
 import { ignite } from '../ui/ignite';
-import { titleHtml, titleWmax } from '../ui/title';
+import { titleHtml } from '../ui/title';
 
 const { civic, wisers } = experience;
 const headline = ignite(experience.heading);
 ---
 
 <section id="experience" class="scene xp" data-scene="experience" aria-labelledby="experience-title">
-  <div class="wrap grid xp__wrap">
-    <div class="xp__block scrim">
-      <div class="xp__main">
-        <h2 id="experience-title" class="h2" {...headline.attrs} set:html={titleHtml(experience.heading)} />
-        <div class="xp__civic stack">
-          <div class="xp__where">
-            <!-- "CIVIC EXCHANGE" whole (5.96em), not just its longest word: it sits right at the
-                 column's width, so fitting the whole phrase keeps it on one line in the stand-in
-                 font and in Barlow alike (no reflow when the font arrives). -->
-            <h3
-              class="t-project xp__org"
-              style="--wmax: 5.958"
-              set:html={titleHtml(civic.name, 'Civic Exchange')}
-            />
-            <p class="t-meta">{civic.meta.text}</p>
+  <div class="xp__track">
+    <div class="wrap grid xp__wrap">
+      <div class="xp__block scrim">
+        <div class="xp__main">
+          <h2 id="experience-title" class="h2" {...headline.attrs} set:html={titleHtml(experience.heading)} />
+          <div class="xp__civic stack">
+            <div class="xp__where">
+              <h3 class="t-project xp__org" set:html={titleHtml(civic.name, 'Civic Exchange')} />
+              <p class="t-meta">{civic.meta.text}</p>
+              <p class="t-meta xp__supervisor">{civic.supervisor.text}</p>
+            </div>
+            <p class="t-lead">{civic.lead.text}</p>
+            <ul class="facts">
+              {
+                civic.facts.map((fact) => (
+                  <li>
+                    {fact.text}
+                    {fact.archive && (
+                      <ul class="sr-only">
+                        {archive.columns.map((col) => (
+                          <li>{archive.label(col.topic, col.count)}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))
+              }
+            </ul>
           </div>
-          <p class="t-lead">{civic.lead.text}</p>
-          <ul class="facts">
-            {
-              civic.facts.map((fact) => (
-                <li>
-                  {fact.text}
-                  {fact.archive && (
-                    <ul class="sr-only">
-                      {archive.columns.map((col) => (
-                        <li>{archive.label(col.topic, col.count)}</li>
+        </div>
+
+        <More id="experience-more" label={civic.moreLabel} class="xp__more">
+          {
+            civic.more.map((block) => (
+              <>
+                {block.text && (
+                  <p>
+                    <strong>{block.title}</strong> {block.text.text}
+                  </p>
+                )}
+                {block.list && (
+                  <>
+                    <p>
+                      <strong>{block.title}</strong>
+                    </p>
+                    <ul>
+                      {block.list.map((item) => (
+                        <li>{item.text}</li>
                       ))}
                     </ul>
-                  )}
-                </li>
-              ))
-            }
-          </ul>
-        </div>
+                  </>
+                )}
+              </>
+            ))
+          }
+        </More>
       </div>
-
-      <More id="experience-more" label={civic.moreLabel} class="xp__more">
-        {
-          civic.more.map((block) => (
-            <>
-              {block.text && (
-                <p>
-                  <strong>{block.title}</strong> {block.text.text}
-                </p>
-              )}
-              {block.list && (
-                <>
-                  <p>
-                    <strong>{block.title}</strong>
-                  </p>
-                  <ul>
-                    {block.list.map((item) => (
-                      <li>{item.text}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </>
-          ))
-        }
-      </More>
     </div>
   </div>
 
@@ -95,11 +96,7 @@ const headline = ignite(experience.heading);
     <div class="wisers__frame">
       <div class="wrap grid">
         <div class="wisers__block scrim">
-          <h3
-            class="t-project xp__org"
-            style={`--wmax: ${titleWmax('Wisers')}`}
-            set:html={titleHtml(wisers.name, 'Wisers')}
-          />
+          <h3 class="t-project xp__org" set:html={titleHtml(wisers.name, 'Wisers')} />
           <p class="t-meta">{wisers.meta.text}</p>
           <ol class="wisers__summers">
             {
@@ -138,8 +135,23 @@ const headline = ignite(experience.heading);
     margin-top: var(--space-5);
   }
   .xp__where {
+    position: relative;
     display: grid;
     gap: var(--space-2);
+  }
+  /* The Civic Exchange header rises through the Mission current's densest band while the columns
+     form (C to D), and the block's own scrim fades out toward its top. A denser scrim of its own
+     keeps the meta and supervisor lines at 4.5:1 over the stream (they measured 2.1 to 2.5). */
+  .xp__where::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--space-4) * -1) calc(var(--space-6) * -1);
+    z-index: -1;
+    background: var(--scrim-dense);
+    pointer-events: none;
+  }
+  .xp__supervisor {
+    max-width: var(--measure);
   }
   .xp .facts {
     margin-top: var(--space-4);
@@ -212,10 +224,51 @@ const headline = ignite(experience.heading);
       -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
-    .xp__block,
-    .wisers__block {
-      /* Titles here fit their longest word to the right column (base.css --wmax). */
-      --fit-w: var(--col-right);
+  }
+
+  /*
+    Civic Exchange held (desktop, motion on, JavaScript on, not snapshot; V4 section 1): a 170vh
+    track whose one-screen frame stays still for 70vh of scroll once the twelve columns stand, the
+    block centered in it, as Wisers and the work stops are held. The track's height is in the CSS
+    from the first paint. The timeline adds .is-tall while an open More panel makes the block taller
+    than the frame; then it scrolls normally. The frame keeps its padding either way, so the
+    timeline's fit test reads the same held or not. Phones, reduced motion and snapshot don't hold.
+  */
+  @media (min-width: 1024px) {
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__wrap {
+      box-sizing: border-box;
+      padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
+    }
+    /* The menu and the lift land where the hold starts (the track's top, under the section's top
+       padding): Civic Exchange in its frame with the columns whole. */
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp {
+      scroll-margin-top: calc(var(--space-9) * -1);
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track:not(.is-tall) {
+      height: 170vh;
+    }
+    /* Let go, the block keeps the place it had in the frame (set by the timeline). */
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track.is-tall .xp__wrap {
+      padding-top: var(--civic-top, calc(var(--header-h) + var(--space-3)));
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track:not(.is-tall) .xp__wrap {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      align-content: center;
+    }
+  }
+  /* Short desktop windows (1024 x 768, 1280 x 720): a tighter frame and one smaller gap, so the
+     block (about 680px at 1024 wide) still fits and holds. */
+  @media (min-width: 1024px) and (max-height: 820px) {
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__wrap {
+      padding-block: calc(var(--header-h) + var(--space-2)) var(--space-3);
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__track.is-tall .xp__wrap {
+      padding-top: var(--civic-top, calc(var(--header-h) + var(--space-2)));
+    }
+    :global(html.js:not([data-motion='off']):not([data-snapshot])) .xp__civic {
+      margin-top: var(--space-4);
     }
   }
 
@@ -328,6 +381,12 @@ const headline = ignite(experience.heading);
     .xp__wrap {
       display: block !important;
       margin-bottom: 0 !important;
+      position: static !important;
+      height: auto !important;
+      padding-block: 0 !important;
+    }
+    .xp__track {
+      height: auto !important;
     }
     /* Snapshot's two desktop screens (below) are for captures: on wide paper they centred the
        block in 200vh and left the section's first page blank. */

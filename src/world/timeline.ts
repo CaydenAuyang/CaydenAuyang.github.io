@@ -45,18 +45,22 @@ interface Morph {
 const BEATS: Record<SceneKey, Beat> = {
   hero: { key: 'hero', arrive: 0, morph: { hold: 'B' } },
   question: { key: 'question', arrive: 0.9, morph: { from: 'B', to: 'C', over: [0.05, 0.75] } },
-  experience: { key: 'experience', arrive: 0.8, morph: { from: 'C', to: 'D', over: [0.05, 0.7] } },
-  // Wisers is held on screen (spec v3: 320 to 480vh): the columns become the 2024 feed, the feed
-  // folds into the shoe, then the shoe becomes the 2025 screen agent. Summer 2024 is the
-  // highlighted line for the first half, Summer 2025 for the second (data-beat on the section).
+  // The twelve columns are whole by the time EXPERIENCE nears the top of the window (V4 section 1),
+  // and the camera has arrived with them, so they stand still while Civic Exchange is held
+  // (desktop) or read (phones).
+  experience: { key: 'experience', arrive: 0.25, morph: { from: 'C', to: 'D', over: [0, 0.25] } },
+  // Wisers is held on screen: the columns become the 2024 feed, the feed folds into the shoe, then
+  // the shoe becomes the 2025 screen agent, each picture held a while before the next (V4 section
+  // 1). The feed starts once the Wisers frame is held. Summer 2024 is the highlighted line until
+  // the middle of the last morph, Summer 2025 after it (data-beat on the section).
   wisers: {
     key: 'wisers',
     arrive: 0.3,
     morph: {
       steps: [
-        { from: 'D', to: 'F1', over: [0.02, 0.16] },
-        { from: 'F1', to: 'F2', over: [0.26, 0.42] },
-        { from: 'F2', to: 'G', over: [0.54, 0.68] },
+        { from: 'D', to: 'F1', over: [0.08, 0.2] },
+        { from: 'F1', to: 'F2', over: [0.32, 0.46] },
+        { from: 'F2', to: 'G', over: [0.6, 0.72] },
       ],
     },
   },
@@ -196,6 +200,9 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
    *     archive columns dissolving back into the city) gets real scroll length on phones too. On
    *     desktop the CSS holds each one still for about 120vh (spec section 6), unless an opened
    *     More panel makes it taller than the window: then it scrolls normally so nothing is cut off.
+   *   - Civic Exchange, at the top of Experience, is held the same way on desktop (V4 section 1):
+   *     its frame stays still for about 70vh once the columns stand, inside the experience scene,
+   *     whose progress runs through the hold (see holdCivic()).
    *   - Contact starts as soon as it enters the window, so the two lights have room to gather.
    *   - Everything else starts when its top reaches the middle of the window.
    */
@@ -214,8 +221,84 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     return bottom + padBottom <= window.innerHeight + 1;
   }
 
+  /**
+   * Civic Exchange's hold (Experience.astro): a sticky frame (.xp__wrap) in a taller track
+   * (.xp__track), in CSS on desktop with motion. Like a project's, it lets go (.is-tall) while an
+   * open More panel makes the block taller than the window, and takes hold again once it fits.
+   * Either change moves the block on the page, so the scroll moves with it and the reader keeps
+   * their place: the block stays put while it is on screen, and what follows it once it has gone
+   * by. Let go, the block keeps the place it had in the frame (--civic-top), so a reader inside
+   * the hold stays inside the experience scene's hold too, with the columns whole and still.
+   * Opening More lets go at the click, before the panel grows, so it opens downward in the flow
+   * instead of spreading both ways inside the frame.
+   */
+  const civicTrack = document.querySelector<HTMLElement>('.xp__track');
+  const civicFrame = civicTrack?.querySelector<HTMLElement>('.xp__wrap') ?? null;
+  const civicBlock = civicFrame?.querySelector<HTMLElement>('.xp__block') ?? null;
+  function holdCivic(tall: boolean) {
+    if (!civicTrack || !civicFrame || !civicBlock || civicTrack.classList.contains('is-tall') === tall) return;
+    const box = civicBlock.getBoundingClientRect();
+    if (tall) {
+      // Never above the frame's own padding (a block taller than its frame overflows it upward).
+      const offset = Math.max(parseFloat(getComputedStyle(civicFrame).paddingTop) || 0, box.top - civicFrame.getBoundingClientRect().top);
+      civicTrack.style.setProperty('--civic-top', `${Math.round(offset)}px`);
+    }
+    const anchor = box.bottom > 0 && box.top < window.innerHeight ? civicBlock : box.bottom <= 0 ? (civicTrack.nextElementSibling as HTMLElement | null) : null;
+    const before = anchor?.getBoundingClientRect().top ?? 0;
+    civicTrack.classList.toggle('is-tall', tall);
+    if (!anchor) return;
+    let shift = anchor.getBoundingClientRect().top - before;
+    if (Math.abs(shift) < 1) return;
+    if (anchor === civicBlock && !tall) {
+      // Held again, the block only moves with the page while its frame isn't stuck, so the frame
+      // goes where the block is back at `before`: still coming in (block at or below its place in
+      // the frame), or already going out, its bottom on the track's (block above its place).
+      const track = civicTrack.getBoundingClientRect();
+      const frame = civicFrame.getBoundingClientRect();
+      const want = before - (civicBlock.getBoundingClientRect().top - frame.top);
+      shift = track.top - (want >= 0 ? want : want - (track.height - frame.height));
+    }
+    const y = window.scrollY + shift;
+    if (lenis) lenis.scrollTo(y, { immediate: true, force: true });
+    else window.scrollTo(0, y);
+  }
+  if (pinning && civicFrame) {
+    document.addEventListener(
+      'click',
+      (event) => {
+        const btn = (event.target as Element | null)?.closest?.('.xp__more [data-more-btn]');
+        if (btn && btn.getAttribute('aria-expanded') !== 'true') holdCivic(true);
+      },
+      true,
+    );
+  }
+
+  /**
+   * The experience scene's length with Civic Exchange's More shut. The columns' morph and the
+   * camera's arrival are shares of the scene (both done at 0.25), and an open panel makes the scene
+   * longer (it opens inside it, and on desktop the hold lets go), so measured as is they would
+   * slide back under the reader who opened it. While the panel is open the scene keeps the length
+   * it had shut at this window size (after a resize, its length less the panel's height).
+   * Snapshot's layout has every panel open.
+   */
+  const civicIndex = scenes.findIndex((sc) => sc.key === 'experience');
+  const civicPanel = civicTrack?.querySelector<HTMLElement>('[data-more-panel]') ?? null;
+  let civicLength = 0;
+  let civicSize = '';
+  ScrollTrigger.addEventListener('refresh', () => {
+    const st = triggers[civicIndex];
+    const next = triggers[civicIndex + 1];
+    if (!st || !next) return;
+    const size = `${window.innerWidth}x${window.innerHeight}`;
+    const open = !snapshot && !!civicPanel?.hasAttribute('data-open');
+    if (open && size === civicSize) return;
+    civicLength = next.start - st.start - (open && civicPanel ? civicPanel.offsetHeight : 0);
+    civicSize = size;
+  });
+
   function build() {
     triggers.forEach((st) => st.kill(true));
+    if (pinning && civicFrame) holdCivic(!frameFits(civicFrame));
     triggers = scenes.map(({ key, el }) => {
       if (el.hasAttribute('data-pin')) {
         // Desktop with motion: the CSS holds each project's frame still for 120vh (a sticky frame
@@ -235,9 +318,16 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         // its progress runs from its top reaching the top of the window.
         return ScrollTrigger.create({ trigger: el, start: 'top top', end: 'bottom bottom' });
       }
+      if (key === 'experience' && !motion && !snapshot) {
+        // Reduced motion cuts the current to the columns as soon as EXPERIENCE enters the window
+        // (see apply()), so the Civic Exchange header never rises through the current, which sat
+        // right behind its meta lines (2.2 to 1).
+        return ScrollTrigger.create({ trigger: el, start: 'top 90%', end: 'bottom center' });
+      }
       if (key === 'contact') {
-        // Snapshot freezes People on the star field and Contact on the two lights, so Contact
-        // starts at the middle of the window there; live, it starts as soon as it enters.
+        // Snapshot freezes More work on the city and Contact on the two lights, and its screens
+        // follow straight on, so Contact starts at the middle of the window there; live, it starts
+        // as soon as it enters.
         return ScrollTrigger.create({ trigger: el, start: snapshot ? 'top center' : 'top bottom', end: 'bottom bottom' });
       }
       return ScrollTrigger.create({ trigger: el, start: 'top center', end: 'bottom center' });
@@ -248,6 +338,19 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   // A More toggle changes a section's height: rebuild the triggers from scratch.
   window.addEventListener('world:layout', build);
+  // A resize, or the web font arriving, can change whether Civic Exchange fits its frame.
+  if (pinning && civicTrack && civicFrame) {
+    let timer = 0;
+    const recheck = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (civicTrack.classList.contains('is-tall') !== frameFits(civicFrame)) return;
+        build();
+      }, 200);
+    };
+    window.addEventListener('resize', recheck);
+    document.fonts?.ready.then(recheck);
+  }
 
   // Wisers: which summer's line is highlighted, in step with the pictures (the page styles
   // [data-beat]): 2025 from the middle of the shoe-to-screen morph, where the picture becomes the
@@ -364,7 +467,9 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     if (!st) return { index: 0, p: 0, y };
     const next = triggers[index + 1];
     // The last scene (Contact) runs to the bottom of the page, so its morph can complete.
-    const end = next ? next.start : Math.max(st.start + 1, ScrollTrigger.maxScroll(window));
+    let end = next ? next.start : Math.max(st.start + 1, ScrollTrigger.maxScroll(window));
+    // Civic Exchange's open More doesn't stretch the experience scene (see civicLength).
+    if (index === civicIndex && civicLength > 0) end = Math.min(end, st.start + civicLength);
     return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)), y };
   }
 
@@ -440,7 +545,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         // there's never a stretch with neither picture in frame.
         const first = 'over' in beat.morph ? beat.morph : 'steps' in beat.morph ? beat.morph.steps[0] : null;
         const cutAt = first ? (first.over[0] + first.over[1]) / 2 : beat.arrive / 2;
-        a = snapshot || p >= cutAt ? 1 : 0;
+        a = snapshot || p >= cutAt || scene.key === 'experience' ? 1 : 0;
         if (scene.key === 'question' || beat === WORK_INTRO) a = snapshot || clear === 1 ? 1 : 0;
         // The figure can cut away before the Mission scene starts: the camera goes with it.
         if (scene.key === 'hero' && clear === 1) {
@@ -460,15 +565,15 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       } else {
         world.setIntro({ sky: 1, wake: 1 });
         if ('hold' in beat.morph) {
-          // The hero's figure starts leaving once THE MISSION is on its way up.
+          // The hero's figure starts leaving once the Mission panel is on its way up.
           if (scene.key === 'hero' && clear > 0) signal?.setMorph('B', 'C', clear);
           else signal?.setMorph(beat.morph.hold, beat.morph.hold, 1);
         } else if ('steps' in beat.morph) {
           // Several morphs in a row: the last one that has started (or the first, before any).
-          // Snapshot looks 0.3 ahead with each picture finished, so a section's first screen
+          // Snapshot looks 0.4 ahead with each picture finished, so a section's first screen
           // shows its second picture (the shoe) and its second screen the last (the screen agent).
           const steps = beat.morph.steps;
-          const at = snapshot ? p + 0.3 : p;
+          const at = snapshot ? p + 0.4 : p;
           let k = 0;
           steps.forEach((st, i) => {
             if (at >= st.over[0]) k = i;
@@ -481,7 +586,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         } else {
           const { from, to, over } = beat.morph;
           let t = Math.max(span(p, over[0], over[1]), clear);
-          if (snapshot) t = 1;
+          if (snapshot || (cutting && scene.key === 'experience')) t = 1;
           signal?.setMorph(from, to, t);
         }
       }
