@@ -14,6 +14,9 @@ uniform float uPulseOn;
 uniform vec3 uBeamBase[BEAMS]; // searchlights: lamp (world), direction times length, brightness and radius
 uniform vec3 uBeamDir[BEAMS];
 uniform vec4 uBeamK[BEAMS];
+uniform vec4 uKeep[KEEP_OUT]; // keep-out boxes (viewport fractions from the top left): no beam light there
+uniform float uKeepN;
+uniform float uKeepW[KEEP_OUT]; // how far each box has faded in
 varying vec3 vColor;
 varying vec3 vSz; // point size (px), core sigma (px), halo weight
 
@@ -80,9 +83,17 @@ void main() {
   float b = aStar.y * tw + flash * (1.3 + 0.5 * aStar.y);
 
   // Stars seen through a searchlight's beam brighten a little: the line of sight to the star (from
-  // the camera) passes through the cone.
+  // the camera) passes through the cone. Not inside the keep-out boxes, where the beam is cut.
   vec3 sd = normalize(p);
+  vec2 sf = vec2(0.5 + 0.5 * gl_Position.x / gl_Position.w, 0.5 - 0.5 * gl_Position.y / gl_Position.w);
+  float keepS = 1.0;
+  for (int i = 0; i < KEEP_OUT; i++) {
+    if (float(i) >= uKeepN) break;
+    vec4 bx = uKeep[i];
+    if (sf.x > bx.x - 0.04 && sf.x < bx.z + 0.04 && sf.y > bx.y - 0.04 && sf.y < bx.w + 0.04) keepS = min(keepS, 1.0 - uKeepW[i]);
+  }
   for (int i = 0; i < BEAMS; i++) {
+    if (keepS <= 0.0) break;
     vec4 K = uBeamK[i];
     if (K.x <= 0.0) continue;
     vec3 D = uBeamDir[i];
@@ -98,7 +109,7 @@ void main() {
     vec3 q = w0 + sd * sc - D * uc;
     float r = K.y + uc * K.z;
     float inside = exp(-dot(q, q) / (r * r) * 2.2) * (1.0 - uc / L);
-    b *= 1.0 + min(0.5, 2.5 * K.x) * inside;
+    b *= 1.0 + min(0.5, 2.5 * K.x) * inside * keepS;
   }
   float size = aStar.x * uPixelRatio * (0.75 + 0.25 * haze) * (1.0 + 1.4 * flash);
   // A core narrower than a pixel changes shape as the star drifts across the pixel grid, so the

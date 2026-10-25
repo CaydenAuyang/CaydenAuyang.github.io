@@ -16,7 +16,7 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import Lenis from 'lenis';
-import { usePhoneLayout, type SceneKey, type Signal, type Target, type World } from './contract';
+import { FIGURE_ANCHOR, usePhoneLayout, wisersBox, type SceneKey, type Signal, type Target, type World } from './contract';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -312,10 +312,47 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   }
 
   /**
+   * Titles never cross a drawn picture (spec section 3). The figure and the screen agent sit where
+   * the next section's title arrives, so they leave over a stretch of scroll measured from that
+   * title rather than from the scene: from the title's top entering the window to its reaching
+   * the picture's bottom edge, less a small gap. Their morphs are always at least this far along.
+   * Reduced motion and snapshot cut picture and camera together late in the stretch (CLEAR_CUT),
+   * once the hero text has risen clear of the Mission view's skyline.
+   *
+   * `reach` is how far along the morph must be when the title arrives. The figure is gone by the
+   * middle of its morph, so its stretch runs on past the title (FIGURE_REACH): the camera's dolly
+   * to the Mission view, which moves with it, gets twice the scroll.
+   */
+  const CLEAR_GAP = 24;
+  const CLEAR_CUT = 0.9;
+  const FIGURE_REACH = 0.5;
+  function clearance(selector: string, pictureBottom: () => number, reach = 1): (y: number) => number {
+    const title = document.querySelector<HTMLElement>(selector);
+    let from = 0;
+    let to = 1;
+    const measure = () => {
+      if (!title) return;
+      const top = title.getBoundingClientRect().top + window.scrollY;
+      from = top - window.innerHeight;
+      to = Math.max(from + 1, from + (top - pictureBottom() * window.innerHeight - CLEAR_GAP - from) / reach);
+    };
+    measure();
+    ScrollTrigger.addEventListener('refresh', measure);
+    return (y) => (title ? span(y, from, to) : 0);
+  }
+  /** The figure leaves as THE MISSION rises toward it (B into C). */
+  const figureClear = clearance('#mission-title', () => {
+    const a = usePhoneLayout(window.innerWidth, window.innerHeight) ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
+    return a.y + a.height / 2;
+  }, FIGURE_REACH);
+  /** The screen agent leaves as SELECTED WORK rises toward it (G into A). */
+  const agentClear = clearance('#work-title', () => wisersBox(window.innerWidth, window.innerHeight).y1);
+
+  /**
    * The scene the viewport is in (the last one whose start we have passed) and how far through it
    * we are, measured from its start to the next scene's start (the last scene uses its own end).
    */
-  function current(): { index: number; p: number } {
+  function current(): { index: number; p: number; y: number } {
     // Lenis's animated position is fractional, so morphs glide smoothly to rest instead of
     // stepping one whole pixel at a time at the end of a smooth scroll.
     const y = lenis ? lenis.animatedScroll : window.scrollY;
@@ -324,11 +361,11 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       if (y >= st.start - 1) index = i;
     });
     const st = triggers[index];
-    if (!st) return { index: 0, p: 0 };
+    if (!st) return { index: 0, p: 0, y };
     const next = triggers[index + 1];
     // The last scene (Contact) runs to the bottom of the page, so its morph can complete.
     const end = next ? next.start : Math.max(st.start + 1, ScrollTrigger.maxScroll(window));
-    return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)) };
+    return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)), y };
   }
 
   // ---- World half ----
@@ -369,7 +406,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     let lightsOn = false;
 
     function apply() {
-      const { index, p } = current();
+      const { index, p, y } = current();
       const scene = scenes[index];
       if (!scene) return;
 
@@ -382,17 +419,36 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       }
       const beat = scene.beat;
       const prevKey = index > 0 ? scenes[index - 1].beat.key : beat.key;
+      // How far the picture in the next title's way must have left (see clearance()).
+      const figureLeaving = scene.key === 'hero' || scene.key === 'question';
+      const agentLeaving = scene.key === 'wisers' || beat === WORK_INTRO;
+      const along = figureLeaving ? figureClear(y) : agentLeaving ? agentClear(y) : 0;
+      const clear = cutting ? (along >= CLEAR_CUT * (figureLeaving ? FIGURE_REACH : 1) ? 1 : 0) : along;
 
       // Camera: arrive at this scene's key over the first part of the scene.
       let a = beat.arrive > 0 ? span(p, 0, beat.arrive) : 1;
+      let toKey = beat.key;
+      // The figure's points land in the current, which is placed for the Mission view, so the
+      // camera moves there with them: seen from the hero's view, the current is a far pile of
+      // points on the horizon that drew no more than a dot and cost over 20 ms a frame to blend.
+      if (!cutting && figureLeaving && clear > 0) {
+        a = Math.max(scene.key === 'hero' ? 0 : a, clear);
+        toKey = 'question';
+      }
       if (cutting) {
         // Cut the camera with the picture: at the morph's midpoint, where the signal cuts, so
         // there's never a stretch with neither picture in frame.
         const first = 'over' in beat.morph ? beat.morph : 'steps' in beat.morph ? beat.morph.steps[0] : null;
         const cutAt = first ? (first.over[0] + first.over[1]) / 2 : beat.arrive / 2;
         a = snapshot || p >= cutAt ? 1 : 0;
+        if (scene.key === 'question' || beat === WORK_INTRO) a = snapshot || clear === 1 ? 1 : 0;
+        // The figure can cut away before the Mission scene starts: the camera goes with it.
+        if (scene.key === 'hero' && clear === 1) {
+          a = 1;
+          toKey = 'question';
+        }
       }
-      world.setCameraProgress(lerp(keys[prevKey], keys[beat.key], easeInOut(a)));
+      world.setCameraProgress(lerp(keys[prevKey], keys[toKey], easeInOut(a)));
 
       // Highlight for the project stops.
       const strength = beat.highlight ? (snapshot ? 1 : plateau(p)) : 0;
@@ -404,7 +460,9 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       } else {
         world.setIntro({ sky: 1, wake: 1 });
         if ('hold' in beat.morph) {
-          signal?.setMorph(beat.morph.hold, beat.morph.hold, 1);
+          // The hero's figure starts leaving once THE MISSION is on its way up.
+          if (scene.key === 'hero' && clear > 0) signal?.setMorph('B', 'C', clear);
+          else signal?.setMorph(beat.morph.hold, beat.morph.hold, 1);
         } else if ('steps' in beat.morph) {
           // Several morphs in a row: the last one that has started (or the first, before any).
           // Snapshot looks 0.3 ahead with each picture finished, so a section's first screen
@@ -416,10 +474,13 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
             if (at >= st.over[0]) k = i;
           });
           const { from, to, over } = steps[k];
-          signal?.setMorph(from, to, snapshot ? 1 : span(at, over[0], over[1]));
+          // Past the last picture, the screen agent starts back into the city (WORK_INTRO's G
+          // into A) once SELECTED WORK is on its way up.
+          if (k === steps.length - 1 && clear > 0) signal?.setMorph(to, 'A', clear);
+          else signal?.setMorph(from, to, snapshot ? 1 : span(at, over[0], over[1]));
         } else {
           const { from, to, over } = beat.morph;
-          let t = span(p, over[0], over[1]);
+          let t = Math.max(span(p, over[0], over[1]), clear);
           if (snapshot) t = 1;
           signal?.setMorph(from, to, t);
         }

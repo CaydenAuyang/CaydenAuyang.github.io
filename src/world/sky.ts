@@ -18,7 +18,7 @@ import {
 import { PALETTE } from './palette';
 import { mulberry32 } from './random';
 import { PULSES, type PulseUniforms } from './pulse';
-import { BEAMS, type BeamUniforms, type ShowUniforms } from './lightshow';
+import { BEAMS, KEEP_OUT, type BeamUniforms, type ShowUniforms } from './lightshow';
 import skyVert from './shaders/sky.vert.glsl?raw';
 import skyFrag from './shaders/sky.frag.glsl?raw';
 import starsVert from './shaders/stars.vert.glsl?raw';
@@ -176,8 +176,11 @@ export function buildSky(shared: SkyUniforms, opts: SkyOptions): Sky {
         uBeamBase: shared.uBeamBase,
         uBeamDir: shared.uBeamDir,
         uBeamK: shared.uBeamK,
+        uKeep: shared.uKeep,
+        uKeepN: shared.uKeepN,
+        uKeepW: shared.uKeepW,
       },
-      defines: { PULSES, BEAMS },
+      defines: { PULSES, BEAMS, KEEP_OUT },
       blending: AdditiveBlending,
       depthWrite: false,
       transparent: true,

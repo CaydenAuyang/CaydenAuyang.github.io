@@ -21,7 +21,7 @@ const TAU = 0.085;
 /** How fast the footage's running brightness follows it (s). */
 const AVG_TAU = 2;
 /** Saturation floor for clips that have a hue. */
-const SAT_FLOOR = 0.7;
+const SAT_FLOOR = 0.8;
 
 export interface SpillUniforms {
   /** The spill color (saturation raised, full value, display 0..1) and how much of the light it takes (0..0.2). */
@@ -109,7 +109,7 @@ export function createSpill(U: SpillUniforms, motion: () => boolean, requestRend
         if (avg < 0) avg = lum;
         else avg += (lum - avg) * (1 - Math.exp(-Math.max(0, now - lastSample) / 1000 / AVG_TAU));
         lastSample = now;
-        const drive = Math.max(-1, Math.min(1, 0.7 * (lum - 0.3) + 4 * (lum - avg)));
+        const drive = Math.max(-1, Math.min(1, 1.0 * (lum - 0.3) + 6 * (lum - avg)));
         target.k = 1 + 0.85 * drive;
         target.a = MAX_MIX * s;
         if (center) {

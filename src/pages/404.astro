@@ -1,7 +1,8 @@
 ---
 // 404.astro: shown at any address that doesn't exist. GitHub Pages serves dist/404.html for
-// those. Same night, no scene: the still (or gradient) behind a short message. It has no
-// canonical link (Base.astro leaves it out on this page).
+// those. Same night, no scene: the night gradient behind a short message, in every mode (the
+// hero still would put the figure behind the title). It has no canonical link (Base.astro leaves
+// it out on this page).
 import Base from '../layouts/Base.astro';
 import { site, ui } from '../data/site';
 ---
@@ -17,7 +18,17 @@ import { site, ui } from '../data/site';
 </Base>
 
 <style>
+  /* The night gradient, never the hero still with the figure (which reduced motion would show). */
+  :global(.world-fallback[data-still]) {
+    background-image: var(--night-gradient) !important;
+  }
+  :global(.world-fallback[data-still]::before) {
+    display: none !important;
+  }
+  /* The message's scrim reaches past the section; clipped here, so the page doesn't scroll. */
   .nf {
+    overflow: hidden;
+    overflow: clip;
     display: flex;
     align-items: center;
     min-height: 100vh;

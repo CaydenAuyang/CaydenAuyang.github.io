@@ -2,10 +2,13 @@
 // (homes and roads on the slopes, the promenade, aviation lights, the ferry) in one Points draw.
 
 import {
-  AdditiveBlending,
+  AddEquation,
   BufferAttribute,
   BufferGeometry,
+  CustomBlending,
   Mesh,
+  OneFactor,
+  OneMinusSrcAlphaFactor,
   Points,
   ShaderMaterial,
   Vector3,
@@ -159,7 +162,14 @@ export function buildLights(city: CityLayout, shared: PeakUniforms, density: num
         uGlow: { value: new Vector3(...PALETTE.glow) },
         uFog: { value: cityFog(city) },
       },
-      blending: AdditiveBlending,
+      // Premultiplied over: lights with alpha 0 are added on top as before; the aviation dots
+      // (alpha up to 1) replace what is behind them, so the horizon haze can't tint them pink.
+      blending: CustomBlending,
+      blendEquation: AddEquation,
+      blendSrc: OneFactor,
+      blendDst: OneMinusSrcAlphaFactor,
+      blendSrcAlpha: OneFactor,
+      blendDstAlpha: OneMinusSrcAlphaFactor,
       depthWrite: false,
       transparent: true,
     }),

@@ -6,8 +6,9 @@
 // for a moment, so its strike draws, its insertion lights, and its note number glows (here and in
 // the notes list). The Previously, Edits and Now switch becomes three presets that move the handle
 // (0, 3, 4) and shows which one the handle is on. Reduced motion: the same changes, instant
-// (base.css). Snapshot keeps the fixed Edits view, so this doesn't run there; without JavaScript
-// the switch's CSS views stay.
+// (base.css). Snapshot keeps the fixed Edits view, so the scrubber doesn't run there: the switch
+// stays as the poster's key to the marked text, set to Edits and inert. Without JavaScript the
+// switch's CSS views stay.
 
 const html = document.documentElement;
 const root = document.querySelector<HTMLElement>('.qp');
@@ -15,7 +16,11 @@ const range = root?.querySelector<HTMLInputElement>('#qp-scrub');
 const scrub = root?.querySelector<HTMLElement>('[data-qp-scrub]');
 const marked = root?.querySelector<HTMLElement>('[data-qp-marked]');
 
-if (root && range && scrub && marked && !html.hasAttribute('data-snapshot')) {
+if (root && html.hasAttribute('data-snapshot')) {
+  const edits = root.querySelector<HTMLInputElement>('#qp-edits');
+  if (edits) edits.checked = true;
+  root.querySelector<HTMLElement>('[data-qp-switch]')?.setAttribute('inert', '');
+} else if (root && range && scrub && marked) {
   const texts: string[] = JSON.parse(range.dataset.texts || '[]');
   const last = Number(range.max);
   const editsStop = Number(range.dataset.editsStop);

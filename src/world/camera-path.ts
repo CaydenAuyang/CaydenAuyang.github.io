@@ -3,8 +3,8 @@
 // Each key is a position plus a heading (yaw, pitch). Positions run on a centripetal Catmull-Rom
 // spline; yaw and pitch run on their own cubic with Catmull-Rom tangents, limited so the heading
 // never swings past a key and back. Inside each segment the parameter is eased (power2.inOut), so
-// the camera settles into every key, except the moves into Since May and the first work stop,
-// which the timeline eases on its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
+// the camera settles into every key, except the moves into the Mission, Since May and the first
+// work stop, which the timeline eases on its own; People holds Since May's pose. No roll, ever: the camera always looks at a point with
 // world up.
 //
 // The hero key is solved, not guessed: for the current aspect it finds the distance and pitch
@@ -261,10 +261,11 @@ export function buildCameraPath(city: CityLayout, aspect: number, phone: boolean
     const b = poses[order[i + 1]];
     return a.pos.distanceTo(b.pos) < 1e-6 && a.yaw === b.yaw && a.pitch === b.pitch;
   });
-  // The moves into Since May and into the first work stop are not eased or curved here: the
-  // timeline eases them already, and easing them twice packed each turn into the middle of its
-  // scroll (Since May about 3.4 degrees per 20 px, the 55 degree turn into Work about 9.5).
-  const linear = order.map((_, i) => i < n - 1 && (order[i + 1] === 'since' || order[i + 1] === 'och'));
+  // The moves into the Mission, Since May and the first work stop are not eased or curved here:
+  // the timeline eases them already, and easing them twice packed each move into the middle of
+  // its scroll (Since May about 3.4 degrees per 20 px, the 55 degree turn into Work about 9.5,
+  // and two thirds of the dolly to the Mission in one wheel notch).
+  const linear = order.map((_, i) => i < n - 1 && ['question', 'since', 'och'].includes(order[i + 1]));
   const shape = (i: number, raw: number) => (linear[i] ? raw : ease(raw));
 
   return {

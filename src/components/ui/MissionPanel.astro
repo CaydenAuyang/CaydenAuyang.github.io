@@ -21,7 +21,9 @@
 // each insertion lights as the handle passes it, and its note number glows. Arrow keys move one
 // edit at a time; aria-valuetext says what each stop shows. With JavaScript the one marked
 // paragraph shows every stop (each edit is a span the script turns on and off); without it, the
-// switch shows the three fixed views. Snapshot: the marked version, no scrubber.
+// switch shows the three fixed views. Every view sits in one grid cell, as tall as the marked
+// version (the tallest), so nothing under or around the text moves when the view changes.
+// Snapshot: the marked version, no scrubber, and the switch on Edits as its key (inert).
 //
 // At build time it checks that the edits turn the Previously text into the Now text exactly; if
 // not, the build stops with an error, so a typo can't ship.
@@ -119,7 +121,7 @@ const START_STOP = LAST_STOP;
 
 <div class="qp">
   <div class="qp__panel glass">
-    <fieldset class="qp__switch" data-snapshot-hide>
+    <fieldset class="qp__switch" data-qp-switch>
       <legend class="sr-only">{ui.viewLegend}</legend>
       <input class="sr-only" type="radio" name="qp-view" id="qp-from" value="from" />
       <label for="qp-from">{views.from}</label>
@@ -133,6 +135,9 @@ const START_STOP = LAST_STOP;
       <p class="qp__text qp__view qp__view--from">{from.text}</p>
       <p class="qp__text qp__view qp__view--edits" data-qp-marked set:html={marked} />
       <p class="qp__text qp__view qp__view--to">{to.text}</p>
+      <!-- The scrubber's tallest stop (every edit marked), invisible: it holds the block at that
+           height, so the slider and the switch never move during a drag. -->
+      <p class="qp__text qp__view qp__ghost" aria-hidden="true" set:html={marked} />
     </div>
 
     <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide>
@@ -269,6 +274,7 @@ const START_STOP = LAST_STOP;
      struck words are small text now and need 4.5:1 where the panel sits over the lit city. */
   .qp__views {
     position: relative;
+    display: grid;
   }
   .qp__views::before {
     content: '';
@@ -290,17 +296,25 @@ const START_STOP = LAST_STOP;
     text-wrap: pretty;
   }
 
-  /* Now is the default and the only view without :has. */
+  /* Every view in one cell, so the block is always the tallest view's height. Now is the default
+     and the only view without :has. The others are hidden, not removed, so they keep the height. */
+  .qp__view {
+    grid-area: 1 / 1;
+  }
   .qp__view--from,
-  .qp__view--edits {
-    display: none;
+  .qp__view--edits,
+  .qp__ghost {
+    visibility: hidden;
   }
   .qp:has(#qp-from:checked) .qp__view--from,
   .qp:has(#qp-edits:checked) .qp__view--edits {
-    display: block;
+    visibility: visible;
   }
   .qp:has(#qp-from:checked) .qp__view--to,
   .qp:has(#qp-edits:checked) .qp__view--to {
+    visibility: hidden;
+  }
+  .qp__ghost {
     display: none;
   }
   @supports not selector(:has(*)) {
@@ -308,9 +322,19 @@ const START_STOP = LAST_STOP;
       display: none;
     }
   }
-  /* Snapshot: the marked version only. */
+  /* Snapshot: the switch reads Edits from the first paint (mission.ts then checks it and makes the
+     switch inert), and the marked version only. */
+  :global(html[data-snapshot]) .qp__switch input:checked:not(#qp-edits) + label {
+    background: none;
+    color: var(--dim);
+  }
+  :global(html[data-snapshot]) .qp__switch #qp-edits + label {
+    background: var(--text);
+    color: var(--night);
+  }
   :global(html[data-snapshot]) .qp__view--edits {
     display: block !important;
+    visibility: visible !important;
   }
   :global(html[data-snapshot]) .qp__view--from,
   :global(html[data-snapshot]) .qp__view--to {
@@ -395,13 +419,18 @@ const START_STOP = LAST_STOP;
     }
   }
 
-  /* With the scrubber, the one marked paragraph shows every stop. */
+  /* With the scrubber, the one marked paragraph shows every stop, and the ghost (every edit
+     marked) holds the block at the tallest stop's height. */
   .qp:global(.is-scrub) .qp__view--from,
   .qp:global(.is-scrub) .qp__view--to {
     display: none !important;
   }
   .qp:global(.is-scrub) .qp__view--edits {
     display: block !important;
+    visibility: visible !important;
+  }
+  .qp:global(.is-scrub) .qp__ghost {
+    display: block;
   }
 
   /* The scrubber: a native range input, 44px tall, a thin track that fills in window up to the
@@ -413,7 +442,7 @@ const START_STOP = LAST_STOP;
   /* Text color, not dim: the glass can sit over the lit skyline, and this is a control's label. */
   .qp__scrub-label {
     display: block;
-    margin-bottom: var(--space-1);
+    margin-bottom: var(--space-2);
     font-size: var(--fs-small);
     line-height: 1.5;
     color: var(--text);
@@ -493,6 +522,34 @@ const START_STOP = LAST_STOP;
     display: grid;
     gap: var(--space-4);
     max-width: var(--measure);
+  }
+  /* Beside the panel (768px and up) the notes scroll over the water where the signal's current
+     lands, which is brighter than the lit windows the 60% scrim is set for (tokens.css). So their
+     scrim, the same soft wide ellipse, holds night at 63%: every note line keeps 4.5:1 at the 99th
+     percentile through the Mission scroll, measured with the note text transparent and no halo. */
+  @media (min-width: 768px) {
+    .qp__notes.scrim::before {
+      background: radial-gradient(
+        closest-side,
+        rgb(var(--night-rgb) / 0.63) 0%,
+        rgb(var(--night-rgb) / 0.63) 55%,
+        rgb(var(--night-rgb) / 0.315) 78%,
+        rgb(var(--night-rgb) / 0) 100%
+      );
+    }
+  }
+  /* Phones: the same band as every block's (base.css), at 63% for the same reason: under the
+     panel the notes pass over the landed current too. */
+  @media (max-width: 767px) {
+    .qp__notes.scrim::before {
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0) 0,
+        rgb(var(--night-rgb) / 0.63) 160px,
+        rgb(var(--night-rgb) / 0.63) calc(100% - 160px),
+        rgb(var(--night-rgb) / 0) 100%
+      );
+    }
   }
   @media (min-width: 768px) and (max-width: 1023px) {
     .qp__notes {

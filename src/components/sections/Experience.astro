@@ -318,15 +318,45 @@ const headline = ignite(experience.heading);
       padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
     }
   }
-  /* Printing: no held track (it would print an empty page); the frame is one screen in the flow. */
+  /* Printing: no held track and no screen-sized spacing (either would print an empty page). The
+     phone layout's room for the archive band and the Wisers frame's screen height and room for
+     the pictures are for the world, which doesn't print; the text follows on. */
   @media print {
+    /* A block, not the page grid: as a grid item split over pages, Civic Exchange left a blank
+       page at the end of the print (Chrome, A4 landscape from a phone). On wide paper it keeps its
+       right column (8 to 12) by margin. */
+    .xp__wrap {
+      display: block !important;
+      margin-bottom: 0 !important;
+    }
+    /* Snapshot's two desktop screens (below) are for captures: on wide paper they centred the
+       block in 200vh and left the section's first page blank. */
+    .xp__block {
+      display: block !important;
+      min-height: 0 !important;
+    }
+    .xp__main {
+      margin-block: 0 !important;
+    }
+    .xp :global(.xp__more) {
+      margin-top: var(--space-3) !important;
+    }
     .wisers {
       height: auto !important;
+      margin-top: var(--space-6) !important;
     }
     .wisers__frame {
       position: static !important;
       height: auto !important;
-      min-height: 100vh;
+      min-height: 0 !important;
+      padding: 0 !important;
+      justify-content: flex-start !important;
+    }
+  }
+  @media print and (min-width: 1024px) {
+    .xp__block {
+      width: calc((100% - 11 * var(--space-5)) / 12 * 5 + 4 * var(--space-5));
+      margin-left: calc((100% - 11 * var(--space-5)) / 12 * 7 + 7 * var(--space-5));
     }
   }
   /* Snapshot: two screens, the frame held across both (2024, then 2025). */

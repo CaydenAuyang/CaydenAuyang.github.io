@@ -74,6 +74,7 @@ uniform float uFigDot;
 uniform float uFigGain;
 uniform vec3 uFigColor;
 uniform float uBackDot; // the backing disc's size (CSS px), wide enough to close the gaps between dots
+uniform float uBackR; // the backing disc's radius in figure heights
 uniform float uScan;
 // The Wisers pictures (F1, F2, G): the box's centre and its axes in the world (one box height
 // each), the point size of each picture (CSS px), their brightness, the feed's loop (its lowest v,
@@ -470,8 +471,18 @@ void main() {
     gl_PointSize = 0.0;
     return;
   }
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = uBackDot * uPixelRatio;
+  // Opaque discs wide enough that neighbours overlap. So the backing never spills past the
+  // silhouette as a dark halo, each disc moves inward by its radius along the dot's normal as seen
+  // on screen (a dot on the shoulder's top moves down, one on the cheek's edge moves in), shrinks
+  // a little where the surface is seen edge on, and never reaches below the bust's cut.
+  float headT = smoothstep(uFigYNeckBase, uFigYChin, aFigPos.y);
+  float ya = uFigYaw * mix(uFigTorsoRatio, 1.0, headT);
+  vec3 bn = vec3(aFigN.x * cos(ya) + aFigN.z * sin(ya), aFigN.y, -aFigN.x * sin(ya) + aFigN.z * cos(ya));
+  bn = vec3(bn.x, bn.y * cos(uFigPitch) - bn.z * sin(uFigPitch), bn.y * sin(uFigPitch) + bn.z * cos(uFigPitch));
+  float size = mix(0.55, 1.0, smoothstep(0.05, 0.3, abs(bn.z))) * clamp(aFigPos.y / uBackR, 0.3, 1.0);
+  vec3 bpos = pos - uFigBasis * vec3(bn.xy * uBackR * size, 0.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(bpos, 1.0);
+  gl_PointSize = uBackDot * size * uPixelRatio;
   return;
 #endif
 

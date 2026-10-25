@@ -149,7 +149,7 @@ void main() {
   }
 
   // Video spill: the reflections take on a little of the playing video's color, most under it.
-  if (uSpill.w > 0.0) refl = nsSpill(refl, 0.3 + 0.7 * nsSpillNear(vec2(gl_FragCoord.x, uSpillAt.y)));
+  if (uSpill.w > 0.0) refl = nsSpill(refl, 0.6 + 0.4 * nsSpillNear(vec2(gl_FragCoord.x, uSpillAt.y)));
 
   // The horizon's faint glow on the water near the shore.
   vec3 skyRefl = uGlow * 0.16 * exp(-ym / 140.0);

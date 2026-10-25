@@ -88,6 +88,13 @@ const vars = [
     height: 100svh;
     min-height: 520px;
   }
+  /* On paper the hero is the first page exactly: on a short page (A5 landscape) the 520px floor
+     spilled onto an empty second page. */
+  @media print {
+    .hero {
+      min-height: 0;
+    }
+  }
 
   /* Where the figure of light is drawn: a box for its description, invisible. */
   .hero__figure {
@@ -155,9 +162,13 @@ const vars = [
   }
 
   /*
-    Phones: a band of night at 60% under the whole stack (the spec's 60%, feathering out above and
-    below, clear of the figure, running past the screen's sides where main clips it); the small
-    line also carries the meta lines' halo and hugging scrim (t-meta).
+    Phones: a band of night at 60% under the stack (the spec's 60%, feathering in above it, clear
+    of the figure, running past the screen's sides where main clips it). Below, there is no room
+    to feather out under the text (the tower tops are 8px down), so it eases out across the small
+    line instead and is gone at the tower tops, leaving no edge across the horizon haze. The small
+    line's own scrim (t-meta) makes up the rest under it, as a wider, softer ellipse than the
+    usual hug, so it doesn't read as a second box. The small line keeps at least 5.8:1 with the
+    searchlight behind it.
     Short phones (700px tall or less): no scroll cue (it would sit beside the small line; it goes on
     the first scroll anyway).
   */
@@ -168,7 +179,22 @@ const vars = [
         to bottom,
         rgb(var(--night-rgb) / 0) 0,
         rgb(var(--night-rgb) / 0.6) var(--space-3),
-        rgb(var(--night-rgb) / 0.6) calc(100% - var(--space-2)),
+        rgb(var(--night-rgb) / 0.6) calc(100% - 56px),
+        rgb(var(--night-rgb) / 0.5) calc(100% - 44px),
+        rgb(var(--night-rgb) / 0.34) calc(100% - 30px),
+        rgb(var(--night-rgb) / 0.17) calc(100% - 16px),
+        rgb(var(--night-rgb) / 0.05) calc(100% - 6px),
+        rgb(var(--night-rgb) / 0) 100%
+      );
+    }
+    .hero__small.t-meta::before {
+      inset: -18px -40px;
+      background: radial-gradient(
+        closest-side,
+        rgb(var(--night-rgb) / 0.6) 0%,
+        rgb(var(--night-rgb) / 0.55) 40%,
+        rgb(var(--night-rgb) / 0.3) 70%,
+        rgb(var(--night-rgb) / 0.1) 88%,
         rgb(var(--night-rgb) / 0) 100%
       );
     }
@@ -395,6 +421,7 @@ const vars = [
 
 <script>
   import '../../scripts/hero-hint';
+  import '../../scripts/print-still';
   // The timeline hides the cue on the first scroll; this covers a page where it didn't load.
   const cue = document.querySelector('[data-scroll-cue]');
   if (cue) window.addEventListener('scroll', () => cue.classList.add('is-gone'), { once: true, passive: true });

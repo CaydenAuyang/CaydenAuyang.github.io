@@ -5,7 +5,9 @@
 //   titleHtml('Civic Exchange, Hong Kong', 'Civic Exchange')
 //     -> the colored words for "Civic Exchange", then "Hong Kong" on a smaller line of its own
 //        (<span class="t-tail">). The comma is kept for screen readers only (the line break stands
-//        in for it on screen), so the heading still reads word for word as written.
+//        in for it on screen), so the heading still reads word for word as written. It stays in
+//        the text flow (.sr-inline, base.css): a hidden comma taken out of the flow (.sr-only)
+//        makes the heading's name "Civic Exchange , Hong Kong", with a space before it.
 // Each .tw carries its color as custom properties (base.css), which the neon ignition reads, so a
 // headline's letters strike in their word's color. The build stops if a title has no colors.
 import { titleColors } from '../../data/content';
@@ -65,7 +67,7 @@ export function titleHtml(text: string, lead: string = text): string {
   let tail = text.slice(lead.length);
   let comma = '';
   if (tail.startsWith(',')) {
-    comma = '<span class="sr-only">,</span>';
+    comma = '<span class="sr-inline">,</span>';
     tail = tail.slice(1);
   }
   const head = words.map((w, i) => `<span class="tw tw--${colors[i]}">${esc(w)}</span>`).join(' ');

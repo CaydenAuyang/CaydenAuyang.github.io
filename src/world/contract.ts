@@ -272,6 +272,10 @@ export interface Signal {
   setColumnHighlight(i: number): void;
   /** 11b.3 Where column i's top is on screen (viewport fractions), for its label, or null when the columns aren't showing. */
   columnTop(i: number): { x: number; y: number } | null;
+  /** 4.7 The archive columns' box on screen (viewport fractions) while any of them is drawn, or null. For the searchlight's keep-out. */
+  columnsBox(): ScreenBox | null;
+  /** 4.7 Whether any of a Wisers picture (F1, F2, G) is drawn. For the searchlight's keep-out. */
+  pictureShowing(): boolean;
 
   /** 11b.7 Two cities: send an extra light along the arc between the two lights (the email was hovered or focused). The regular one runs by itself about every 6 s while the lights show. */
   sendArc(): void;

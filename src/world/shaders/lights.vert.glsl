@@ -10,6 +10,7 @@ uniform vec3 uFerry; // x start, x span, seconds per crossing
 uniform vec3 uGlow;
 uniform vec3 uFog;
 varying vec3 vColor;
+varying float vAvi; // aviation lights: how much of the sky behind the dot it covers (0 for the rest)
 
 void main() {
   vec3 p = position;
@@ -32,7 +33,14 @@ void main() {
   float behind = max(0.0, -w.z);
   float dist = length(w.xyz - cameraPosition);
   float fogF = 1.0 - exp(-(behind * uFog.x + max(0.0, dist - uFog.z) * uFog.y));
-  vColor = mix(aColor, uGlow, fogF * 0.5) * b * on * (1.0 - 0.6 * fogF);
+  // the haze dims a far light; aviation red is only dimmed, not tinted, so it stays red
+  float tint = (mode > 0.5 && mode < 1.5) ? 0.0 : 0.5;
+  vColor = mix(aColor, uGlow, fogF * tint) * b * on * (1.0 - 0.6 * fogF);
+  vAvi = (mode > 0.5 && mode < 1.5) ? b * on : 0.0;
   gl_PointSize = aInfo.x * uPixelRatio;
+  // An aviation dot sits just above its roof or mast, so the roof would hide the lower half of
+  // the round sprite: slide it 25 m toward the camera along the line of sight (it stays on the
+  // same spot on screen, still behind the towers in front of it).
+  if (mode > 0.5 && mode < 1.5) w.xyz += normalize(cameraPosition - w.xyz) * 25.0;
   gl_Position = projectionMatrix * viewMatrix * w;
 }

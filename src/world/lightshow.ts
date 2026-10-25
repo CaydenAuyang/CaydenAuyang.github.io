@@ -13,7 +13,7 @@
 //     through whatever sky is in view, each aiming at a point that moves through the frame. It
 //     loops until lightShow(false), which fades it out over 1 s. With motion off the beams hold
 //     still, nothing pulses, and every change is immediate.
-//   - Text: a coarse mask of where the page's text sits (32 x 20 cells, refreshed about 5 times a
+//   - Text: a coarse mask of where the page's text sits (64 x 40 cells, refreshed about 3 times a
 //     second) dims every beam behind text blocks, so a beam never washes text out.
 
 import {
@@ -45,28 +45,49 @@ const BEAT = 0.6;
 const LOOP = 14;
 const SEARCH_LEN = 6000;
 /** The searchlight's tilt band (degrees above the horizon), and lower bands it may drop to when
- * the camera looks away from Central and a beam in the spec's band can't reach the frame. */
-const EL_BANDS = [65, 55, 45, 35, 27, 20];
+ * the camera looks away from Central and a beam in the spec's band can't reach the frame. The
+ * lowest only with the lamp out of view (behind or beside the camera, the beam coming in low from
+ * the frame edge): from a lamp in view a beam that flat doesn't read as a searchlight. */
+const EL_BANDS = [65, 55, 45, 35, 27, 20, 14];
+const EL_OFF_FRAME = 14;
 const EL_SWING = 15;
 /** The tilt swing for a band: the full 15 degrees, narrower for the lowest bands. */
 const swingFor = (band: number) => Math.min(EL_SWING, band - 8);
-/** With motion off the beam holds at this point of its loop: near the centre of the sweep, leaning a little. */
-const HOLD_PHASE = 0.04;
+/** With motion off the beam holds at the first of these points of its loop that reads (the first: near the centre of the sweep, leaning a little). */
+const HOLD_PHASES = [0.04, 0.12, 0.2, 0.3, 0.45, 0.55, 0.7, 0.8, 0.9];
+const HOLD_PHASE = HOLD_PHASES[0];
 /** How many keep-out boxes the beams fade out inside, and their feather (share of the short side). */
 export const KEEP_OUT = 4;
 const FEATHER = 0.05;
+/** The searchlight: brightness, and how much wider it gets per meter (half that while the show runs). */
 const SEARCH_I = 0.16;
-/** The show's beams: how far ahead of the camera their aim points sit, how far past they run, how bright. */
+const SEARCH_GROW = 0.06;
+/** The show's beams: how far ahead of the camera their aim points sit, how far past they run, how bright, how much wider per meter, and how fast they fade along their length (the exponent; under 1 holds them bright longer). */
 const AIM_DIST = 4200;
 const OVERSHOOT = 1.35;
 const SHOW_I = 0.3;
+const SHOW_GROW = 0.028;
+const SHOW_FADE = 0.55;
 /** Fades (s): the show in, the show out, the searchlight in after the intro. */
 const SHOW_IN = 1.2;
 const SHOW_OUT = 1;
 const SEARCH_IN = 1.5;
+/** Fades (s) of the searchlight where it starts or stops reading as a shaft (as the camera moves or a keep-out box comes and goes): in slowly, so it never pops in, out quickly. */
+const READ_IN = 1.2;
+const READ_OUT = 0.4;
+/** How fast (s for its whole length) the searchlight draws back from a keep-out box it sweeps into or that appears across it, and runs out again after. */
+const CUT_OUT = 0.25;
+const CUT_IN = 0.6;
+/**
+ * How long (s) a keep-out box that appears across a lit beam takes to fade the beam out inside it.
+ * A little longer than CUT_OUT, so the part past the box has drawn back before the part inside is
+ * gone and never shows on its own. Cutting the beam in one frame instead dropped most of its light
+ * at once, scrolling back into Wisers or on into Experience.
+ */
+const KEEP_IN = 0.3;
 /** Text mask size, and what a beam keeps behind text. */
-const MASK_W = 32;
-const MASK_H = 20;
+const MASK_W = 64;
+const MASK_H = 40;
 const TEXT_KEEP = 0.55;
 const TEXT_BLOCKS = 'h1, h2, h3, h4, p, li, dt, dd, blockquote, figcaption, a, button, label, input, .glass';
 
@@ -81,8 +102,19 @@ export interface BeamUniforms {
   uBeamBase: IUniform<Vector3[]>;
   /** Direction times length. */
   uBeamDir: IUniform<Vector3[]>;
-  /** x: brightness (0: off), y: radius at the lamp (m), z: radius growth per meter, w: 0 fades from the lamp, 1 stays bright most of the way (the show). */
+  /** x: brightness (0: off), y: radius at the lamp (m), z: radius growth per meter, w: how fast it fades along its length (the exponent of the fade; 1 is even). */
   uBeamK: IUniform<Vector4[]>;
+  /**
+   * Per beam, as shares of its length: x where it comes into the frame (its brightness is
+   * measured from there, so a beam whose lamp is off-frame enters from the frame edge at full
+   * strength instead of as a faint far end), y where it ends (before a keep-out box it would
+   * otherwise come out of, so no shaft ever floats free of its lamp).
+   */
+  uBeamSpan: IUniform<Vector2[]>;
+  /** Keep-out boxes (viewport fractions x0, y0, x1, y1 from the top left), how many are set, and how far each has faded in (0..1). */
+  uKeep: IUniform<Vector4[]>;
+  uKeepN: IUniform<number>;
+  uKeepW: IUniform<number[]>;
 }
 
 export function showUniforms(): ShowUniforms & BeamUniforms {
@@ -90,7 +122,11 @@ export function showUniforms(): ShowUniforms & BeamUniforms {
     uShow: { value: new Vector4(0, 0, BEAT, 0) },
     uBeamBase: { value: Array.from({ length: BEAMS }, () => new Vector3()) },
     uBeamDir: { value: Array.from({ length: BEAMS }, () => new Vector3(0, 1, 0)) },
-    uBeamK: { value: Array.from({ length: BEAMS }, () => new Vector4(0, 6, 0.045, 0)) },
+    uBeamK: { value: Array.from({ length: BEAMS }, () => new Vector4(0, 6, 0.045, 1)) },
+    uBeamSpan: { value: Array.from({ length: BEAMS }, () => new Vector2(0, 1)) },
+    uKeep: { value: Array.from({ length: KEEP_OUT }, () => new Vector4()) },
+    uKeepN: { value: 0 },
+    uKeepW: { value: new Array<number>(KEEP_OUT).fill(1) },
   };
 }
 
@@ -114,24 +150,29 @@ attribute float aSide; // -1 or 1 across the beam
 uniform vec3 uBeamBase[${BEAMS}];
 uniform vec3 uBeamDir[${BEAMS}];
 uniform vec4 uBeamK[${BEAMS}];
+uniform vec2 uBeamSpan[${BEAMS}];
 varying float vAlong;
 varying float vOff;
 varying vec2 vRad;
 varying float vI;
 varying float vSeed;
 varying float vLen;
-varying float vFlat;
+varying vec2 vSpan;
+varying float vFade;
 void main() {
   int i = int(aBeam + 0.5);
   vec3 dir = uBeamDir[i];
   float len = length(dir);
   vec3 p = uBeamBase[i] + dir * aAlong;
   dir /= max(len, 1e-3);
-  // widen across the camera's view direction (one direction for the whole beam, so the strip
-  // never twists and the cone stays straight)
-  vec3 fwd = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
-  vec3 side = cross(fwd, dir); // this order keeps the quads facing the camera (front faces)
-  side = length(side) > 1e-3 ? normalize(side) : vec3(1.0, 0.0, 0.0);
+  // widen square to the plane through the camera and the beam's axis: that is across the shaft on
+  // screen wherever it is, and the same direction for the whole beam, so the strip never twists
+  // and the cone stays straight. (Widening across the view direction instead turns the strip
+  // edge-on, a hairline, when a beam far off the middle of the frame runs away from the camera,
+  // as at the Work stops.)
+  vec3 side = cross(uBeamBase[i] - cameraPosition, dir); // this order keeps the quads facing the camera (front faces)
+  if (length(side) < 1e-3 * length(uBeamBase[i] - cameraPosition)) side = cross(-vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]), dir);
+  side = length(side) > 1e-6 ? normalize(side) : vec3(1.0, 0.0, 0.0);
   // the quad is a little wider than the cone, so its soft edge never meets the quad's edge
   float r = uBeamK[i].y + aAlong * len * uBeamK[i].z;
   p += side * aSide * r * 2.6;
@@ -142,7 +183,8 @@ void main() {
   // the shaft snake.
   vOff = aSide * r * 2.6;
   vRad = vec2(uBeamK[i].y, len * uBeamK[i].z);
-  vFlat = uBeamK[i].w;
+  vSpan = uBeamSpan[i];
+  vFade = uBeamK[i].w;
   vI = uBeamK[i].x;
   vSeed = aBeam;
   vLen = len;
@@ -157,13 +199,15 @@ uniform sampler2D uTextMask;
 uniform vec2 uView;
 uniform vec4 uKeep[${KEEP_OUT}]; // boxes the beams stay out of (viewport fractions, x0, y0, x1, y1 from the top left)
 uniform float uKeepN;
+uniform float uKeepW[${KEEP_OUT}];
 varying float vAlong;
 varying float vOff;
 varying vec2 vRad;
 varying float vI;
 varying float vSeed;
 varying float vLen;
-varying float vFlat;
+varying vec2 vSpan;
+varying float vFade;
 
 float h12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -183,11 +227,12 @@ void main() {
   // scattered by the fog; x is in cone radii
   float x = vOff / (vRad.x + vAlong * vRad.y);
   float across = exp(-x * x * 2.2) + 0.15 * exp(-x * x * 0.45);
-  // along: brightest at the lamp, thinning out as the fog swallows it; the show's beams stay
-  // bright most of the way, so they read in a frame of sky far from their roofs
-  float fade = pow(1.0 - vAlong, 1.05);
-  float held = (1.0 - 0.45 * vAlong) * (1.0 - smoothstep(0.7, 1.0, vAlong));
-  float along = mix(fade, held, vFlat) * smoothstep(0.0, 0.01, vAlong);
+  // along: brightest where the beam comes into view (the lamp, or the frame edge when the lamp is
+  // off-frame), thinning out as the fog swallows it, and gone before a keep-out box it would come
+  // out of (vSpan.y). It always reaches 0 at the far end, so no beam ends in a bright cap.
+  float a = clamp((vAlong - vSpan.x) / max(1.0 - vSpan.x, 1e-3), 0.0, 1.0);
+  float along = pow(1.0 - a, vFade) * smoothstep(0.0, 0.01, vAlong);
+  if (vSpan.y < 1.0) along *= 1.0 - smoothstep(vSpan.y - 0.05, vSpan.y, vAlong);
   // fog: slow drifting density along the beam (meters along it, and time), the same across its
   // width, so the shaft stays straight and never reads as a flat wedge
   float m = vAlong * vLen;
@@ -205,7 +250,7 @@ void main() {
     vec4 bx = uKeep[i];
     float inX = smoothstep(bx.x - fe.x, bx.x, fr.x) * (1.0 - smoothstep(bx.z, bx.z + fe.x, fr.x));
     float inY = smoothstep(bx.y - fe.y, bx.y, fr.y) * (1.0 - smoothstep(bx.w, bx.w + fe.y, fr.y));
-    keep *= 1.0 - inX * inY;
+    keep *= 1.0 - uKeepW[i] * inX * inY;
   }
   if (keep <= 0.0) discard;
   float I = vI * (along * across * fog + lamp) * (1.0 - (1.0 - ${TEXT_KEEP.toFixed(2)}) * text) * keep;
@@ -280,8 +325,14 @@ export function buildBeams(
   maskTex.magFilter = LinearFilter;
   maskTex.needsUpdate = true;
   const viewU = new Vector2(1, 1);
-  const keepBoxes = Array.from({ length: KEEP_OUT }, () => new Vector4());
-  const keepN = { value: 0 };
+  const keep = U.uKeep.value;
+  const keepN = U.uKeepN;
+  const keepW = U.uKeepW.value;
+  // last frame's boxes, to tell a box that moved (the figure, the columns as they draw) from a new one
+  const prevKeep = Array.from({ length: KEEP_OUT }, () => new Vector4());
+  const prevW = new Array<number>(KEEP_OUT).fill(1);
+  let prevN = 0;
+  const span = U.uBeamSpan.value;
   const mat = new ShaderMaterial({
     vertexShader: vert,
     fragmentShader: frag,
@@ -289,12 +340,14 @@ export function buildBeams(
       uBeamBase: U.uBeamBase,
       uBeamDir: U.uBeamDir,
       uBeamK: U.uBeamK,
+      uBeamSpan: U.uBeamSpan,
       uTime: U.uTime,
       uCool: { value: new Vector3(...cool) },
       uTextMask: { value: maskTex },
       uView: { value: viewU },
-      uKeep: { value: keepBoxes },
-      uKeepN: keepN,
+      uKeep: U.uKeep,
+      uKeepN: U.uKeepN,
+      uKeepW: U.uKeepW,
     },
     blending: AdditiveBlending,
     depthWrite: false,
@@ -330,60 +383,61 @@ export function buildBeams(
         const x1 = Math.min(MASK_W - 1, Math.floor((r.right / vw) * MASK_W));
         const y0 = Math.max(0, Math.floor(((vh - r.bottom) / vh) * MASK_H));
         const y1 = Math.min(MASK_H - 1, Math.floor(((vh - r.top) / vh) * MASK_H));
-        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) mask[y * MASK_W + x] = 255;
+        // one cell wider all round: the mask is filtered, so the text itself sits in fully dimmed cells
+        for (let y = Math.max(0, y0 - 1); y <= Math.min(MASK_H - 1, y1 + 1); y++)
+          for (let x = Math.max(0, x0 - 1); x <= Math.min(MASK_W - 1, x1 + 1); x++) mask[y * MASK_W + x] = 255;
       }
     }
     maskTex.needsUpdate = true;
+  };
+  /** Whether a screen point (fractions from the top left) is on text. */
+  const onText = (fx: number, fy: number) => {
+    const cx = Math.min(MASK_W - 1, Math.max(0, Math.floor(fx * MASK_W)));
+    const cy = Math.min(MASK_H - 1, Math.max(0, Math.floor((1 - fy) * MASK_H)));
+    return mask[cy * MASK_W + cx] > 0;
   };
 
   // ---- State ----
   let show = false; // asked for
   let showEnv = 0; // 0..1, eased
   let searchEnv = 0;
+  let readEnv = 0; // 0..1: whether the searchlight reads as a shaft from a lamp here (eased)
   let showT = 0; // seconds of show time (runs while the show is visible)
   let tSearch = 0; // seconds of searchlight time (runs with motion)
   let keepChanged = false;
+  let fading = false; // whether a keep-out box is still fading in
+  let lastMotion = true;
+  let cutS = 1; // where the searchlight ends (share of its length), eased
 
   const tmp = new Vector3();
   const target = new Vector3();
 
-  // ---- The searchlight's aim ----
-  // The lamp stays on the Central roof, but the sweep turns to wherever the camera looks: a few
-  // times a second the world tries directions around the lamp and finds the widest run of
-  // azimuths whose beam crosses the visible sky (above the towers, outside the keep-out boxes)
-  // for the whole tilt band. The figure-eight is centred on that run, and the centre eases as the
-  // camera moves. If no beam in the spec's band (50 to 80 degrees) can reach the frame, as at the
-  // stops that look away from Central from low down, the band drops just far enough that it can.
-  const AZN = 36;
-  // samples along the beam (share of its length), finer near the lamp where it is brightest
-  const FS = [0, 0.03, 0.07, 0.12, 0.2, 0.3, 0.45, 0.6, 0.8];
+  // ---- Reading a beam on screen ----
+  // A beam reads as a searchlight only as a straight shaft that starts at its lamp, or at the edge
+  // of the frame when the lamp is off-frame, or rises from behind nearer towers. A shaft that
+  // would start at the edge of a keep-out box (its lamp inside the box) floats in mid-air, so it
+  // doesn't count; nor does what comes out the far side of a box (the beam ends at the box).
+  // Lengths on text count for less (the beam is dimmed there and hard to see).
+  const NS = 16;
+  const FS = Array.from({ length: NS }, (_, i) => Math.pow(i / (NS - 1), 1.3));
   const SKY_COLS = 24;
   const sky = new Float32Array(SKY_COLS); // highest tower top per screen column (NDC y)
   const vp = new Matrix4();
   let e = vp.elements;
-  const q0 = new Float32Array(3); // per elevation of the band
-  const okRun = new Uint8Array(AZN);
-  const okTop = new Uint8Array(AZN);
-  const okBot = new Uint8Array(AZN);
-  // centre azimuth, half-width of the sweep (radians), tilt centre and swing (degrees)
-  const aim = { az: 0, A: 0.95, el: EL_BANDS[0], sw: EL_SWING, fresh: true };
-  const want = { az: 0, A: 0.95, el: EL_BANDS[0], sw: EL_SWING };
-  let aimAt = -1e9;
-  const lastCam = new Float32Array(16);
-  const lamp = U.uBeamBase.value[0];
-  const keep = keepBoxes;
-  // for the test scripts: the sweep's current centre, width and band
-  mesh.userData.aim = aim;
-  mesh.userData.sweep = { loop: LOOP, len: SEARCH_LEN, swing: EL_SWING, holdPhase: HOLD_PHASE, swingFor };
-
-  const px = new Float32Array(2);
-  /** NDC of a world point into px; false behind the camera. */
+  const px = new Float32Array(3);
+  /** NDC of a world point into px (and its clip w into px[2]); false behind the camera. */
   const proj = (x: number, y: number, z: number) => {
     const w = e[3] * x + e[7] * y + e[11] * z + e[15];
     if (w <= 1e-3) return false;
     px[0] = (e[0] * x + e[4] * y + e[8] * z + e[12]) / w;
     px[1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) / w;
+    px[2] = w;
     return true;
+  };
+  const syncView = () => {
+    camera.updateMatrixWorld();
+    vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    e = vp.elements;
   };
   const refreshSky = () => {
     sky.fill(-1);
@@ -401,63 +455,214 @@ export function buildBeams(
       }
     }
   };
+  const BOX_M = 0.02;
+  const inBox = (fx: number, fy: number, m: number) => {
+    for (let b = 0; b < keepN.value; b++) {
+      const k = keep[b];
+      if (fx > k.x - m && fx < k.z + m && fy > k.y - m && fy < k.w + m) return true;
+    }
+    return false;
+  };
+  // Liang-Barsky: the part of a segment inside a box, as shares of it (lbIn to lbOut)
+  let lbIn = 0;
+  let lbOut = 1;
+  const lbClip = (p: number, q: number) => {
+    if (p === 0) {
+      if (q < 0) lbIn = 2;
+      return;
+    }
+    const r = q / p;
+    if (p < 0) lbIn = Math.max(lbIn, r);
+    else lbOut = Math.min(lbOut, r);
+  };
   /**
-   * How much of a beam (az, el in radians) shows in open sky: its on-screen length (NDC units)
-   * above the towers, weighted by how bright the beam is there. Lengths inside the keep-out boxes
-   * count against it, so the sweep prefers to pass beside the figure and the Wisers pictures.
+   * Where a segment on screen (fractions from the top left) first comes within BOX_M of a
+   * keep-out box inside the frame, as a share of the segment, or -1. The samples along a beam are
+   * far apart, so a beam can clip a box's corner between two of them.
    */
-  const quality = (az: number, el: number) => {
-    const ce = Math.cos(el);
-    const dx = Math.sin(az) * ce;
-    const dy = Math.sin(el);
-    const dz = -Math.cos(az) * ce;
-    let q = 0;
-    let pv = false;
+  const segBox = (ax: number, ay: number, bx: number, by: number) => {
+    let first = -1;
+    for (let b = 0; b < keepN.value; b++) {
+      const k = keep[b];
+      const x0 = Math.max(0, k.x - BOX_M);
+      const y0 = Math.max(0, k.y - BOX_M);
+      const x1 = Math.min(1, k.z + BOX_M);
+      const y1 = Math.min(1, k.w + BOX_M);
+      if (x0 >= x1 || y0 >= y1) continue;
+      lbIn = 0;
+      lbOut = 1;
+      lbClip(ax - bx, ax - x0);
+      lbClip(bx - ax, x1 - ax);
+      lbClip(ay - by, ay - y0);
+      lbClip(by - ay, y1 - ay);
+      if (lbIn <= lbOut && (first < 0 || lbIn < first)) first = lbIn;
+    }
+    return first;
+  };
+  const read = { q: 0, sky: 0, enter: 0, cut: 1, edge: 1, qFull: 0 };
+  /**
+   * How well a beam from base along dir (direction times length) reads on screen, into read:
+   * q is its visible on-screen length (NDC units) above the towers, weighted by its brightness
+   * there (measured from where it comes into view); sky is the part of that in open sky, clear of
+   * text and the header; enter and cut are the shares of its length where it comes into view and
+   * where it must end. q is 0 when the shaft would float (then cut is 0: none of it may show).
+   * edge (0..1, also in q and sky; qFull is q without it) goes to 0 as the place it comes into the
+   * frame rises under the header: through the top edge, from behind the camera, it reads only as a
+   * faint smudge along the top, not as a shaft.
+   */
+  const evalBeam = (base: Vector3, dx: number, dy: number, dz: number) => {
+    read.q = 0;
+    read.sky = 0;
+    read.enter = 0;
+    read.cut = 1;
+    read.edge = 1;
+    read.qFull = 0;
+    let started = -1;
+    let prevIn = false;
+    let prevBoxed = false;
+    let prevFrame = false;
+    let prevOk = false;
     let pxx = 0;
     let pyy = 0;
-    let pBox = false;
-    for (let i = 0; i < FS.length; i++) {
+    let pw = 1;
+    let pf = 0;
+    for (let i = 0; i < NS; i++) {
       const f = FS[i];
-      const L = f * SEARCH_LEN;
-      let v = proj(lamp.x + dx * L, lamp.y + dy * L, lamp.z + dz * L);
+      const ok = proj(base.x + dx * f, base.y + dy * f, base.z + dz * f);
       const x = px[0];
       const y = px[1];
-      let boxed = false;
-      if (v) {
-        if (Math.abs(x) > 0.95 || y > 0.95 || y < -0.95) v = false;
-        else {
-          const c = Math.min(SKY_COLS - 1, Math.max(0, Math.floor(((x + 1) / 2) * SKY_COLS)));
-          if (y < sky[c] + 0.02 && f > 0) v = false;
-          const fx = (x + 1) / 2;
-          const fy = (1 - y) / 2;
-          for (let b = 0; b < keepN.value; b++) {
-            const k = keep[b];
-            if (fx > k.x && fx < k.z && fy > k.y && fy < k.w) boxed = true;
+      const w = px[2];
+      const frame = ok && Math.abs(x) <= 1 && Math.abs(y) <= 1;
+      const fx = (x + 1) / 2;
+      const fy = (1 - y) / 2;
+      const boxed = frame && inBox(fx, fy, BOX_M);
+      const col = Math.min(SKY_COLS - 1, Math.max(0, Math.floor(fx * SKY_COLS)));
+      const open = frame && !boxed && (i === 0 || y >= sky[col] + 0.01);
+      // where the stretch since the last sample first meets a keep-out box
+      const hit = i > 0 && ok && prevOk ? segBox((pxx + 1) / 2, (1 - pyy) / 2, fx, fy) : -1;
+      if (started < 0) {
+        if (frame && boxed && i === 0) {
+          read.cut = 0; // the lamp is inside a box: it would float
+          return read;
+        }
+        if (frame && !boxed) {
+          // comes out of a box: floats
+          if (i > 0 && ((prevFrame && prevBoxed) || hit >= 0)) {
+            read.cut = 0;
+            return read;
           }
+          started = i;
+          // from the frame edge (lamp off-frame) the brightness counts from here; from the lamp
+          // or from behind nearer towers it counts from the lamp
+          read.enter = i > 0 && !prevFrame ? FS[i - 1] : 0;
+          if (i > 0 && !prevFrame) read.edge = entryEdge(base, dx, dy, dz, pf, f);
+        }
+      } else {
+        if (hit >= 0 || boxed) {
+          // ends where it meets the box (the screen share converted back to a share of length)
+          const u = hit >= 0 ? (hit * pw) / (w * (1 - hit) + hit * pw) : 0;
+          read.cut = Math.max(read.enter + 0.02, pf + u * (f - pf));
+          break;
+        }
+        if (!frame) break; // leaves the frame
+        if (open && prevIn) {
+          const mid = (0.5 * (f + pf) - read.enter) / Math.max(1e-3, 1 - read.enter);
+          const bright = Math.pow(1 - Math.min(1, Math.max(0, mid)), 1.05);
+          // behind text (where the beam is dimmed) or in the band under the header along the top
+          // it is hard to see, so those lengths count for less
+          const l = Math.hypot(x - pxx, y - pyy) * bright;
+          const clear = fy >= 0.1 && !onText(fx, fy);
+          read.q += clear ? l : l * 0.35;
+          if (clear) read.sky += l;
         }
       }
-      if (v && pv) {
-        const len = Math.hypot(x - pxx, y - pyy);
-        const bright = Math.pow(1 - 0.5 * (f + FS[i - 1]), 1.05);
-        q += (boxed || pBox ? -1 : 1) * len * bright;
-      }
-      pv = v;
+      prevIn = open;
+      prevBoxed = boxed;
+      prevFrame = frame;
+      prevOk = ok;
       pxx = x;
       pyy = y;
-      pBox = boxed;
+      pw = w;
+      pf = f;
     }
-    return q;
+    read.qFull = read.q;
+    read.q *= read.edge;
+    read.sky *= read.edge;
+    return read;
+  };
+  /**
+   * For a beam that is out of the frame at share f0 of its length and in it at f1: 1 where it comes
+   * in well below the top, falling to 0 as that rises to the top edge (and beyond: through it). By
+   * bisection for the last point outside the frame before it comes in.
+   */
+  const entryEdge = (base: Vector3, dx: number, dy: number, dz: number, f0: number, f1: number) => {
+    let lo = f0;
+    let hi = f1;
+    for (let k = 0; k < 10; k++) {
+      const m = 0.5 * (lo + hi);
+      const ok = proj(base.x + dx * m, base.y + dy * m, base.z + dz * m);
+      if (ok && Math.abs(px[0]) <= 1 && Math.abs(px[1]) <= 1) hi = m;
+      else lo = m;
+    }
+    if (!proj(base.x + dx * lo, base.y + dy * lo, base.z + dz * lo)) return 1;
+    const t = Math.min(1, Math.max(0, (px[1] - 0.85) / 0.15));
+    return 1 - t * t * (3 - 2 * t);
+  };
+
+  // ---- The searchlight's aim ----
+  // The lamp stays on the Central roof, but the sweep turns to wherever the camera looks: a few
+  // times a second the world tries directions around the lamp and finds the widest run of
+  // azimuths whose beam reads (above) over the whole tilt band. The figure-eight is centred on
+  // that run, and the centre eases as the camera moves. If no beam in the spec's band (50 to 80
+  // degrees) can read, as at the stops that look away from Central from low down, the band drops
+  // just far enough that one can. Where none reads at all, the searchlight fades out.
+  const AZN = 48;
+  const okRun = new Uint8Array(AZN);
+  const okTop = new Uint8Array(AZN);
+  const okBot = new Uint8Array(AZN);
+  const skyMid = new Float32Array(AZN); // each azimuth's length in open sky at the band's middle tilt
+  const cutMid = new Float32Array(AZN); // and how well it reads there where a keep-out box cuts it short (0 if none does)
+  // centre azimuth, half-width of the sweep (radians), tilt centre and swing (degrees)
+  const aim = { az: 0, A: 0.95, el: EL_BANDS[0], sw: EL_SWING, fresh: true };
+  const want = { az: 0, A: 0.95, el: EL_BANDS[0], sw: EL_SWING };
+  let aimAt = -1e9;
+  let anyReads = true;
+  const lastCam = new Float32Array(16);
+  const lamp = U.uBeamBase.value[0];
+  // for the test scripts: the sweep's current centre, width and band
+  mesh.userData.aim = aim;
+  mesh.userData.sweep = { loop: LOOP, len: SEARCH_LEN, swing: EL_SWING, holdPhase: HOLD_PHASE, swingFor };
+
+  /** How well the beam at (az, el) reads; strict: a shaft that a keep-out box cuts short doesn't count at all. */
+  const quality = (az: number, el: number, strict: boolean) => {
+    const ce = Math.cos(el);
+    const r = evalBeam(lamp, Math.sin(az) * ce * SEARCH_LEN, Math.sin(el) * SEARCH_LEN, -Math.cos(az) * ce * SEARCH_LEN);
+    // a shaft that a keep-out box cuts short reads as a stub unless it is long, so it counts for less
+    if (r.cut < 1) return strict ? 0 : r.q * 0.7;
+    return r.q;
   };
   /** The bearing from the lamp to the camera (a beam leaning that way stands upright on screen). */
   const towardCamera = () => Math.atan2(camera.position.x - lamp.x, -(camera.position.z - lamp.z));
-  const Q_MIN = 0.12;
+  // for the test scripts: how the beam at a bearing from the camera's (radians) and tilt (degrees) reads from here
+  mesh.userData.probe = (daz: number, el: number, strict = false) => {
+    syncView();
+    refreshSky();
+    const q = quality(towardCamera() + daz, el * DEG, strict);
+    return { qual: q, ...read };
+  };
+  const Q_MIN = 0.15;
   const set = (az: number, A: number, el: number, sw: number) => {
     want.az = az;
     want.A = A;
     want.el = el;
     want.sw = sw;
   };
-  /** Where one end of the tilt keeps leaving the frame over the run, tilt over the half that shows. */
+  /**
+   * Where one end of the tilt keeps failing over the run, tilt over the half that reads. Within
+   * the spec's bands the tilt never drops below its 50 degrees: a beam that reads at the band's
+   * middle tilt and at its bottom reads at 50 too (on the phone at AI Simply, 50 to 55 instead of
+   * 40 to 55).
+   */
   const setTilt = (az: number, A: number, band: number, sw: number, from: number, len: number) => {
     let top = 0;
     let bot = 0;
@@ -466,33 +671,54 @@ export function buildBeams(
       top += okTop[i];
       bot += okBot[i];
     }
-    if (top < len * 0.7 && bot >= top) set(az, A, band - sw / 2, sw / 2);
-    else if (bot < len * 0.7) set(az, A, band + sw / 2, sw / 2);
-    else set(az, A, band, sw);
+    let lo = band - sw;
+    let hi = Math.min(80, band + sw);
+    if (top < len * 0.7 && bot >= top) hi = band;
+    else if (bot < len * 0.7) lo = band;
+    if (band >= 55) lo = Math.max(50, lo);
+    set(az, A, (lo + hi) / 2, (hi - lo) / 2);
   };
   const findAim = () => {
-    camera.updateMatrixWorld();
-    vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    e = vp.elements;
     refreshSky();
+    anyReads = findAimIn(true) || findAimIn(false);
+  };
+  /**
+   * The aim over the bands, into want; false if no beam reads. Strict first: only shafts that no
+   * keep-out box cuts short, so the sweep passes beside the figure (as on the phone hero, where
+   * the lamp stands right under it) instead of running into it as a stub. It may still cross
+   * behind the box on its way to open sky on the far side (below).
+   */
+  const findAimIn = (strict: boolean) => {
     const toCam = towardCamera();
+    const lampInView = proj(lamp.x, lamp.y, lamp.z) && Math.abs(px[0]) <= 1 && Math.abs(px[1]) <= 1;
     for (const band of EL_BANDS) {
+      if (band <= EL_OFF_FRAME && lampInView) break;
       const sw = swingFor(band);
-      // good azimuths: the beam shows at the band's middle tilt and at one of its ends at least
+      // within the spec's tilt (50 to 80 degrees) a somewhat shorter shaft is enough, so the beam
+      // keeps to the spec wherever it can still read
+      const qMin = band >= 55 ? Q_MIN * 0.7 : Q_MIN;
+      // good azimuths: the beam reads at the band's middle tilt and at one of its ends at least
       let all = true;
       for (let i = 0; i < AZN; i++) {
         const az = toCam + (i / AZN) * 2 * Math.PI;
-        q0[0] = quality(az, Math.min(80, band + sw) * DEG);
-        q0[1] = quality(az, band * DEG);
-        q0[2] = quality(az, (band - sw) * DEG);
-        okTop[i] = q0[0] >= Q_MIN ? 1 : 0;
-        okBot[i] = q0[2] >= Q_MIN ? 1 : 0;
-        okRun[i] = q0[1] >= Q_MIN && (okTop[i] || okBot[i]) ? 1 : 0;
-        if (!okRun[i] || q0[0] < Q_MIN || q0[2] < Q_MIN) all = false;
+        const qm = quality(az, band * DEG, strict);
+        skyMid[i] = read.sky;
+        cutMid[i] = read.cut > 0 && read.cut < 1 ? read.q * 0.7 : 0;
+        if (qm < qMin) {
+          okRun[i] = 0;
+          okTop[i] = 0;
+          okBot[i] = 0;
+          all = false;
+          continue;
+        }
+        okTop[i] = quality(az, Math.min(80, band + sw) * DEG, strict) >= qMin ? 1 : 0;
+        okBot[i] = quality(az, (band - sw) * DEG, strict) >= qMin ? 1 : 0;
+        okRun[i] = okTop[i] || okBot[i] ? 1 : 0;
+        if (!okRun[i] || !okTop[i] || !okBot[i]) all = false;
       }
       if (all) {
         set(toCam, 0.95, band, sw);
-        return;
+        return true;
       }
       // the longest run of good azimuths (around the circle); ties go to the one nearest the camera
       let best = -1;
@@ -514,14 +740,54 @@ export function buildBeams(
         for (let i = 0; i < AZN; i++) if (okRun[i]) any = true;
         if (!any) continue;
         setTilt(toCam, 0.95, band, sw, 0, AZN);
-        return;
+        return true;
       }
-      if (bestLen >= 2) {
-        setTilt(toCam + (best / AZN) * 2 * Math.PI, Math.min(0.95, Math.max(0.1, 0.42 * (bestLen / AZN) * 2 * Math.PI)), band, sw, Math.round(best - (bestLen - 1) / 2), bestLen);
-        return;
+      // Beside a keep-out box, the sweep keeps to the longest stretch of the run with at least 60%
+      // of its longest shaft in open sky, so where only the beams just beside the box reach open
+      // sky (the phone hero, where the rest of the run hides behind the name) it stays there.
+      // Elsewhere, or where no beam of the run gets much open sky, the whole run.
+      const from = Math.round(best - (bestLen - 1) / 2);
+      let peak = 0;
+      for (let k = 0; k < bestLen; k++) peak = Math.max(peak, skyMid[(from + k) % AZN]);
+      const floor = keepN.value > 0 && peak >= Q_MIN ? peak * 0.6 : 0;
+      let sFrom = from;
+      let sLen = 0;
+      let cur = 0;
+      for (let k = 0; k < bestLen; k++) {
+        cur = skyMid[(from + k) % AZN] >= floor ? cur + 1 : 0;
+        if (cur > sLen) {
+          sLen = cur;
+          sFrom = from + k - cur + 1;
+        }
       }
+      // The sweep may also cross behind the box to a stretch with open sky on its far side (the
+      // phone hero, where the lamp stands right under the figure): across the box the beam is cut
+      // short as it passes behind it, so it sweeps round the figure instead of nodding beside it.
+      if (strict && floor > 0) {
+        for (const step of [-1, 1]) {
+          let k = step < 0 ? sFrom - 1 : sFrom + sLen;
+          let gap = 0;
+          while (gap < AZN / 4 && cutMid[(k + AZN * 2) % AZN] >= qMin) {
+            gap++;
+            k += step;
+          }
+          let far = 0;
+          while (gap > 0 && far < AZN / 4 && okRun[(k + AZN * 2) % AZN] && skyMid[(k + AZN * 2) % AZN] >= floor) {
+            far++;
+            k += step;
+          }
+          if (far === 0) continue;
+          if (step < 0) sFrom -= gap + far;
+          sLen += gap + far;
+          break;
+        }
+      }
+      const mid = sFrom + (sLen - 1) / 2;
+      setTilt(toCam + (mid / AZN) * 2 * Math.PI, Math.min(0.95, Math.max(0.05, 0.42 * (sLen / AZN) * 2 * Math.PI)), band, sw, sFrom, sLen);
+      return true;
     }
-    // nothing reaches the frame (the camera sees no open sky): keep the current aim
+    // no beam reads here (every one floats, hides behind text or the towers, or misses the frame)
+    return false;
   };
   const camMoved = () => {
     const m = camera.matrixWorld.elements;
@@ -541,6 +807,31 @@ export function buildBeams(
     const el = Math.min(80, aim.el + aim.sw * Math.sin(2 * w * t)) * DEG;
     const ce = Math.cos(el);
     return out.set(Math.sin(az) * ce, Math.sin(el), -Math.cos(az) * ce);
+  };
+  let holdPh = HOLD_PHASE;
+  const holdQ = new Float32Array(HOLD_PHASES.length);
+  const holdSky = new Float32Array(HOLD_PHASES.length);
+  const pickHold = () => {
+    for (const whole of [true, false]) {
+      let bestQ = 0;
+      let bestSky = 0;
+      for (let k = 0; k < HOLD_PHASES.length; k++) {
+        searchDir(LOOP * HOLD_PHASES[k], tmp);
+        const r = evalBeam(lamp, tmp.x * SEARCH_LEN, tmp.y * SEARCH_LEN, tmp.z * SEARCH_LEN);
+        const ok = r.q >= Q_MIN * 0.7 && (!whole || r.cut >= 1);
+        holdQ[k] = ok ? r.q : 0;
+        holdSky[k] = ok ? r.sky : 0;
+        bestQ = Math.max(bestQ, holdQ[k]);
+        bestSky = Math.max(bestSky, holdSky[k]);
+      }
+      if (bestQ <= 0) continue;
+      // by the length in open sky; where no point gets much (the frame's sky is all behind text),
+      // by how well it reads at all
+      const v = bestSky >= Q_MIN ? holdSky : holdQ;
+      const best = bestSky >= Q_MIN ? bestSky : bestQ;
+      for (let k = 0; k < HOLD_PHASES.length; k++) if (holdQ[k] > 0 && v[k] >= best * 0.6) return HOLD_PHASES[k];
+    }
+    return HOLD_PHASE;
   };
   /** A show beam's direction at time t: at a point that sweeps through the frame in its own lane. */
   const showDir = (b: number, t: number, out: Vector3) => {
@@ -565,12 +856,30 @@ export function buildBeams(
     setKeepOut(boxes) {
       const n = Math.min(KEEP_OUT, boxes.length);
       let changed = n !== keepN.value;
+      for (let i = 0; i < prevN; i++) {
+        prevKeep[i].copy(keep[i]);
+        prevW[i] = keepW[i];
+      }
+      // A box that appears across the lit searchlight fades in (KEEP_IN); one that was here last
+      // frame (most of it overlapping) keeps its fade.
+      const lit = lastMotion && U.uBeamK.value[0].x > 0;
       for (let i = 0; i < n; i++) {
         const b = boxes[i];
-        const k = keepBoxes[i];
+        const k = keep[i];
         if (k.x !== b.x0 || k.y !== b.y0 || k.z !== b.x1 || k.w !== b.y1) changed = true;
         k.set(b.x0, b.y0, b.x1, b.y1);
+        let w = lit ? 0 : 1;
+        for (let j = 0; j < prevN; j++) {
+          const q = prevKeep[j];
+          const ix = Math.min(q.z, b.x1) - Math.max(q.x, b.x0);
+          const iy = Math.min(q.w, b.y1) - Math.max(q.y, b.y0);
+          const small = Math.min((q.z - q.x) * (q.w - q.y), (b.x1 - b.x0) * (b.y1 - b.y0));
+          if (ix > 0 && iy > 0 && ix * iy > 0.5 * small) w = Math.max(w, prevW[j]);
+        }
+        keepW[i] = w;
+        if (w < 1) fading = true;
       }
+      prevN = n;
       keepN.value = n;
       if (changed) {
         keepChanged = true;
@@ -579,33 +888,19 @@ export function buildBeams(
     },
     update(now, dt, motion, wake) {
       const d = Math.max(0, Math.min(0.1, dt));
-      // envelopes: eased with motion, immediate without
-      const searchTarget = wake >= 0.999 ? 1 : 0;
-      if (motion) {
-        searchEnv = Math.min(1, Math.max(0, searchEnv + (searchTarget ? d / SEARCH_IN : -d / SEARCH_IN)));
-        showEnv = Math.min(1, Math.max(0, showEnv + (show ? d / SHOW_IN : -d / SHOW_OUT)));
-        tSearch += d;
-        if (showEnv > 0) showT += d;
-        else showT = 0;
-      } else {
-        searchEnv = searchTarget;
-        showEnv = show ? 1 : 0;
-      }
-      const sEase = searchEnv * searchEnv * (3 - 2 * searchEnv);
-      const shEase = showEnv * showEnv * (3 - 2 * showEnv);
-
-      // the searchlight (beam 0): brighter while the show runs
-      const K = U.uBeamK.value;
-      camera.updateMatrixWorld();
+      syncView();
       // with motion: a few times a second (the camera and the figure move all the time); without:
       // whenever the frozen camera or the boxes change
       const due = motion ? now - aimAt > 250 : camMoved() || keepChanged;
-      if (due || aim.fresh) {
+      const aimed = due || aim.fresh;
+      if (aimed) {
         aimAt = now;
         keepChanged = false;
         const t0 = performance.now();
+        // with motion the mask refreshes on its own a few times a second (below)
+        if (!motion) refreshMask();
         findAim();
-        mesh.userData.aimMs = performance.now() - t0; // for the test scripts (about 0.1 to 0.3 ms)
+        mesh.userData.aimMs = performance.now() - t0; // for the test scripts
       }
       if (motion && !aim.fresh) {
         const k = 1 - Math.exp(-d / 0.7);
@@ -620,24 +915,78 @@ export function buildBeams(
         aim.sw = want.sw;
         aim.fresh = false;
       }
-      // with motion off the beam holds still at one point of its loop
-      searchDir(motion ? tSearch : LOOP * HOLD_PHASE, tmp);
-      U.uBeamDir.value[0].copy(tmp).multiplyScalar(SEARCH_LEN);
-      K[0].set((SEARCH_I + (SHOW_I - SEARCH_I) * shEase) * Math.max(sEase, shEase), 6, 0.06 - 0.03 * shEase, shEase);
-      // the show's beams
+      // with motion off the beam holds still at one point of its loop, picked whenever the aim
+      // changes: of a few points around the loop, the first (nearest the centre of the sweep) that
+      // reads with a shaft in open sky at least 60% as long as the best one, so a frozen view
+      // (reduced motion, snapshot) shows a shaft where one can read. Shafts that a keep-out box
+      // cuts short only if nothing else reads.
+      if (!motion && aimed) holdPh = pickHold();
+      const dir0 = U.uBeamDir.value[0];
+      searchDir(motion ? tSearch : LOOP * holdPh, tmp);
+      dir0.copy(tmp).multiplyScalar(SEARCH_LEN);
+      evalBeam(lamp, dir0.x, dir0.y, dir0.z);
+      // does the beam, where it points now, read as a shaft from a lamp? (with a little hysteresis)
+      // Where it comes in under the header it dims with read.edge instead, so a sweep that rises
+      // there for a moment fades smoothly rather than switching off and on.
+      const reads = anyReads && read.qFull >= (readEnv > 0.5 ? Q_MIN * 0.5 : Q_MIN * 0.7);
+      const edge = read.edge;
+      // where it ends: drawn back quickly as it sweeps into a keep-out box, or as one appears across
+      // it (a Wisers picture drawing in) while the box fades the beam out inside it, so nothing past
+      // the box shows on its own; run out again more slowly once clear
+      lastMotion = motion;
+      if (!motion) cutS = read.cut;
+      else if (read.cut < cutS) cutS = Math.max(read.cut, cutS - d / CUT_OUT);
+      else cutS = Math.min(read.cut, cutS + d / CUT_IN);
+      if (fading) {
+        fading = false;
+        for (let i = 0; i < keepN.value; i++) {
+          keepW[i] = motion ? Math.min(1, keepW[i] + d / KEEP_IN) : 1;
+          if (keepW[i] < 1) fading = true;
+        }
+        requestRender();
+      }
+      span[0].set(read.enter, cutS);
+      mesh.userData.read = { q: read.q, enter: read.enter, cut: read.cut, edge, reads, anyReads };
+
+      // envelopes: eased with motion, immediate without
+      const searchTarget = wake >= 0.999 ? 1 : 0;
+      if (motion) {
+        searchEnv = Math.min(1, Math.max(0, searchEnv + (searchTarget ? d / SEARCH_IN : -d / SEARCH_IN)));
+        showEnv = Math.min(1, Math.max(0, showEnv + (show ? d / SHOW_IN : -d / SHOW_OUT)));
+        readEnv = Math.min(1, Math.max(0, readEnv + (reads ? d / READ_IN : -d / READ_OUT)));
+        tSearch += d;
+        if (showEnv > 0) showT += d;
+        else showT = 0;
+      } else {
+        searchEnv = searchTarget;
+        showEnv = show ? 1 : 0;
+        readEnv = reads ? 1 : 0;
+      }
+      const sEase = searchEnv * searchEnv * (3 - 2 * searchEnv);
+      const shEase = showEnv * showEnv * (3 - 2 * showEnv);
+      const rEase = readEnv * readEnv * (3 - 2 * readEnv);
+
+      // the searchlight (beam 0): brighter while the show runs
+      const K = U.uBeamK.value;
+      K[0].set((SEARCH_I + (SHOW_I - SEARCH_I) * shEase) * Math.max(sEase * rEase, shEase) * edge, 6, SEARCH_GROW * (1 - 0.5 * shEase), 1.05);
+      // the show's beams: like the searchlight, brightest where they come into view (the bottom
+      // edge) and fading all the way to nothing at their far ends
       for (let b = 1; b < BEAMS; b++) {
         if (shEase <= 0) {
           K[b].x = 0;
           continue;
         }
-        showDir(b, motion ? showT : 1.5, U.uBeamDir.value[b]);
-        K[b].set(SHOW_I * shEase, 5, 0.028, 1);
+        const db = showDir(b, motion ? showT : 1.5, U.uBeamDir.value[b]);
+        evalBeam(U.uBeamBase.value[b], db.x, db.y, db.z);
+        span[b].set(read.enter, read.cut);
+        K[b].set(SHOW_I * shEase, 5, SHOW_GROW, SHOW_FADE);
       }
       // the windows' pulse and the bottom glow
       U.uShow.value.set(motion ? shEase : 0, showT, BEAT, shEase);
 
       mesh.visible = K[0].x > 0 || shEase > 0;
-      if (mesh.visible && now - maskAt > 200) {
+      // the text mask also steers the aim, so it stays fresh while the beam is faded out
+      if (now - maskAt > 300) {
         maskAt = now;
         refreshMask();
       }

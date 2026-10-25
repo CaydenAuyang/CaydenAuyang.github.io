@@ -27,8 +27,9 @@ function webglAvailable(): boolean {
 }
 
 /**
- * 4.7: the searchlight never lights or slices the figure or the Wisers pictures. Every frame the
- * world gets the figure's box while it shows and the Wisers box while Wisers is on screen.
+ * 4.7: the searchlight never lights or slices the figure, the archive columns or the Wisers
+ * pictures. Every frame the world gets the figure's box while it shows, the columns' box while
+ * any column is drawn, and the Wisers box while Wisers is on screen and a picture is drawn in it.
  */
 function keepBeamsOff(world: World, signal: Signal | null) {
   const wisers = document.querySelector('[data-scene="wisers"]');
@@ -41,29 +42,37 @@ function keepBeamsOff(world: World, signal: Signal | null) {
     boxes.length = 0;
     const figure = signal?.figureBox();
     if (figure) boxes.push(figure);
-    if (wisersOn) boxes.push(wisersAt);
+    const columns = signal?.columnsBox();
+    if (columns) boxes.push(columns);
+    if (wisersOn && (!signal || signal.pictureShowing())) boxes.push(wisersAt);
     world.setBeamKeepOut?.(boxes);
   });
 }
 
 async function boot() {
-  const loadTimeline = timelineModules['./timeline.ts'];
-  const timeline = loadTimeline ? await (loadTimeline() as Promise<typeof import('./timeline')>) : null;
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-world]');
+  const gl = Boolean(canvas) && webglAvailable();
+  // Fetch the chunks all at once rather than one after another: on a cold load that chain of
+  // requests held the intro back by most of a second.
+  const loadTimeline = timelineModules['./timeline.ts']?.() as Promise<typeof import('./timeline')> | undefined;
+  const loadWorld = gl ? (worldModules['./renderer.ts']?.() as Promise<typeof import('./renderer')> | undefined) : undefined;
+  const loadSignal = gl ? (signalModules['./signal.ts']?.() as Promise<typeof import('./signal')> | undefined) : undefined;
+  // Awaited later; this only stops a failed fetch being reported before then.
+  loadSignal?.catch(() => {});
+
+  const timeline = loadTimeline ? await loadTimeline : null;
   const tl = timeline?.createTimeline({ motion, snapshot });
 
-  const canvas = document.querySelector<HTMLCanvasElement>('[data-world]');
-  const loadWorld = worldModules['./renderer.ts'];
-  if (!canvas || !loadWorld || !webglAvailable()) {
+  if (!canvas || !loadWorld) {
     html.classList.add('no-webgl');
     return;
   }
 
   try {
-    const { createWorld } = (await loadWorld()) as typeof import('./renderer');
+    const { createWorld } = await loadWorld;
     const world = await createWorld({ canvas, motion });
-    const loadSignal = signalModules['./signal.ts'];
     const signal = loadSignal
-      ? await ((await loadSignal()) as typeof import('./signal')).createSignal({
+      ? await (await loadSignal).createSignal({
           world,
           motion,
           // The video-built figure: figure-{hi|lo|phone}.json and .bin in this folder (spec v3).

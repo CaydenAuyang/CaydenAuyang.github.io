@@ -62,16 +62,24 @@ const FIGURE_DOT = { perHeight: 0.0031, min: 1.6, max: 3.2 };
 /** The figure's brightness against the reference renders (figure-video/preview). */
 const FIGURE_GAIN = 1;
 /**
- * The figure's backing: dark discs (the night colour) under its dots, so stars and haze behind it
- * don't show through. Each disc is this many times the mean spacing between the dots on screen.
+ * The figure's backing: opaque dark discs (the night colour) under its dots, so stars and haze
+ * behind it don't show through. Each disc is this many times the mean spacing between the dots on
+ * screen, so neighbouring discs overlap with no gaps (smaller near the outline; see the shader).
  */
 const BACKING_COLOR = '#05070D';
-const BACKING_DOT = 2.0;
+const BACKING_DOT = 4;
 /** Scan assembly (figure-video/figure-loader.ts): how much of a morph into or out of the figure the scan takes, and its randomness. */
 const SCAN = 0.3;
 const SCAN_JITTER = 0.1;
 /** Screen row (from the top) of the current's center in the question view: open water, below the reflections. */
 const CURRENT_ROW = 0.8;
+/**
+ * The current's centre across the question view and its length (shares of the view's width). On
+ * desktop the Mission panel covers the left 57% of the screen, so the current runs on the open
+ * water to its right; on phones the panel is full width and the current crosses the whole view.
+ */
+const CURRENT_X = { desktop: 0.8, phone: 0.5 };
+const CURRENT_SPAN = { desktop: 0.56, phone: 1.35 };
 /** Archive highlight (11b.3): how long a column takes to light or dim (the shader doubles a lit column and dims the rest to 38%). */
 const COL_EASE = 0.2;
 /** Archive hit areas: at least this wide on screen (CSS px), and this much taller than a column. */
@@ -485,6 +493,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     // Color would convert it to linear and show it darker and beige).
     uFigColor: { value: new Color().setHex(parseInt((fig.meta.color || '#EEE9E1').slice(1), 16), LinearSRGBColorSpace) },
     uBackDot: { value: 4 },
+    uBackR: { value: 0.005 },
     uBack: { value: new Color(BACKING_COLOR) },
     uScan: { value: 0 },
     uCarry: { value: (world.tier.tier === 'phone' ? CARRY_WINDOW.phone : CARRY_WINDOW.desktop) / Math.max(1, N / used) },
@@ -603,7 +612,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       uniforms.uFigDot.value = clamp(FIGURE_DOT.perHeight * heightPx * ratio, FIGURE_DOT.min, FIGURE_DOT.max) / ratio;
       // The dots' mean spacing on screen (the bust covers about half of its height squared).
       const spacing = Math.sqrt((0.5 * heightPx * heightPx) / Math.max(1, F));
-      uniforms.uBackDot.value = Math.max(2, BACKING_DOT * spacing);
+      uniforms.uBackDot.value = Math.max(2.5, BACKING_DOT * spacing);
+      uniforms.uBackR.value = uniforms.uBackDot.value / 2 / heightPx;
       const t = T[1];
       const o = figFrame.origin;
       for (let i = 0; i < N; i++) {
@@ -624,11 +634,13 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       uniforms.uFlowEye.value.copy(q.pos);
       uniforms.uFlowFwd.value.copy(q.fwd);
       uniforms.uFlowDir.value.copy(horizontal(q.right));
-      // Lengths per unit of depth, so the band looks the same on any screen: it runs a little past
-      // both edges, and meanders by a few percent of the view.
+      // Lengths per unit of depth, so the band looks the same on any screen: on phones it runs a
+      // little past both edges, on desktop it fills the open water right of the Mission panel; it
+      // meanders by a few percent of the view.
       const halfW = q.aspect * q.tanHalf;
       const halfH = q.tanHalf;
-      uniforms.uFlowLenK.value = 2 * halfW * 1.35;
+      const cx = phone ? CURRENT_X.phone : CURRENT_X.desktop;
+      uniforms.uFlowLenK.value = 2 * halfW * (phone ? CURRENT_SPAN.phone : CURRENT_SPAN.desktop);
       uniforms.uFlowScreen.value.set(1 / halfW, 1 / halfH);
       uniforms.uFlowAmp.value.set(0.08 * halfW, 0.035 * halfH, 0.1 * halfH);
       const r = fixed[2];
@@ -639,10 +651,10 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
         const g = Math.sqrt(-2 * Math.log(Math.max(1e-6, r[i * 4 + 1]))) * Math.cos(2 * Math.PI * r[i * 4 + 2]);
         const strand = Math.floor(r[i * 4] * 8);
         const sy = clamp(strand < 6 ? CURRENT_ROW + (strand - 2.5) * 0.02 + g * 0.0045 : CURRENT_ROW + g * 0.035, 0.55, 0.98);
-        unproject(q, 0.5, sy, 1, ray).sub(q.pos);
+        unproject(q, cx, sy, 1, ray).sub(q.pos);
         let depth = S * 0.3;
         if (ray.y < -1e-5) depth = Math.min((lm.waterY - q.pos.y) / ray.y, S * 0.5);
-        const p = unproject(q, 0.5, sy, depth, _v);
+        const p = unproject(q, cx, sy, depth, _v);
         const lift = depth * (0.004 + 0.006 * r[i * 4 + 2]);
         t[i * 4] = p.x;
         t[i * 4 + 1] = Math.max(p.y, lm.waterY) + lift;
@@ -1090,6 +1102,17 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     if (from === 'D') return cut ? t < 0.5 : t <= 0.4;
     return false;
   }
+  // Whether any of a state's drawing is on screen, for the searchlight's keep-out (4.7): from the
+  // first points landing to the last leaving, so the beam never lights a half-drawn picture.
+  function drawn(is: (k: Target) => boolean) {
+    if (!points.visible) return false;
+    const { from, to, t } = cur;
+    const cut = !motion;
+    if (is(from) && is(to)) return true;
+    if (is(to)) return cut ? t >= 0.5 : t > 0.05;
+    if (is(from)) return cut ? t < 0.5 : t < 0.85;
+    return false;
+  }
   // Each column's highlight moves toward 1 (lit) or 0 at a steady rate, and the dim on the rest
   // follows whether any column is lit.
   function easeColumns(dt: number) {
@@ -1179,6 +1202,32 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       }
       if (!(x1 > 0 && x0 < 1 && y1 > 0 && y0 < 1)) return null;
       return { x0, y0, x1, y1 };
+    },
+    columnsBox(): ScreenBox | null {
+      if (disposed || !drawn((k) => k === 'D')) return null;
+      world.camera.updateMatrixWorld();
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (let c = 0; c < COLS; c++) {
+        toScreen(colFeet[c], _foot);
+        toScreen(colTops[c], _top);
+        if (!_foot.ok || !_top.ok) continue;
+        x0 = Math.min(x0, _foot.x, _top.x);
+        x1 = Math.max(x1, _foot.x, _top.x);
+        y0 = Math.min(y0, _top.y);
+        y1 = Math.max(y1, _foot.y);
+      }
+      if (!(x1 >= x0)) return null;
+      // Half a column gap all round, so a lamp on a roof at the columns' feet counts as inside.
+      const pad = (x1 - x0) / (COLS - 1) / 2;
+      return { x0: (x0 - pad) / W, y0: (y0 - pad) / H, x1: (x1 + pad) / W, y1: (y1 + pad) / H };
+    },
+    pictureShowing() {
+      return !disposed && drawn(isPicture);
     },
     columnAt(ndc: Ndc) {
       if (disposed || !columnsShowing()) return -1;

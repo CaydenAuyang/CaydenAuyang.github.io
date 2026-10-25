@@ -21,8 +21,8 @@ void main() {
   float r2 = dot(c, c);
   if (r2 > 1.0) discard;
 #ifdef BACKING
-  // The figure's backing: the night colour, nearly opaque, soft at the edge.
-  fragColor = vec4(uBack, vAlpha * 0.92 * (1.0 - smoothstep(0.5, 1.0, r2)));
+  // The figure's backing: the night colour, opaque, with only a thin antialiased rim.
+  fragColor = vec4(uBack, vAlpha * (1.0 - smoothstep(0.82, 1.0, r2)));
   return;
 #endif
   float core = exp(-r2 * 7.0) * vCore;
