@@ -396,22 +396,18 @@ html[data-snapshot] .world-canvas {
   color: var(--c-headline);
 }
 /*
-  A title keeps its spec size (--s) unless its longest word (--wmax, in em, from title.ts) would run
-  past its block (--fit-w: the content width, or the right column on desktop), with 3% to spare.
-  One more rule keeps a title from wrapping differently in the stand-in font than in Barlow: where
-  the whole title (--wall) only just fits on one line, or only just doesn't (between 93% and 105%
-  of the block, --a being the size at which it exactly fits), it is set at 93% of --a, so it sits on
-  one line with room in both fonts. Everywhere else the first two terms leave --s alone.
+  Titles at their spec size, with no fitting (v4 scale, tokens.css). Every title fits its block on
+  one line from 320px up, in Barlow and in the stand-in font alike (at most 2.7% wider): the
+  closest is SELECTED WORK at 320px, 92% of the content width. So no title wraps differently when
+  the font arrives.
 */
 .h2 {
-  --s: min(var(--fs-h2), var(--fit-w, var(--content-w)) / (var(--wmax, 4.5) * 1.03));
-  --a: calc(var(--fit-w, var(--content-w)) / var(--wall, 99));
-  font-size: max(min(var(--s), var(--a) * 0.93), clamp(0px, (var(--s) - var(--a) * 1.05) * 1000, var(--s)));
+  font-size: var(--fs-h2);
   color: var(--c-headline);
 }
 .t-project {
   position: relative;
-  font-size: min(var(--fs-project), var(--fit-w, var(--content-w)) / (var(--wmax, 6) * 1.03));
+  font-size: var(--fs-project);
   color: var(--c-sub);
 }
 /* Organisation and project names often sit over the lit skyline: a soft scrim of their own, under
@@ -465,12 +461,25 @@ html[data-snapshot] .world-canvas {
     var(--halo);
 }
 /* The rest of a long organisation name ("Hong Kong", "Information Limited, Hong Kong"): a
-   smaller line of its own under the colored name, in the same heading. */
+   smaller line of its own under the colored name, in the same heading. It is dim, and the C to D
+   current runs right behind Hong Kong (2.64 to 1 with the name's halo alone), so it carries the
+   meta lines' strong halo and hug scrim too. */
 .t-tail {
+  position: relative;
   display: block;
+  width: fit-content;
   margin-top: var(--space-2);
   font-size: var(--fs-summer);
   color: var(--c-meta);
+  text-shadow: var(--halo-strong);
+}
+.t-tail::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-2) * -1) calc(var(--space-4) * -1);
+  z-index: -1;
+  background: var(--scrim-hug);
+  pointer-events: none;
 }
 
 /* JetBrains Mono for everything else. */
@@ -1033,31 +1042,14 @@ html[data-snapshot] .world-fallback[data-still]::after {
   .scrim:not(.hero__text)::before {
     display: none !important;
   }
-  /* A preview fits on a page with the heading above it and its caption, and a title with the
-     block under it: the titles are held to the page's height (vh is the page here). */
+  /* A preview fits on a page with the heading above it and its caption (vh is the page here). */
   .vf {
     max-width: calc(55vh * 1.6);
-  }
-  :root {
-    --fs-h2: min(clamp(80px, 13vw, 240px), 12vh);
-    --fs-project: min(clamp(44px, 6vw, 112px), 7vh);
-  }
-  .qp__panel {
-    padding: var(--space-4) !important;
-  }
-  /* The panel, then its notes, as blocks: Chrome won't split the grid between them, so the whole
-     grid went to the next page and left the mission's title alone above an empty page. */
-  .qp {
-    display: block !important;
-  }
-  .qp__notes {
-    margin-top: var(--space-5);
   }
   /* The long sections start on a page of their own, so their titles never end a page. */
   #experience,
   #work,
-  .more-work,
-  #since {
+  .more-work {
     break-before: page;
   }
   .scene,

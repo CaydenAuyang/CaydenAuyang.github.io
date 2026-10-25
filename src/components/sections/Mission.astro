@@ -1,29 +1,22 @@
 ---
-// Mission.astro: section 2. The headline, the lead, and the Previously / Edits / Now panel with its
-// three notes (MissionPanel.astro). The camera stop keeps its internal name: data-scene="question".
+// Mission.astro: section 2. The Previously / Edits / Now panel (MissionPanel.astro), with no
+// headline, lead or notes of its own (V4 section 5). The nav and the lift still say Mission, so
+// the section keeps its #mission anchor and is named by a visually hidden heading (taken out of
+// the flow, so nothing measures it for layout). The camera stop keeps its internal name:
+// data-scene="question".
 import MissionPanel from '../ui/MissionPanel.astro';
 import { mission } from '../../data/content';
-import { ignite } from '../ui/ignite';
-import { titleHtml } from '../ui/title';
-
-const headline = ignite(mission.heading);
 ---
 
-<section id="mission" class="scene mission" data-scene="question" aria-labelledby="mission-title">
+<section id="mission" class="scene mission" data-scene="question" aria-labelledby="mission-name">
   <div class="wrap">
-    <div class="mission__head stack scrim">
-      <h2 id="mission-title" class="h2" {...headline.attrs} set:html={titleHtml(mission.heading)} />
-      <p class="t-lead">{mission.lead.text}</p>
-    </div>
-    <MissionPanel views={mission.views} from={mission.from} to={mission.to} edits={mission.edits} notes={mission.notes} />
+    <h2 id="mission-name" class="sr-only">{mission.name}</h2>
+    <MissionPanel views={mission.views} from={mission.from} to={mission.to} edits={mission.edits} />
   </div>
 </section>
 
 <style>
   .mission {
     --scene-h: 120vh;
-  }
-  .mission__head {
-    margin-bottom: var(--space-6);
   }
 </style>

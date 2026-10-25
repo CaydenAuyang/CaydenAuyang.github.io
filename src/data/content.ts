@@ -41,7 +41,6 @@ export const meta = {
 export type TitleColor = 'window' | 'cool' | 'text';
 export const titleColors: Record<string, TitleColor[]> = {
   'Cayden Auyang': ['window', 'cool'],
-  'The mission': ['cool', 'window'],
   Experience: ['cool'],
   'Civic Exchange': ['window', 'text'],
   Wisers: ['window'],
@@ -97,7 +96,6 @@ export const hero = {
 //   ins:      insert `text` right after the words in `after`. `after: ''` means directly after the
 //             previous edit.
 //   replace:  strike `text` and insert `insertText` right after it.
-// `note` is the number of the note that says what caused the edit.
 // The build stops with an error if a `text` or `after` can't be found, or if the edits don't turn
 // the Previously text into the Now text exactly (MissionPanel.astro).
 export interface Edit {
@@ -105,15 +103,12 @@ export interface Edit {
   text: string;
   insertText?: string;
   after?: string;
-  note?: number;
 }
 
+// No headline, lead or notes (v4): the switch is the panel's only label. `name` is the section's
+// name for screen readers only; the nav and the lift say Mission too.
 export const mission = {
-  heading: 'The mission',
-  lead: {
-    text: "What I'm working towards, and how the question behind it changed.",
-    source: 'content.md, Oct 24',
-  } satisfies Line,
+  name: 'Mission',
   // The switch, left to right. The default view is Now.
   views: { from: 'Previously', edits: 'Edits', to: 'Now' },
   from: {
@@ -131,27 +126,14 @@ export const mission = {
       type: 'replace',
       text: 'If money is what separates people,',
       insertText: 'Why does know-how move so easily among the people who already have it, and so rarely reach the people who need it most?',
-      note: 1,
     },
-    { type: 'replace', text: "what could I build that's big enough to close the gap?", insertText: 'What does it take to get it across,', note: 2 },
+    { type: 'replace', text: "what could I build that's big enough to close the gap?", insertText: 'What does it take to get it across,' },
     {
       type: 'replace',
       text: 'Which tool finally makes it fair?',
       insertText: 'and how do I pass it on in a way that lets them pass it on too?',
-      note: 3,
     },
   ] satisfies Edit[] as Edit[],
-  // One line each, numbered 1 to 3 on the page.
-  notes: [
-    { text: 'At Civic Exchange, 25 years of research already existed. Staff just couldn\'t reach it.', source: 'CEX §3b, ER §1' },
-    { text: 'I did 11 interviews before building anything. Getting it across started with listening.', source: 'CEX §3a, UR, FD P2' },
-    {
-      // CONFIRM: the second sentence comes from Cayden's essay; keep it only if he's happy to say
-      // it publicly.
-      text: 'I handed the notebooks over with a 39-page manual and a staff workshop. In my club, a member I mentored now helps newer members.',
-      source: 'CEX §3g, FD P42; §3f, FD P38; Common App essay',
-    },
-  ] satisfies Line[],
 };
 
 // ---- 3. Experience -----------------------------------------------------------------------------

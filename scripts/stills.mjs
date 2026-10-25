@@ -28,7 +28,9 @@ mkdirSync(outDir, { recursive: true });
 
 const shots = [
   { file: 'fallback-hero.webp', viewport: { width: 1440, height: 900 }, scale: 1 },
-  { file: 'fallback-hero-phone.webp', viewport: { width: 390, height: 844 }, scale: 2, mobile: true },
+  // The phone still has no searchlight: its beam leans out of the left edge, and the fallback
+  // mirrors the still's edges to fill wider windows, so it would show the beam twice, as a V.
+  { file: 'fallback-hero-phone.webp', viewport: { width: 390, height: 844 }, scale: 2, mobile: true, noBeams: true },
 ];
 
 // The GPU path renders the scene as visitors see it (on a Mac, Metal through ANGLE).
@@ -41,7 +43,7 @@ for (const shot of shots) {
     hasTouch: Boolean(shot.mobile),
   });
   const page = await context.newPage();
-  await page.goto(new URL('/?snapshot', BASE).href, { waitUntil: 'networkidle' });
+  await page.goto(new URL(shot.noBeams ? '/?snapshot&debug' : '/?snapshot', BASE).href, { waitUntil: 'networkidle' });
   // Wait until the world reports it is ready (main.ts adds "is-ready" to <html>).
   await page.waitForFunction(() => document.documentElement.classList.contains('is-ready'), null, { timeout: 30000 });
   await page.waitForTimeout(1200);
@@ -50,6 +52,14 @@ for (const shot of shots) {
     content: 'body > *:not(.world-canvas):not([data-world]) { visibility: hidden !important; } [data-world] { opacity: 1 !important; visibility: visible !important; }',
   });
   await page.evaluate(() => window.scrollTo(0, 0));
+  if (shot.noBeams) {
+    await page.evaluate(() => {
+      const world = window.__night.world;
+      // The material, not the mesh: the beams set their mesh's visibility every frame.
+      world.scene.getObjectByName('beams').material.visible = false;
+      world.requestRender();
+    });
+  }
   await page.waitForTimeout(600);
   const png = resolve(outDir, shot.file.replace('.webp', '.png'));
   await page.screenshot({ path: png });

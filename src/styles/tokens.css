@@ -25,6 +25,21 @@
     dim: lift floors (desktop)             14px         5.62    4.5    1, over the skyline
     night on text: the chosen switch       15px        16.67    4.5    flat
 
+  v4 (2026-10-25), the smaller titles and the mission panel without notes, measured stricter: the
+  99th percentile of each line's box, titles with their halo left in, the mission text with its
+  halo taken out too, at 1440 x 900, 1024 x 768 and 390 x 844, motion on and reduced, and ?snapshot.
+
+    window: title words                    30-160px     3.46    3      Civic entering (1024, reduced)
+    cool: title words                      30-160px     4.20    3      EXPERIENCE (1440)
+    text: title words (Exchange, More)     30-104px     3.46    3      a letter of More work (1440)
+    dim: organisation tails (bold)         22-30px      3.38    3      Hong Kong over the C to D
+                                                                       current (1024, reduced)
+    dim: struck words (mission)            17-20px      4.88    4.5    "Which tool finally..." (390)
+    text, window: mission text, label      13-20px      5.64    4.5    every other mission line
+
+  The tails were 2.64 over the current with the name's halo alone; they now carry the strong halo
+  and a hug scrim of their own, like the meta lines (base.css .t-tail).
+
   Flat, for reference (WCAG 2.x formula in node):
 
                  on night   on sky    on glow   on glass over glow (#1A1529)
@@ -35,8 +50,8 @@
 
   What makes the city frames pass: over a fully lit window, the block scrim (night at 60%) keeps
   text at 6.44 (cool 5.96), but dim drops to 2.60 and window to 4.48. So every block over the city
-  carries a dark halo (--halo) around its letters; links, note numbers and struck words carry the
-  tighter --halo-strong; and small labels, dim lines, links, note numbers and project and
+  carries a dark halo (--halo) around its letters; links and struck words carry the tighter
+  --halo-strong; and small labels, dim lines, links and project and
   organisation names also get a small scrim of their own that hugs the words (base.css), as do the
   Contact light labels (darker, under the light show's beams), the hero stack on phones (a band at
   the spec's 60%) and the mission text inside its glass: two 60% layers leave 16% of the light,
@@ -121,14 +136,16 @@
   --font-display: var(--font-barlow), sans-serif;
   --font-body: var(--font-mono), monospace;
 
-  /* v3.1, bigger titles (NIGHT-SIGNAL.md section 3). The name fills the content width, fitted in
-     Hero.astro. Section titles: */
-  --fs-h2: clamp(80px, 13vw, 240px);
+  /* v4, smaller titles (V4.md section 4, replacing the v3.1 scale). The name, held inside the
+     hero's text column where that is narrower (Hero.astro): */
+  --fs-name: clamp(64px, 9vw, 160px);
+  /* Section titles (Experience, Selected work, More work, Reach out). */
+  --fs-h2: clamp(44px, 6vw, 104px);
   /* Organisation and project names (Civic Exchange, Wisers, OurCityHealth...). */
-  --fs-project: clamp(44px, 6vw, 112px);
+  --fs-project: clamp(30px, 3.6vw, 60px);
   /* The Wisers summer labels ("Summer 2024"), and the smaller tail of a long organisation name. */
   --fs-summer: clamp(22px, 2.2vw, 30px);
-  /* Subheads (Civic Exchange, Wisers, Lawrence Iu, the Since May statuses, the More work cards). */
+  /* Subheads (the More work cards' names). */
   --fs-sub: clamp(26px, 1vw + 22px, 36px);
   /* Small uppercase labels. */
   --fs-label: 16px;
@@ -181,11 +198,6 @@
      (32px at 768, 48px at 1024, 72px at 1440), at most 80px. Browsers without round() use
      plain 5vw. A custom property can't fall back by redeclaring it, hence @supports below. */
   --gutter: clamp(16px, 5vw, 80px);
-  /* Widths a title's longest word must fit in (a title only gets smaller than its spec size where
-     a word would otherwise run past its block): the page's content width, and on desktop the
-     right text column (grid columns 8 to 12 of the page's 12, with 32px gaps). */
-  --content-w: calc(min(100vw, 1440px) - 2 * var(--gutter));
-  --col-right: calc((min(100vw, 1440px) - 2 * var(--gutter) - 352px) * 5 / 12 + 128px);
   --max-page: 1440px;
   --header-h: 64px;
   --tap: 44px;

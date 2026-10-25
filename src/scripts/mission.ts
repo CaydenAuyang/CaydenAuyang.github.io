@@ -3,12 +3,15 @@
 // One stop per edit on a native range input: 0 is Previously (no edits, plain), 1 to 3 apply the
 // edits one by one in reading order, 4 is Now (every edit, clean; the default). Moving the handle
 // turns each edit's span on or off in the one marked paragraph; an edit switched on gets .is-new
-// for a moment, so its strike draws, its insertion lights, and its note number glows (here and in
-// the notes list). The Previously, Edits and Now switch becomes three presets that move the handle
-// (0, 3, 4) and shows which one the handle is on. Reduced motion: the same changes, instant
-// (base.css). Snapshot keeps the fixed Edits view, so the scrubber doesn't run there: the switch
-// stays as the poster's key to the marked text, set to Edits and inert. Without JavaScript the
-// switch's CSS views stay.
+// for a moment, so its strike draws and its insertion lights. The Previously, Edits and Now switch
+// becomes three presets that move the handle (0, 3, 4) and shows which one the handle is on.
+// Reduced motion: the same changes, instant (base.css). Snapshot keeps the fixed Edits view, so the
+// scrubber doesn't run there: the switch stays as the poster's key to the marked text, set to
+// Edits and inert. Without JavaScript the switch's CSS views stay.
+//
+// Height: the text area keeps the tallest stop's height at every stop (MissionPanel.astro), so
+// nothing here measures or moves anything: the slider stays put under a drag (mouse, pen or
+// touch), a preset or a key.
 
 const html = document.documentElement;
 const root = document.querySelector<HTMLElement>('.qp');
@@ -27,9 +30,6 @@ if (root && html.hasAttribute('data-snapshot')) {
   const edits = Array.from(marked.querySelectorAll<HTMLElement>('.qp__edit'));
   const ticks = Array.from(scrub.querySelectorAll<HTMLElement>('.qp__tick'));
   const track = range.parentElement as HTMLElement;
-  const noteNumbers = new Map(
-    Array.from(root.querySelectorAll<HTMLElement>('.qp__note-n[data-note]')).map((el) => [el.dataset.note, el]),
-  );
   const presets: [HTMLInputElement | null, number][] = [
     [root.querySelector<HTMLInputElement>('#qp-from'), 0],
     [root.querySelector<HTMLInputElement>('#qp-edits'), editsStop],
@@ -50,11 +50,7 @@ if (root && html.hasAttribute('data-snapshot')) {
       const was = edit.classList.contains('is-on');
       edit.classList.toggle('is-on', on);
       if (!on) edit.classList.remove('is-new');
-      else if (!was && animate) {
-        flash(edit, 'is-new');
-        const number = edit.dataset.note ? noteNumbers.get(edit.dataset.note) : undefined;
-        if (number) flash(number, 'is-glow');
-      }
+      else if (!was && animate) flash(edit, 'is-new');
     });
     marked.classList.toggle('is-clean', stop === last);
     if (range.value !== String(stop)) range.value = String(stop);

@@ -1,28 +1,32 @@
 ---
 // MissionPanel.astro: the mission's question as it was (Previously), edited in place into what it
-// is now (Now), on a glass panel, with the three notes that say what caused each edit.
+// is now (Now), on a glass panel sized to its text (V4 section 5). It has no title of its own: the
+// Previously / Edits / Now switch is its only label.
 //
 // A Previously / Edits / Now switch shows the clean Previously text, the marked version, or the
 // clean Now text. Default: Now. It is a real radio group that works with CSS alone (:has), so it
 // needs no JavaScript; browsers without :has hide the switch and show Now.
 //
-// The marked version (phrase level):
-//   - each old phrase is a real <del>, dimmed with a thin line through, plus a hidden "deleted";
-//   - its new phrase follows as a real <ins> in window, plus a hidden "inserted", and a small
-//     superscript note number.
-// The notes sit beside the panel on desktop and below it on phones.
+// The marked version (phrase level): each old phrase is a real <del>, dimmed with a thin line
+// through, plus a hidden "deleted"; its new phrase follows as a real <ins> in window, plus a hidden
+// "inserted".
 // The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
-// alone.
+// alone. It is #mission-panel: the timeline clears the figure as it rises (timeline.ts).
+//
+// Height: every view sits in one grid cell, as tall as the marked version (the tallest), so the
+// text area keeps one height at every stop and the slider and the switch never move, whether the
+// view changes by a drag (mouse, pen or touch), a preset or a key. Nothing around the panel moves
+// either (no layout shift, no timeline rebuild).
 //
 // The scrubber (NIGHT-SIGNAL.md 11b.5, src/scripts/mission.ts): under the text, a native range
 // input from Previously to Now, one stop per edit: 0 is Previously (clean), 1 to 3 apply the edits
 // one by one in reading order (marked as in the Edits view), 4 is Now (clean). The switch becomes
 // three presets that move it: Previously 0, Edits 3, Now 4 (the default). Each strike draws and
-// each insertion lights as the handle passes it, and its note number glows. Arrow keys move one
-// edit at a time; aria-valuetext says what each stop shows. With JavaScript the one marked
-// paragraph shows every stop (each edit is a span the script turns on and off); without it, the
-// switch shows the three fixed views. Every view sits in one grid cell, as tall as the marked
-// version (the tallest), so nothing under or around the text moves when the view changes.
+// each insertion lights as the handle passes it. Arrow keys move one edit at a time;
+// aria-valuetext says what each stop shows. With JavaScript the one marked paragraph shows every
+// stop (each edit is a span the script turns on and off), and an invisible copy with every edit
+// marked holds the cell at the tallest stop's height; without it, the switch shows the three fixed
+// views, hidden rather than removed, so the marked one holds the height.
 // Snapshot: the marked version, no scrubber, and the switch on Edits as its key (inert).
 //
 // At build time it checks that the edits turn the Previously text into the Now text exactly; if
@@ -35,16 +39,15 @@ interface Props {
   from: Line;
   to: Line;
   edits: Edit[];
-  notes: Line[];
 }
 
-const { views, from, to, edits, notes } = Astro.props;
+const { views, from, to, edits } = Astro.props;
 
 const fail = (message: string): never => {
   throw new Error(`MissionPanel: ${message}`);
 };
 
-type Piece = { kind: 'keep'; text: string } | { kind: 'edit'; del?: string; ins?: string; note?: number };
+type Piece = { kind: 'keep'; text: string } | { kind: 'edit'; del?: string; ins?: string };
 
 // Turn the Previously text plus the edits into kept text and edits.
 const pieces: Piece[] = [];
@@ -55,25 +58,24 @@ const find = (needle: string) => {
   return at;
 };
 for (const edit of edits) {
-  if (edit.note !== undefined && !notes[edit.note - 1]) fail(`an edit points at note ${edit.note}, which doesn't exist.`);
   if (edit.type === 'del' || edit.type === 'replace') {
     if (edit.type === 'replace' && !edit.insertText) fail(`the replace edit for "${edit.text}" has no insertText.`);
     const at = find(edit.text);
     if (at > cursor) pieces.push({ kind: 'keep', text: from.text.slice(cursor, at) });
     cursor = at + edit.text.length;
-    pieces.push({ kind: 'edit', del: edit.text, ins: edit.insertText, note: edit.note });
+    pieces.push({ kind: 'edit', del: edit.text, ins: edit.insertText });
   } else {
     const end = edit.after ? find(edit.after) + edit.after.length : cursor;
     if (edit.after === undefined) fail(`the insert "${edit.text}" needs an "after" ('' for right after the last edit).`);
     if (end > cursor) pieces.push({ kind: 'keep', text: from.text.slice(cursor, end) });
     cursor = end;
-    pieces.push({ kind: 'edit', ins: edit.text, note: edit.note });
+    pieces.push({ kind: 'edit', ins: edit.text });
   }
 }
 if (cursor < from.text.length) pieces.push({ kind: 'keep', text: from.text.slice(cursor) });
 
-// The edits must produce the October text exactly. A struck word leaves a double space behind
-// it ("to  hear"); that collapses, and nothing else is forgiven.
+// The edits must produce the Now text exactly. A struck word leaves a double space behind it
+// ("to  hear"); that collapses, and nothing else is forgiven.
 const produced = pieces
   .map((p) => (p.kind === 'keep' ? p.text : (p.ins ?? '')))
   .join('')
@@ -83,20 +85,18 @@ if (produced !== to.text) fail(`the edits produce\n  "${produced}"\nwhich is not
 // The marked sentence is one HTML string: line breaks between tags would put stray spaces
 // around words. Every piece of text is escaped.
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-// A word joiner keeps a note number on the same line as the word before it.
-const WJ = '⁠';
 // Each edit is a span the scrubber turns on (applied) and off (the Previously words); on, with the
-// paragraph's .is-clean, is the default Now view; on without it is the Edits view. A replacement's space sits inside its insertion, so it goes with it.
+// paragraph's .is-clean, is the default Now view; on without it is the Edits view. A replacement's
+// space sits inside its insertion, so it goes with it.
 let step = 0;
 const marked = pieces
   .map((p) => {
     if (p.kind === 'keep') return esc(p.text);
     step += 1;
-    let out = `<span class="qp__edit is-on" data-step="${step}"${p.note ? ` data-note="${p.note}"` : ''}>`;
+    let out = `<span class="qp__edit is-on" data-step="${step}">`;
     if (p.del) out += `<del class="qp__del"><span class="sr-only">${ui.deleted}: </span>${esc(p.del)}</del>`;
     const space = p.del && p.ins && !p.ins.startsWith(',') ? ' ' : '';
     if (p.ins) out += `<ins class="qp__ins">${space}<span class="sr-only">${ui.inserted}: </span>${esc(p.ins)}</ins>`;
-    if (p.note) out += `${WJ}<sup class="qp__n"><span class="sr-only">${ui.note} </span>${p.note}</sup>`;
     return `${out}</span>`;
   })
   .join('');
@@ -108,7 +108,7 @@ const stopTexts = [
   views.from,
   ...editPieces.map((p, i) => {
     const what = p.del && p.ins ? ui.scrubReplaced(p.del, trimWords(p.ins)) : p.del ? ui.scrubStruck(p.del) : ui.scrubInserted(trimWords(p.ins ?? ''));
-    const text = ui.scrubStep(i + 1, editPieces.length, what + (p.note ? ui.scrubNote(p.note) : ''));
+    const text = ui.scrubStep(i + 1, editPieces.length, what);
     return i === editPieces.length - 1 ? `${views.edits}. ${text}` : text;
   }),
   views.to,
@@ -119,62 +119,46 @@ const LAST_STOP = editPieces.length + 1;
 const START_STOP = LAST_STOP;
 ---
 
-<div class="qp">
-  <div class="qp__panel glass">
-    <fieldset class="qp__switch" data-qp-switch>
-      <legend class="sr-only">{ui.viewLegend}</legend>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-from" value="from" />
-      <label for="qp-from">{views.from}</label>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-edits" value="edits" />
-      <label for="qp-edits">{views.edits}</label>
-      <input class="sr-only" type="radio" name="qp-view" id="qp-to" value="to" checked />
-      <label for="qp-to">{views.to}</label>
-    </fieldset>
+<div class="qp glass" id="mission-panel">
+  <fieldset class="qp__switch" data-qp-switch>
+    <legend class="sr-only">{ui.viewLegend}</legend>
+    <input class="sr-only" type="radio" name="qp-view" id="qp-from" value="from" />
+    <label class="qp__opt" for="qp-from">{views.from}</label>
+    <input class="sr-only" type="radio" name="qp-view" id="qp-edits" value="edits" />
+    <label class="qp__opt" for="qp-edits">{views.edits}</label>
+    <input class="sr-only" type="radio" name="qp-view" id="qp-to" value="to" checked />
+    <label class="qp__opt" for="qp-to">{views.to}</label>
+  </fieldset>
 
-    <div class="qp__views" aria-live="polite" data-qp-views>
-      <p class="qp__text qp__view qp__view--from">{from.text}</p>
-      <p class="qp__text qp__view qp__view--edits" data-qp-marked set:html={marked} />
-      <p class="qp__text qp__view qp__view--to">{to.text}</p>
-      <!-- The scrubber's tallest stop (every edit marked), invisible: it holds the block at that
-           height, so the slider and the switch never move during a drag. -->
-      <p class="qp__text qp__view qp__ghost" aria-hidden="true" set:html={marked} />
-    </div>
-
-    <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide>
-      <label class="qp__scrub-label" for="qp-scrub">{ui.scrubLabel}</label>
-      <div class="qp__track" style={`--stops: ${LAST_STOP}`}>
-        <input
-          id="qp-scrub"
-          class="qp__range"
-          type="range"
-          min="0"
-          max={LAST_STOP}
-          step="1"
-          value={START_STOP}
-          aria-valuetext={stopTexts[START_STOP]}
-          data-texts={JSON.stringify(stopTexts)}
-          data-edits-stop={EDITS_STOP}
-        />
-        <span class="qp__ticks" aria-hidden="true">
-          {stopTexts.map((_, i) => <span class="qp__tick" style={`--t: ${i}`} />)}
-        </span>
-      </div>
-    </div>
+  <div class="qp__views" aria-live="polite" data-qp-views>
+    <p class="qp__text qp__view qp__view--from">{from.text}</p>
+    <p class="qp__text qp__view qp__view--edits" data-qp-marked set:html={marked} />
+    <p class="qp__text qp__view qp__view--to">{to.text}</p>
+    <!-- The scrubber's tallest stop (every edit marked), invisible: it holds the cell at that
+         height, so the slider and the switch never move as the handle goes. -->
+    <p class="qp__text qp__view qp__ghost" aria-hidden="true" set:html={marked} />
   </div>
 
-  <ol class="qp__notes scrim" aria-label={ui.notesLabel}>
-    {
-      notes.map((note, i) => (
-        <li class="qp__note">
-          <span class="qp__note-n" aria-hidden="true" data-note={i + 1}>
-            {i + 1}
-          </span>
-          <span class="sr-only">{`${ui.note} ${i + 1}: `}</span>
-          <span>{note.text}</span>
-        </li>
-      ))
-    }
-  </ol>
+  <div class="qp__scrub" data-qp-scrub data-needs-js data-snapshot-hide>
+    <label class="qp__scrub-label" for="qp-scrub">{ui.scrubLabel}</label>
+    <div class="qp__track" style={`--stops: ${LAST_STOP}`}>
+      <input
+        id="qp-scrub"
+        class="qp__range"
+        type="range"
+        min="0"
+        max={LAST_STOP}
+        step="1"
+        value={START_STOP}
+        aria-valuetext={stopTexts[START_STOP]}
+        data-texts={JSON.stringify(stopTexts)}
+        data-edits-stop={EDITS_STOP}
+      />
+      <span class="qp__ticks" aria-hidden="true">
+        {stopTexts.map((_, i) => <span class="qp__tick" style={`--t: ${i}`} />)}
+      </span>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -182,42 +166,17 @@ const START_STOP = LAST_STOP;
 </script>
 
 <style>
+  /* Glass: one of only two places it appears (the other is the video frames). Sized to its text:
+     at most 34rem wide on desktop, the full width inside the gutters on phones, 24px of padding. */
   .qp {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-5);
-  }
-  /* Desktop: the page's 12 columns. The panel takes 1 to 7, the notes start on column 8, the
-     same edge as the Experience, work and People text. */
-  @media (min-width: 1024px) {
-    .qp {
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-      column-gap: var(--space-5);
-      /* Top-aligned, so the notes hold still while the panel grows and shrinks with the scrubber. */
-      align-items: start;
-    }
-    .qp__panel {
-      grid-column: 1 / span 7;
-    }
-    .qp__notes {
-      grid-column: 8 / span 5;
-    }
-  }
-
-  /* Glass: one of only two places it appears (the other is the video frames). */
-  .qp__panel {
+    max-width: 34rem;
     padding: var(--space-4);
-    border-radius: var(--radius-frame);
     border: 1px solid var(--glass-border);
+    border-radius: var(--radius-frame);
     background: var(--glass-bg);
     -webkit-backdrop-filter: blur(var(--glass-blur));
     backdrop-filter: blur(var(--glass-blur));
     box-shadow: var(--glow-soft);
-  }
-  @media (min-width: 768px) {
-    .qp__panel {
-      padding: var(--space-6);
-    }
   }
 
   /* The switch: three segments, each a 44px target. */
@@ -225,12 +184,12 @@ const START_STOP = LAST_STOP;
     display: inline-flex;
     gap: var(--space-1);
     padding: var(--space-1);
-    margin-bottom: var(--space-5);
+    margin-bottom: var(--space-4);
     border-radius: var(--radius-control);
     border: 1px solid var(--rule);
     background: rgb(var(--night-rgb) / 0.5);
   }
-  .qp__switch label {
+  .qp__opt {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -247,24 +206,24 @@ const START_STOP = LAST_STOP;
       background var(--dur-quick) var(--ease-out);
   }
   @media (min-width: 768px) {
-    .qp__switch label {
+    .qp__opt {
       padding: 0 var(--space-4);
     }
   }
   /* The narrowest phones: "Previously" needs the room. */
   @media (max-width: 359px) {
-    .qp__switch label {
+    .qp__opt {
       padding: 0 var(--space-2);
     }
   }
-  .qp__switch label:hover {
+  .qp__opt:hover {
     color: var(--text);
   }
-  .qp__switch input:checked + label {
+  .qp__switch input:checked + .qp__opt {
     background: var(--text);
     color: var(--night);
   }
-  .qp__switch input:focus-visible + label {
+  .qp__switch input:focus-visible + .qp__opt {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
     box-shadow: 0 0 0 6px var(--focus-halo);
@@ -289,15 +248,17 @@ const START_STOP = LAST_STOP;
     );
     pointer-events: none;
   }
+  /* The panel's width is the measure: 34rem less its padding holds 41 characters at 20px and 48
+     at 17px, under the 60 the spec allows. */
   .qp__text {
     font-size: var(--fs-mission);
     line-height: 1.55;
-    max-width: 34ch;
     text-wrap: pretty;
   }
 
-  /* Every view in one cell, so the block is always the tallest view's height. Now is the default
-     and the only view without :has. The others are hidden, not removed, so they keep the height. */
+  /* Every view in one cell, so the text area is always the tallest view's height. Now is the
+     default and the only view without :has. The others are hidden, not removed, so they keep the
+     height. */
   .qp__view {
     grid-area: 1 / 1;
   }
@@ -324,11 +285,11 @@ const START_STOP = LAST_STOP;
   }
   /* Snapshot: the switch reads Edits from the first paint (mission.ts then checks it and makes the
      switch inert), and the marked version only. */
-  :global(html[data-snapshot]) .qp__switch input:checked:not(#qp-edits) + label {
+  :global(html[data-snapshot]) .qp__switch input:checked:not(#qp-edits) + .qp__opt {
     background: none;
     color: var(--dim);
   }
-  :global(html[data-snapshot]) .qp__switch #qp-edits + label {
+  :global(html[data-snapshot]) .qp__switch #qp-edits + .qp__opt {
     background: var(--text);
     color: var(--night);
   }
@@ -343,10 +304,9 @@ const START_STOP = LAST_STOP;
 
   /*
     The marked paragraph. Each edit is on (applied: struck words dim with a line through,
-    insertions in window with their note number) or off (the Previously words, plain; insertions
-    and numbers gone). .is-clean is Now: struck words gone, insertions plain. The line through is a
-    1px background, so it can draw left to right as the scrubber passes; forced colors get a real
-    line-through.
+    insertions in window) or off (the Previously words, plain; insertions gone). .is-clean is Now:
+    struck words gone, insertions plain. The line through is a 1px background, so it can draw left
+    to right as the scrubber passes; forced colors get a real line-through.
   */
   /* Struck words are dim at lead size (small text, 4.5:1): the strong halo keeps them clear where
      the glass sits over the lit city. */
@@ -363,23 +323,12 @@ const START_STOP = LAST_STOP;
     color: var(--window);
     text-decoration: none;
   }
-  .qp__text :global(.qp__n) {
-    font-size: max(13px, 0.5em);
-    font-weight: var(--fw-medium);
-    line-height: 0;
-    vertical-align: super;
-    margin-left: 0.15em;
-    color: var(--text);
-    font-variant-numeric: tabular-nums;
-  }
   .qp__text :global(.qp__edit:not(.is-on) .qp__del) {
     color: inherit;
     background-size: 0% 1px;
   }
   .qp__text :global(.qp__edit:not(.is-on) .qp__ins),
-  .qp__text :global(.qp__edit:not(.is-on) .qp__n),
   .qp__text:global(.is-clean) :global(.qp__del),
-  .qp__text:global(.is-clean) :global(.qp__n),
   .qp__text :global(.qp__edit:not(.is-on) .qp__del .sr-only),
   .qp__text:global(.is-clean) :global(.qp__ins .sr-only) {
     display: none;
@@ -387,30 +336,15 @@ const START_STOP = LAST_STOP;
   .qp__text:global(.is-clean) :global(.qp__ins) {
     color: inherit;
   }
-  /* Just applied: the insertion lights up like the windows, and its number glows. */
+  /* Just applied: the insertion lights up like the windows. */
   .qp__text :global(.qp__edit.is-new .qp__ins) {
     animation: qp-ins 520ms var(--ease-out);
-  }
-  .qp__text :global(.qp__edit.is-new .qp__n),
-  .qp__note-n:global(.is-glow) {
-    animation: qp-glow 900ms var(--ease-out);
   }
   @keyframes qp-ins {
     from {
       opacity: 0;
       color: var(--ign-hot);
       text-shadow: 0 0 14px rgb(var(--window-rgb) / 0.8);
-    }
-  }
-  @keyframes qp-glow {
-    0% {
-      text-shadow: none;
-    }
-    25% {
-      color: var(--ign-hot);
-      text-shadow:
-        0 0 6px rgb(var(--window-rgb) / 0.95),
-        0 0 18px rgb(var(--window-rgb) / 0.7);
     }
   }
   @media (forced-colors: active) {
@@ -420,7 +354,7 @@ const START_STOP = LAST_STOP;
   }
 
   /* With the scrubber, the one marked paragraph shows every stop, and the ghost (every edit
-     marked) holds the block at the tallest stop's height. */
+     marked) holds the cell at the tallest stop's height. */
   .qp:global(.is-scrub) .qp__view--from,
   .qp:global(.is-scrub) .qp__view--to {
     display: none !important;
@@ -436,8 +370,7 @@ const START_STOP = LAST_STOP;
   /* The scrubber: a native range input, 44px tall, a thin track that fills in window up to the
      handle, and one small tick per stop that lights once the handle has reached it. */
   .qp__scrub {
-    margin-top: var(--space-5);
-    max-width: 34rem;
+    margin-top: var(--space-4);
   }
   /* Text color, not dim: the glass can sit over the lit skyline, and this is a control's label. */
   .qp__scrub-label {
@@ -452,6 +385,9 @@ const START_STOP = LAST_STOP;
     --p: 0;
     position: relative;
   }
+  /* On touch, a sideways drag moves the handle and an up or down swipe still scrolls the page
+     (V4 section 8.4). Without pan-y the browser claimed the drag as a pan (pointercancel) while the
+     handle went on moving, so the text's reflow counted as a layout shift. */
   .qp__range {
     display: block;
     width: 100%;
@@ -461,6 +397,7 @@ const START_STOP = LAST_STOP;
     -webkit-appearance: none;
     appearance: none;
     cursor: pointer;
+    touch-action: pan-y;
   }
   .qp__range::-webkit-slider-runnable-track {
     height: 2px;
@@ -518,69 +455,10 @@ const START_STOP = LAST_STOP;
     background: var(--window);
   }
 
-  .qp__notes {
-    display: grid;
-    gap: var(--space-4);
-    max-width: var(--measure);
-  }
-  /* Beside the panel (768px and up) the notes scroll over the water where the signal's current
-     lands, which is brighter than the lit windows the 60% scrim is set for (tokens.css). So their
-     scrim, the same soft wide ellipse, holds night at 63%: every note line keeps 4.5:1 at the 99th
-     percentile through the Mission scroll, measured with the note text transparent and no halo. */
-  @media (min-width: 768px) {
-    .qp__notes.scrim::before {
-      background: radial-gradient(
-        closest-side,
-        rgb(var(--night-rgb) / 0.63) 0%,
-        rgb(var(--night-rgb) / 0.63) 55%,
-        rgb(var(--night-rgb) / 0.315) 78%,
-        rgb(var(--night-rgb) / 0) 100%
-      );
+  /* On paper the panel shows one view and doesn't change, so it needs no room held for it. */
+  @media print {
+    .qp__ghost {
+      display: none !important;
     }
-  }
-  /* Phones: the same band as every block's (base.css), at 63% for the same reason: under the
-     panel the notes pass over the landed current too. */
-  @media (max-width: 767px) {
-    .qp__notes.scrim::before {
-      background: linear-gradient(
-        to bottom,
-        rgb(var(--night-rgb) / 0) 0,
-        rgb(var(--night-rgb) / 0.63) 160px,
-        rgb(var(--night-rgb) / 0.63) calc(100% - 160px),
-        rgb(var(--night-rgb) / 0) 100%
-      );
-    }
-  }
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .qp__notes {
-      grid-template-columns: 1fr 1fr;
-      max-width: none;
-    }
-  }
-  .qp__note {
-    display: grid;
-    grid-template-columns: var(--space-5) minmax(0, 1fr);
-    align-items: baseline;
-    font-size: var(--fs-body);
-    line-height: var(--lh-body);
-  }
-  .qp__note-n {
-    position: relative;
-    justify-self: start;
-    font-size: 18px;
-    font-weight: var(--fw-medium);
-    color: var(--window);
-    text-shadow: var(--halo-strong);
-    font-variant-numeric: tabular-nums;
-  }
-  /* A small scrim of its own: without WebGL the still's bright figure outline can pass right
-     behind a number. */
-  .qp__note-n::before {
-    content: '';
-    position: absolute;
-    inset: calc(var(--space-2) * -1) calc(var(--space-3) * -1);
-    z-index: -1;
-    background: var(--scrim-hug);
-    pointer-events: none;
   }
 </style>

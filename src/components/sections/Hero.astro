@@ -10,9 +10,10 @@
 // (portrait tablets). Its CSS twin, used below and in base.css:
 //   phone:    @media (max-width: 767px), (max-width: 1023px) and (orientation: portrait)
 //   desktop:  @media (min-width: 1024px), (min-width: 768px) and (orientation: landscape)
-// The name is as large as its column allows (CAYDEN / AUYANG, or one line if that is bigger),
-// held down by height on short screens. The anchors arrive as CSS custom properties; a soft
-// scrim sits behind the text.
+// The name is at its spec size (V4.md section 4: --fs-name) unless its column or the height is
+// smaller, in which case they win (CAYDEN / AUYANG, or one line where that fits). On landscape
+// phones the stack starts under the figure and runs a little below the first screen. The anchors
+// arrive as CSS custom properties; a soft scrim sits behind the text.
 //
 // Timeline hooks: data-intro="name|line|small" (masked under html.js-intro until the timeline
 // adds .is-in; revealed after 2.5 s regardless), data-scroll-cue (the timeline adds .is-gone on
@@ -115,11 +116,11 @@ const vars = [
   /*
     The text stack (NIGHT-SIGNAL.md 3 and 7, v3 item 12): the name, the line and the small line.
     Phones (the base rules here): under the figure, the stack's bottom 8px above the tower tops,
-    the name on two lines (CAYDEN / AUYANG), each line filling the content width. Its size is
-    fitted with the words' measured widths in Barlow Condensed 800 ("Cayden Auyang" 6.07em,
-    "Cayden" 2.89em, "Auyang" 2.97em), so it doesn't depend on the loaded font, and held down by
-    height on short screens so the whole stack fits between the figure (plus 16px) and the tower
-    tops (minus 8px). The desktop column is further down.
+    the name on two lines (CAYDEN / AUYANG) at the spec size (64px on phones), never wider than
+    the content width: the words' measured widths in Barlow Condensed 800 ("Cayden Auyang" 6.07em,
+    "Cayden" 2.89em, "Auyang" 2.97em) set that, so it doesn't depend on the loaded font. It is held
+    down by height on short screens so the whole stack fits between the figure (plus 16px) and
+    the tower tops (minus 8px). The desktop column is further down.
   */
   .hero__text {
     position: absolute;
@@ -138,12 +139,7 @@ const vars = [
   }
   .hero__name-line {
     display: block;
-  }
-  .hero__name-line:first-child {
-    font-size: min(var(--w) / 2.9, var(--name-cap));
-  }
-  .hero__name-line:last-child {
-    font-size: min(var(--w) / 2.975, var(--name-cap));
+    font-size: min(var(--fs-name), var(--w) / 2.975, var(--name-cap));
   }
   .hero__line {
     margin-top: var(--space-3);
@@ -204,6 +200,18 @@ const vars = [
       display: none;
     }
   }
+  /* Phone layout in a window shorter than the hero's 520px floor (landscape phones): there is no
+     room between the figure and the tower tops for the stack, and the height cap would shrink the
+     name to nothing. So the stack starts 24px under the figure instead, the name keeps its spec
+     size (64px), and the stack runs on over the skyline and a little below the first screen,
+     over its band of night. */
+  @media (max-width: 767px) and (max-height: 519px), (max-width: 1023px) and (orientation: portrait) and (max-height: 519px) {
+    .hero__text {
+      top: calc((var(--fig-y-p) + var(--fig-h-p) / 2) * 100svh + var(--space-4));
+      bottom: auto;
+      --name-cap: var(--fs-name);
+    }
+  }
 
   /*
     Desktop layout: the stack in a column on the left, its bottom 48px above the tower tops as
@@ -238,35 +246,37 @@ const vars = [
       );
     }
     /*
-      The bigger of the two fits: two lines (CAYDEN / AUYANG, "Auyang" filling the column; the
-      stack is 1.65em plus the rest) or one line (6.08em across; 0.75em plus the rest), each held
-      down by the room. The words are flex items in boxes of their Barlow widths, with the space's
-      width (0.21em) between, so they wrap to two lines exactly when one line doesn't fit, and
-      the same way before and after the font arrives.
+      The spec size (--fs-name), unless the column or the room is smaller: then the bigger of the
+      two fits, two lines (CAYDEN / AUYANG, "Auyang" filling the column; the stack is 1.65em plus
+      the rest) or one line (6.08em across; 0.75em plus the rest), each held down by the room. The
+      words are flex items in boxes of their Barlow widths, with the space's width (0.21em)
+      between, so they wrap to two lines exactly when one line doesn't fit, and the same way before
+      and after the font arrives. (At 1024 to 1920 wide the column holds the spec size on two
+      lines; the 40px floor is a guard that no real window reaches.)
     */
     .hero__name {
       display: flex;
       flex-wrap: wrap;
       column-gap: 0.21em;
-      font-size: max(
-        min(var(--col) / 2.968, (var(--room) - var(--rest)) / 1.65),
-        min(var(--col) / 6.08, (var(--room) - var(--rest)) / 0.75),
-        40px
+      font-size: min(
+        var(--fs-name),
+        max(
+          min(var(--col) / 2.968, (var(--room) - var(--rest)) / 1.65),
+          min(var(--col) / 6.08, (var(--room) - var(--rest)) / 0.75),
+          40px
+        )
       );
     }
     .hero__name-line {
       display: block;
       flex: none;
+      font-size: inherit;
     }
     .hero__name-line:first-child {
       width: 2.893em;
     }
     .hero__name-line:last-child {
       width: 2.968em;
-    }
-    .hero__name-line:first-child,
-    .hero__name-line:last-child {
-      font-size: inherit;
     }
     /* Two lines, as on the spec's diagram: the second ("people, and build tools that help.") is
        34 characters. At exactly 34ch it fits with nothing to spare, and for one frame while the

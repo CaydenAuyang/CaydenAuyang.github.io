@@ -13,7 +13,7 @@ import ExternalLink from '../ui/ExternalLink.astro';
 import { clipFor } from '../ui/previews';
 import { work } from '../../data/content';
 import { ignite } from '../ui/ignite';
-import { titleHtml, titleWmax } from '../ui/title';
+import { titleHtml } from '../ui/title';
 import { ui } from '../../data/site';
 
 const headline = ignite(work.heading);
@@ -31,12 +31,7 @@ const moreHeadline = ignite(work.moreWork.heading);
         <div class="wrap grid stop__grid">
           <LoopVideo class="stop__video" name={project.name} caption={project.caption} src={clipFor(project.previewId)} />
           <div class="stop__text stack scrim">
-            <h3
-              id={`${project.stop}-name`}
-              class="t-project"
-              style={`--wmax: ${titleWmax(project.name)}`}
-              set:html={titleHtml(project.name)}
-            />
+            <h3 id={`${project.stop}-name`} class="t-project" set:html={titleHtml(project.name)} />
             <p class="t-meta stop__role">{project.role.text}</p>
             <p class="t-lead">{project.lead.text}</p>
             <ul class="facts">
@@ -174,10 +169,6 @@ const moreHeadline = ignite(work.moreWork.heading);
     }
     .stop__text {
       grid-column: 8 / span 5;
-    }
-    /* Project names fit their longest word to the column (base.css --wmax). */
-    .stop__text {
-      --fit-w: var(--col-right);
     }
     .stop__text .t-lead {
       font-size: var(--fs-lead);

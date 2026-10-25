@@ -410,40 +410,41 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
 
   /**
    * Titles never cross a drawn picture (spec section 3). The figure and the screen agent sit where
-   * the next section's title arrives, so they leave over a stretch of scroll measured from that
-   * title rather than from the scene: from the title's top entering the window to its reaching
-   * the picture's bottom edge, less a small gap. Their morphs are always at least this far along.
-   * Reduced motion and snapshot cut picture and camera together late in the stretch (CLEAR_CUT),
-   * once the hero text has risen clear of the Mission view's skyline.
+   * the next section's first block arrives (the Mission panel, SELECTED WORK), so they leave over a
+   * stretch of scroll measured from that block rather than from the scene: from its top entering
+   * the window to its reaching the picture's bottom edge, less a small gap. Their morphs are always
+   * at least this far along. Reduced motion and snapshot cut picture and camera together late in
+   * the stretch (CLEAR_CUT), once the hero text has risen clear of the Mission view's skyline.
+   * `selectors` are tried in order; with none on the page, the scene's own morph takes them away.
    *
-   * `reach` is how far along the morph must be when the title arrives. The figure is gone by the
-   * middle of its morph, so its stretch runs on past the title (FIGURE_REACH): the camera's dolly
+   * `reach` is how far along the morph must be when the block arrives. The figure is gone by the
+   * middle of its morph, so its stretch runs on past the block (FIGURE_REACH): the camera's dolly
    * to the Mission view, which moves with it, gets twice the scroll.
    */
   const CLEAR_GAP = 24;
   const CLEAR_CUT = 0.9;
   const FIGURE_REACH = 0.5;
-  function clearance(selector: string, pictureBottom: () => number, reach = 1): (y: number) => number {
-    const title = document.querySelector<HTMLElement>(selector);
+  function clearance(selectors: string[], pictureBottom: () => number, reach = 1): (y: number) => number {
+    const block = selectors.map((s) => document.querySelector<HTMLElement>(s)).find(Boolean) ?? null;
     let from = 0;
     let to = 1;
     const measure = () => {
-      if (!title) return;
-      const top = title.getBoundingClientRect().top + window.scrollY;
+      if (!block) return;
+      const top = block.getBoundingClientRect().top + window.scrollY;
       from = top - window.innerHeight;
       to = Math.max(from + 1, from + (top - pictureBottom() * window.innerHeight - CLEAR_GAP - from) / reach);
     };
     measure();
     ScrollTrigger.addEventListener('refresh', measure);
-    return (y) => (title ? span(y, from, to) : 0);
+    return (y) => (block ? span(y, from, to) : 0);
   }
-  /** The figure leaves as THE MISSION rises toward it (B into C). */
-  const figureClear = clearance('#mission-title', () => {
+  /** The figure leaves as the Mission panel rises toward it (B into C). */
+  const figureClear = clearance(['#mission-panel', '#mission-title'], () => {
     const a = usePhoneLayout(window.innerWidth, window.innerHeight) ? FIGURE_ANCHOR.phone : FIGURE_ANCHOR.desktop;
     return a.y + a.height / 2;
   }, FIGURE_REACH);
   /** The screen agent leaves as SELECTED WORK rises toward it (G into A). */
-  const agentClear = clearance('#work-title', () => wisersBox(window.innerWidth, window.innerHeight).y1);
+  const agentClear = clearance(['#work-title'], () => wisersBox(window.innerWidth, window.innerHeight).y1);
 
   /**
    * The scene the viewport is in (the last one whose start we have passed) and how far through it

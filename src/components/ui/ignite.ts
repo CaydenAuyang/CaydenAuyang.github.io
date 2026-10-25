@@ -10,10 +10,8 @@
 // text did. Screen readers get a visually hidden copy; the letter spans are aria-hidden.
 //
 // Use it on an <h2 class="h2"> in the section's own template:
-//   const ig = ignite(question.heading);
-//   <h2 id="question-title" class="h2" {...ig.attrs}>{question.heading}</h2>
-
-import { titleWall, titleWmax } from './title';
+//   const ig = ignite(work.heading);
+//   <h2 id="work-title" class="h2" {...ig.attrs} set:html={titleHtml(work.heading)} />
 
 export const SEQ_MS = 320;
 export const TOTAL_MS = 700;
@@ -27,7 +25,7 @@ export function ignite(text: string) {
     attrs: {
       'data-ignite': '',
       'data-ignite-ms': String(total),
-      style: `--stagger: ${stagger.toFixed(1)}ms; --wmax: ${titleWmax(text)}; --wall: ${titleWall(text)}`,
+      style: `--stagger: ${stagger.toFixed(1)}ms`,
     },
   };
 }
