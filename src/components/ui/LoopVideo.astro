@@ -7,9 +7,15 @@
 // presses on it alone.
 //
 // How it behaves (src/scripts/loop-video.ts):
-//   - muted, playsinline, loop, no autoplay attribute. preload="none" until the video is within
-//     one viewport of the screen; then it may start loading.
-//   - Plays while at least half of it is visible, pauses otherwise.
+//   - muted, playsinline, loop, no autoplay attribute. The files are in data attributes, not
+//     <source> elements: once the video is within one viewport of the screen, the script picks the
+//     1280px or the 720px encode by layout (V4.md 8.7), adds its sources and lets it load. The
+//     poster waits in data-poster until then too (a poster attribute is fetched at once, which
+//     put all three in a phone's first load); without JavaScript a <noscript> image stands in.
+//   - Plays while at least half of it is visible, pauses otherwise. While another video plays, a
+//     paused one on screen shows its frame as a still image (.vf__still), so two videos are never
+//     video layers on screen at once.
+//   - On touch screens the glass has no blur (V4.md 8.6), a flat fill and its border instead.
 //   - A visible Pause / Play button, labelled with the project's name, at the right end of the
 //     caption row under the frame, so it covers nothing in the recording: a 32px disc with a 44px
 //     hit area. A pause the visitor makes sticks until they press Play.
@@ -46,16 +52,20 @@ const height = src?.height ?? 800;
               playsinline
               loop
               preload="none"
-              poster={src.poster}
+              data-poster={src.poster}
               width={width}
               height={height}
               aria-label={label}
               disablepictureinpicture
-              disableremoteplayback
-            >
-              {src.webm && <source src={src.webm} type="video/webm" />}
-              <source src={src.mp4} type="video/mp4" />
-            </video>
+              disableRemotePlayback
+              data-webm={src.webm}
+              data-mp4={src.mp4}
+              data-small-webm={src.small?.webm}
+              data-small-mp4={src.small?.mp4}
+            />
+            <noscript>
+              <img class="vf__poster" src={src.poster} alt="" width={width} height={height} />
+            </noscript>
           </>
         ) : (
           <p class="vf__empty">{ui.previewPending}</p>
@@ -91,6 +101,8 @@ const height = src?.height ?? 800;
 </script>
 
 <style>
+  @import '../../styles/media.css';
+
   .vf {
     position: relative;
     z-index: 1; /* above neighbouring text scrims */
@@ -109,6 +121,15 @@ const height = src?.height ?? 800;
     backdrop-filter: blur(var(--glass-blur));
     box-shadow: var(--glow-soft);
   }
+  /* Touch screens: no blur over the live canvas (a phone would redo it every frame), a flat fill
+     instead; the border and the glow stay. */
+  @media (--touch) {
+    .vf__frame {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: var(--glass-flat);
+    }
+  }
 
   .vf__media {
     position: relative;
@@ -117,12 +138,18 @@ const height = src?.height ?? 800;
     border-radius: calc(var(--radius-frame) - 8px);
     background: var(--night);
   }
-  .vf__video {
+  .vf__video,
+  .vf__poster,
+  .vf__media :global(.vf__still) {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  /* The paused frame, drawn by loop-video.ts over the video it stands in for. */
+  .vf__media :global(.vf__still[hidden]) {
+    display: none;
   }
 
   /* The button: in the caption row, at the frame's right edge, off the picture. A 44px hit area
@@ -148,11 +175,14 @@ const height = src?.height ?? 800;
     box-shadow: 0 0 0 1px rgb(var(--text-rgb) / 0.22);
     transition: background var(--dur-quick) var(--ease-out);
   }
-  .vf__btn:hover {
-    color: var(--window);
-  }
-  .vf__btn:hover::before {
-    background: rgb(var(--night-rgb) / 0.9);
+  /* Hover is only a mouse's: on touch it would stick after a tap. */
+  @media (--mouse) {
+    .vf__btn:hover {
+      color: var(--window);
+    }
+    .vf__btn:hover::before {
+      background: rgb(var(--night-rgb) / 0.9);
+    }
   }
   .vf__btn :global(svg) {
     position: relative;

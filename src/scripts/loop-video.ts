@@ -1,8 +1,24 @@
 // loop-video.ts: plays and pauses the project previews (LoopVideo.astro).
 //
-//   - Loading: preload="none" until the video is within one viewport of the screen, then
-//     "auto", so the first frames are ready by the time it is in view.
-//   - Plays while at least half of it is visible, pauses otherwise.
+//   - Loading: a video has no sources until it is within one viewport of the screen. Then its file
+//     is picked by layout (V4.md 8.7) and it gets preload="auto", so the first frames are ready by
+//     the time it is in view. The stack and short layouts (phones upright and sideways, iPads
+//     upright) get the 720px encode, unless the frame is wider than 720px (an upright iPad Air or
+//     Pro), where that file would be stretched past its own size even at 1x; everything else gets
+//     the 1280px encode. A video keeps the file it started with. Its poster is set at the same
+//     time, from data-poster (at once in snapshot mode, without IntersectionObserver, and before
+//     printing).
+//   - Plays while at least half of it is visible, pauses otherwise, and pauses while the tab is
+//     hidden.
+//   - While one video plays, any other paused video on screen shows its frame as a still: a canvas
+//     drawn from it, over it, with the video itself made transparent. Chromium drops two or three
+//     whole-page frames (about 33 ms each) whenever a video starts playing while another video's
+//     paused frame is on screen, which is every hand-off from one work stop to the next; with the
+//     paused one shown as an image, it doesn't. A video paused with no other playing (the visitor's
+//     Pause, the last stop scrolling away) stays as it is. When a video plays again it shows under
+//     its still, and the still goes once the video's next frame is up (requestVideoFrameCallback).
+//     The files are tagged sRGB (the recordings are page screenshots), so the video and the canvas
+//     show the same colours: untagged, Chromium drew the video lighter than any canvas draws it.
 //   - Plays on its own only when motion is allowed. Under reduced motion the visitor presses
 //     Play. A pause the visitor makes sticks until they press Play again.
 //   - Snapshot mode: never plays; the poster stays.
@@ -16,6 +32,7 @@
 //     (requestVideoFrameCallback where it exists) and is skipped with motion off: the tint is
 //     decorative motion. If the browser refuses to read the frame, the spill simply stays off.
 import { ui } from '../data/site';
+import { layoutMode } from '../world/layout';
 
 type Want = 'auto' | 'play' | 'pause';
 
@@ -24,13 +41,21 @@ interface Player {
   video: HTMLVideoElement;
   button: HTMLButtonElement;
   label: string;
+  // At least half visible (plays), and any of it visible (a still while another plays).
   inView: boolean;
+  visible: boolean;
   want: Want;
   refused: boolean;
+  // Sources added and loading allowed.
+  warm: boolean;
+  // The paused frame, drawn over the hidden video (made the first time it is needed).
+  still: HTMLCanvasElement | null;
   // Light spill: whether this video is being sampled, and when it was last.
   sampling: boolean;
   lastSample: number;
 }
+
+type FrameVideo = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
 
 const html = document.documentElement;
 const snapshot = html.hasAttribute('data-snapshot');
@@ -39,14 +64,107 @@ const motionAllowed = () => !snapshot && !reduceQuery.matches;
 
 const players: Player[] = [];
 
+// ---- Which file ----------------------------------------------------------------------------------
+
+/** The small encodes' width: a frame wider than this would stretch them past their own size. */
+const SMALL_WIDTH = 720;
+
+function useSmall(width: number): boolean {
+  const layout = layoutMode();
+  return (layout === 'stack' || layout === 'short') && width <= SMALL_WIDTH;
+}
+
+function setPoster(p: Player) {
+  const poster = p.video.dataset.poster;
+  if (poster && !p.video.getAttribute('poster')) p.video.poster = poster;
+}
+
+/** Picks the file for this layout, adds its sources and lets it load. `width`: the frame's, if known. */
+function warm(p: Player, width?: number) {
+  if (p.warm) return;
+  p.warm = true;
+  setPoster(p);
+  const d = p.video.dataset;
+  const small = !!d.smallMp4 && useSmall(width ?? p.video.getBoundingClientRect().width);
+  // The small files go H.264 first: every phone decodes it in hardware, which is easier on an
+  // iPhone's battery than VP9 might be; the WebM is the fallback.
+  const files: [string | undefined, string][] = small
+    ? [
+        [d.smallMp4, 'video/mp4'],
+        [d.smallWebm, 'video/webm'],
+      ]
+    : [
+        [d.webm, 'video/webm'],
+        [d.mp4, 'video/mp4'],
+      ];
+  for (const [src, type] of files) {
+    if (!src) continue;
+    const source = document.createElement('source');
+    source.src = src;
+    source.type = type;
+    p.video.append(source);
+  }
+  p.video.preload = 'auto';
+  p.video.load();
+}
+
+// ---- The paused frame as a still -------------------------------------------------------------------
+
+function showStill(p: Player) {
+  const { video } = p;
+  if (!video.paused || video.readyState < 2 || !video.videoWidth) return;
+  if (p.still && !p.still.hidden && video.style.opacity === '0') return;
+  try {
+    if (!p.still) {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'vf__still';
+      canvas.setAttribute('aria-hidden', 'true');
+      canvas.hidden = true;
+      video.after(canvas);
+      p.still = canvas;
+    }
+    const canvas = p.still;
+    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+    }
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.hidden = false;
+    // Transparent rather than hidden, so screen readers still find the video and its label.
+    video.style.opacity = '0';
+  } catch {
+    // A frame the browser won't draw: the video stays as it is.
+    if (p.still) p.still.hidden = true;
+    video.style.opacity = '';
+  }
+}
+
+/** A video is playing (or about to): every other paused video on screen becomes a still. */
+function stillsBeside(p: Player) {
+  for (const q of players) if (q !== p && q.visible && q.video.paused) showStill(q);
+}
+
+/** Frames are flowing again: show the video, and drop the still once its next frame is up. */
+function hideStill(p: Player) {
+  const { video, still } = p;
+  video.style.opacity = '';
+  if (!still || still.hidden) return;
+  const done = () => {
+    if (!video.paused) still.hidden = true;
+  };
+  const v = video as FrameVideo;
+  if (typeof v.requestVideoFrameCallback === 'function') v.requestVideoFrameCallback(done);
+  else requestAnimationFrame(() => requestAnimationFrame(done));
+}
+
 // ---- Light spill ----------------------------------------------------------------------------------
 
 const SPILL_EVERY_MS = 250;
 const SPILL_W = 8;
 const SPILL_H = 5;
 const spill: { ctx: CanvasRenderingContext2D | null; off: boolean; from: Player | null } = { ctx: null, off: false, from: null };
-
-type FrameVideo = HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
 
 function spillContext(): CanvasRenderingContext2D | null {
   if (spill.off) return null;
@@ -175,6 +293,8 @@ function stopSpill(p: Player) {
   sendSpill({ color: null, strength: 0 });
 }
 
+// ---- Playing ----------------------------------------------------------------------------------------
+
 function render(p: Player) {
   const playing = !p.video.paused;
   p.figure.dataset.state = playing ? 'playing' : 'paused';
@@ -187,15 +307,9 @@ function wantsToPlay(p: Player): boolean {
   return motionAllowed() && !p.refused;
 }
 
-function warm(video: HTMLVideoElement) {
-  if (video.preload === 'auto') return;
-  video.preload = 'auto';
-  // Nothing has loaded yet under preload="none"; ask again now that loading is allowed.
-  if (video.readyState === 0 && video.paused) video.load();
-}
-
 function start(p: Player) {
-  warm(p.video);
+  warm(p);
+  stillsBeside(p);
   const attempt = p.video.play();
   if (attempt && typeof attempt.catch === 'function') {
     attempt.catch((error: DOMException) => {
@@ -219,31 +333,40 @@ function update(p: Player) {
 }
 
 const canObserve = 'IntersectionObserver' in window;
+const playerOf = (target: Element) => players.find((x) => x.video === target);
 
-// Half visible: play. Less: pause.
+// Pause the videos that are leaving before playing the ones arriving, so the arriving one's
+// start() finds them paused and makes them stills. A paused video that comes on screen while
+// another plays becomes a still too.
 const playObserver = canObserve
   ? new IntersectionObserver(
       (entries) => {
+        const changed: Player[] = [];
         for (const entry of entries) {
-          const p = players.find((x) => x.video === entry.target);
+          const p = playerOf(entry.target);
           if (!p) continue;
+          p.visible = entry.isIntersecting;
           p.inView = entry.isIntersecting && entry.intersectionRatio >= 0.5;
           if (!p.inView) stopSpill(p);
-          update(p);
+          changed.push(p);
         }
+        changed.sort((a, b) => Number(a.inView) - Number(b.inView)).forEach(update);
+        const playing = players.find((x) => !x.video.paused);
+        if (playing) stillsBeside(playing);
       },
       { threshold: [0, 0.5, 1] },
     )
   : null;
 
-// Within one viewport: allow loading.
+// Within one viewport: pick the file and allow loading.
 const nearObserver =
   canObserve && !snapshot
     ? new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
-            warm(entry.target as HTMLVideoElement);
+            const p = playerOf(entry.target);
+            if (p) warm(p, entry.boundingClientRect.width);
             nearObserver?.unobserve(entry.target);
           }
         },
@@ -261,8 +384,11 @@ document.querySelectorAll<HTMLElement>('[data-vf]').forEach((figure) => {
     button,
     label: button.dataset.label || '',
     inView: !canObserve,
+    visible: !canObserve,
     want: 'auto',
     refused: false,
+    warm: false,
+    still: null,
     sampling: false,
     lastSample: 0,
   };
@@ -270,8 +396,11 @@ document.querySelectorAll<HTMLElement>('[data-vf]').forEach((figure) => {
 
   video.addEventListener('play', () => render(p));
   video.addEventListener('pause', () => render(p));
-  // Spill while frames are actually showing; clear it when they stop.
-  video.addEventListener('playing', () => startSpill(p));
+  // Frames are showing: the video comes back from under its still, and the spill starts.
+  video.addEventListener('playing', () => {
+    hideStill(p);
+    startSpill(p);
+  });
   for (const type of ['pause', 'ended', 'emptied']) video.addEventListener(type, () => stopSpill(p));
 
   button.addEventListener('click', () => {
@@ -288,9 +417,12 @@ document.querySelectorAll<HTMLElement>('[data-vf]').forEach((figure) => {
   });
 
   playObserver?.observe(video);
-  nearObserver?.observe(video);
+  if (nearObserver) nearObserver.observe(video);
+  else setPoster(p);
   update(p);
 });
+
+window.addEventListener('beforeprint', () => players.forEach(setPoster));
 
 // The device's reduced-motion setting changed while the page is open.
 reduceQuery.addEventListener?.('change', () =>

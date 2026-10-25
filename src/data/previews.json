@@ -14,9 +14,19 @@
       "poster": "/media/previews/aisimply-desktop-poster.webp"
     },
     "bytes": {
-      "mp4": 1354739,
-      "webm": 1195524,
+      "mp4": 1354290,
+      "webm": 1195532,
       "poster": 48788
+    },
+    "small": {
+      "width": 720,
+      "height": 450,
+      "mp4": "/media/previews/aisimply-desktop-720.mp4",
+      "webm": "/media/previews/aisimply-desktop-720.webm",
+      "bytes": {
+        "mp4": 583800,
+        "webm": 560871
+      }
     },
     "liveUrl": "https://aisimply.co",
     "caption": "AI Simply's website, scrolling from the home page headline and services to its mission statement. Recorded Oct 23, 2026.",
@@ -38,9 +48,19 @@
       "poster": "/media/previews/ourcityhealth-desktop-poster.webp"
     },
     "bytes": {
-      "mp4": 1775907,
-      "webm": 1781967,
+      "mp4": 1775458,
+      "webm": 1781975,
       "poster": 68870
+    },
+    "small": {
+      "width": 720,
+      "height": 450,
+      "mp4": "/media/previews/ourcityhealth-desktop-720.mp4",
+      "webm": "/media/previews/ourcityhealth-desktop-720.webm",
+      "bytes": {
+        "mp4": 593670,
+        "webm": 578418
+      }
     },
     "liveUrl": "https://caydenauyang.github.io/OurCityHealth/",
     "caption": "OurCityHealth's demo globe, showing saved demo data (news dated 2014 to early 2024). Recorded Oct 23, 2026.",
@@ -62,9 +82,19 @@
       "poster": "/media/previews/civicaiclub-desktop-poster.webp"
     },
     "bytes": {
-      "mp4": 1808550,
-      "webm": 1200012,
+      "mp4": 1808101,
+      "webm": 1200020,
       "poster": 30052
+    },
+    "small": {
+      "width": 720,
+      "height": 450,
+      "mp4": "/media/previews/civicaiclub-desktop-720.mp4",
+      "webm": "/media/previews/civicaiclub-desktop-720.webm",
+      "bytes": {
+        "mp4": 577088,
+        "webm": 578193
+      }
     },
     "liveUrl": "https://civicaiclub.github.io",
     "caption": "The Civic AI Club website, scrolling from its home page title to how the club works with teachers. Recorded Oct 23, 2026.",

@@ -3,10 +3,17 @@
 // Civic AI Club), then the More work cards.
 //
 // Timeline hooks: each project is `data-stop="och|ais|club"` with `data-pin`; the More work
-// cards are `data-stop="more"`. On desktop (1024px and up) with motion on, the timeline pins each
-// project for about 120vh of scroll, so a project is exactly one viewport tall there: the video
-// large on the left, the text beside it. Unpinned (reduced motion, snapshot, phones, tablets) the
-// same layout simply scrolls, with the text under the video below 1024px.
+// cards are `data-stop="more"`. Layouts (media.css, V4.md 8.1 and 8.2):
+//   - wide: the video large on the left, the text beside it.
+//   - pin (wide, at least 600 tall) with motion on: each project is a 150vh track whose one-screen
+//     frame (.stop__grid) stays still for 50vh (V4 section 2), in CSS; the timeline's held beats
+//     count on those two numbers. The timeline adds .is-tall when an open More panel makes the
+//     frame taller than the window; that project then scrolls normally.
+//   - short (phones sideways): the video on the left, at most 70% of the window tall, the text
+//     beside it.
+//   - stack (phones and iPads upright): the video at full width, then the text.
+// Not held (stack, short, reduced motion, wide windows under 600 tall) a project is as long as its
+// content. Snapshot gives each one a screen of its own for the poster captures.
 import LoopVideo from '../ui/LoopVideo.astro';
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
@@ -97,12 +104,14 @@ const moreHeadline = ignite(work.moreWork.heading);
 </section>
 
 <style>
+  @import '../../styles/media.css';
+
   .work {
     position: relative;
     padding-block: 22vh;
     padding-block: round(nearest, 22vh, 8px);
   }
-  @media (min-width: 768px) {
+  @media (--wide) {
     .work {
       padding-top: 40vh;
       padding-bottom: 30vh;
@@ -122,9 +131,9 @@ const moreHeadline = ignite(work.moreWork.heading);
     align-items: center;
     padding-block: var(--space-8);
   }
-  @media (min-width: 768px) {
+  @media (--short) {
     .stop {
-      min-height: 120vh;
+      padding-block: var(--space-6);
     }
   }
   .stop__grid {
@@ -152,37 +161,51 @@ const moreHeadline = ignite(work.moreWork.heading);
     flex-basis: 100%;
   }
 
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .stop__grid :global(.stop__video),
-    .stop__text {
-      grid-column: 1 / -1;
-    }
+  /* Stack: the video across the full width, the text under it at a reading width (upright iPads
+     are wide enough for long lines otherwise). */
+  @media (--stack) {
     .stop__text {
       max-width: 40rem;
     }
   }
 
-  /* Desktop: the video large on the left, the text beside it. */
-  @media (min-width: 1024px) {
+  /* Short (phones sideways): the video on the left, never more than 70% of the window tall, so a
+     whole frame is in view; the text beside it. Neither is held. */
+  @media (--short) {
+    .stop__grid :global(.stop__video) {
+      grid-column: 1 / span 7;
+      justify-self: start;
+      width: 100%;
+      /* The picture at most 70svh tall: its width, plus the frame's 16px mat and border. */
+      max-width: calc(70vh * 1.6 + 16px);
+      max-width: calc(70svh * 1.6 + 16px);
+    }
+    .stop__text {
+      grid-column: 8 / span 5;
+    }
+  }
+
+  /* Wide: the video large on the left, the text beside it. */
+  @media (--wide) {
     .stop__grid :global(.stop__video) {
       grid-column: 1 / span 7;
     }
     .stop__text {
       grid-column: 8 / span 5;
     }
-    .stop__text .t-lead {
-      font-size: var(--fs-lead);
-    }
-    /*
-      Held (motion on, JavaScript on, not snapshot): each project is a 220vh track whose frame
-      (the grid) stays still for 120vh of scroll (spec section 6). The track's height is in the
-      CSS from the first paint, so reloads and #links land in the right place and nothing moves
-      when the scripts start. The timeline adds .is-tall when an open More panel makes the frame
-      taller than the window; that project then scrolls normally.
-    */
+  }
+
+  /*
+    Held (the pin layout, motion on, JavaScript on, not snapshot): each project is a 150vh track
+    whose frame (the grid) stays still for 50vh of scroll (V4 section 2), while the frames before
+    and after it travel in and out over the other 100vh. The track's height is in the CSS from the
+    first paint, so reloads and #links land in the right place and nothing moves when the scripts
+    start. Small viewport units, so on an iPad the frame always fits what the toolbar leaves.
+  */
+  @media (--pin) {
     :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop:not(.is-tall) {
-      height: 220vh;
-      min-height: 0;
+      height: 150vh;
+      height: 150svh;
       padding-block: 0;
       align-items: flex-start;
     }
@@ -190,20 +213,22 @@ const moreHeadline = ignite(work.moreWork.heading);
       position: sticky;
       top: 0;
       height: 100vh;
+      height: 100svh;
       box-sizing: border-box;
       padding-block: calc(var(--header-h) + var(--space-3)) var(--space-5);
       align-content: center;
     }
-    /* Keep the pinned frame inside the viewport on short windows. */
+    /* Keep the held frame inside the window on short windows. */
     :global(html.js:not([data-motion='off']):not([data-snapshot])) .stop__grid :global(.stop__video) {
       max-width: calc((100vh - var(--header-h) - 160px) * 1.6);
+      max-width: calc((100svh - var(--header-h) - 160px) * 1.6);
       justify-self: start;
       width: 100%;
     }
   }
 
   /* Snapshot: every stop is one screen; "Selected work" rides at the top of the first one. */
-  @media (min-width: 1024px) {
+  @media (--wide) {
     :global(html[data-snapshot]) .work {
       padding-block: 0;
     }
@@ -236,7 +261,7 @@ const moreHeadline = ignite(work.moreWork.heading);
     position: relative;
     padding-block: var(--space-8);
   }
-  @media (min-width: 768px) {
+  @media (--wide) {
     .more-work {
       padding-block: var(--space-9);
     }
@@ -248,14 +273,15 @@ const moreHeadline = ignite(work.moreWork.heading);
     display: grid;
     gap: var(--space-5);
   }
-  /* Two cards: side by side from 768px, each as wide as the work text column on desktop. */
-  @media (min-width: 768px) {
+  /* Two cards: one under the other in the stack layout, side by side otherwise, each as wide as the
+     work text column in the wide layout. */
+  @media (--short), (--wide) {
     .more-work__list {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--space-5);
     }
   }
-  @media (min-width: 1024px) {
+  @media (--wide) {
     .more-work__list {
       max-width: calc((100% - 11 * var(--space-5)) / 12 * 10 + 9 * var(--space-5));
     }

@@ -410,7 +410,9 @@ function scaleFilter({ w, h }) {
   return `scale=${w}:${h}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p`;
 }
 
-const COLOR_TAGS = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv'];
+// The frames are sRGB screenshots converted with the bt709 matrix only, so the transfer is sRGB
+// (iec61966-2-1). Tagged bt709, Chromium drew the video lighter than its poster and paused still.
+const COLOR_TAGS = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'iec61966-2-1', '-color_range', 'tv'];
 
 // Encode at the lowest CRF (best quality) whose file fits the budget.
 function encodeToBudget(label, startCrf, maxCrf, encode) {
@@ -565,6 +567,12 @@ if (results.length) {
   try { manifest = JSON.parse(fs.readFileSync(JSON_OUT, 'utf8')); } catch { /* new file */ }
   for (const r of results) {
     const i = manifest.findIndex((m) => m.id === r.id);
+    // The 720px encodes (V4.md 8.7) are made from the finished 1280px MP4, outside this tool: keep
+    // the entry, and say they need making again from the new recording.
+    if (i >= 0 && manifest[i].small) {
+      r.small = manifest[i].small;
+      console.log(`${r.id}: re-encode ${r.small.mp4} and ${r.small.webm} from the new 1280px MP4`);
+    }
     if (i >= 0) manifest[i] = r; else manifest.push(r);
   }
   const order = (m) => Object.keys(FRAMINGS).indexOf(m.framing) * 10 + Object.keys(SITES).indexOf(m.projectId);
