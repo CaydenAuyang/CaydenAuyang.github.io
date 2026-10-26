@@ -115,9 +115,11 @@ export interface Logo {
 }
 
 export const intro = {
-  // The phone is a picture to assistive tech: what its two screens show (content.md 1b alt texts).
+  // What the phone's two screens show (content.md 1b alt texts): the live phone's description (it
+  // is a button, "Open the phone"). The still shows it closed, so only the cover photo.
   phoneLabel:
     'A folding phone showing two photos: Cayden, smiling in front of painted lanterns, and Civic AI Club members around a meeting table',
+  phoneStillLabel: 'A folded phone showing a photo: Cayden, smiling in front of painted lanterns',
   // The greeting card (Cayden approved option C). `bold` is the phrase inside `text` shown in window.
   greeting: [
     { text: "Hi, I'm Cayden." },

@@ -1,27 +1,33 @@
-// index.ts: the intro module's folding phone (V4.md 6.1, 8.5 to 8.8): its lifecycle, the
-// render-on-demand loop and context loss. Intro.astro loads this chunk (three comes from the
-// world's chunks, not a second copy) once the module is within 1.5 screens, and calls
-// mountPhone(box, { motion }) on its [data-intro-phone] box.
+// index.ts: the intro module's folding phone (V4.md 6.1, 8.5 to 8.8; V5.md section 1): its
+// lifecycle, the render-on-demand loop and context loss. Intro.astro loads this chunk (three comes
+// from the world's chunks, not a second copy) once the module is within 1.5 screens, and calls
+// mountPhone(box, { motion, hint }) on its [data-intro-phone] box.
 //
 // Lifecycle:
 //   - WebGL: checked by making the phone canvas's own context, so no probe context is ever left
 //     alive. three r186 needs WebGL 2; without it the box keeps the still (Intro.astro's <img> of
-//     the open phone).
+//     the closed phone) and stays a picture (role img).
 //   - Before the entrance, and before anything is drawn: the photos are fetched and decoded with
 //     createImageBitmap (screens.ts), the room's reflections are built once in idle time
 //     (requestIdleCallback, 1 s timeout) and the generator freed, and every material is compiled
 //     and every texture uploaded, so the first frames on screen don't stall.
 //   - The first frame waits until the box is on screen; then the canvas fades in over the still
-//     (class is-live). With motion the still stays hidden until then (it shows the open phone,
-//     the entrance starts shut); with reduced motion it stands in until that first frame, which
-//     matches it.
+//     (class is-live) and the box becomes a button (role button, aria-pressed with the fold,
+//     aria-label "Open the phone" or "Close the phone", described by what its screens show) and a
+//     tab stop. With motion the still stays hidden until then (it shows the closed display pose,
+//     the entrance starts from another); with reduced motion it stands in until that first frame,
+//     which matches it.
+//   - The hint under the phone ("Click to open", "Tap to open"; Intro.astro) fades in with the
+//     first frame and out after the first open, and doesn't come back this visit (sessionStorage).
 //   - The entrance starts when 40% of the box is in view (an IntersectionObserver, not a scroll
 //     position). From then on the canvas floats (about 4 px and 2 degrees over 6 s): a CSS
 //     animation on the canvas element (Intro.astro), never a redraw, paused off screen.
+//   - When the box leaves the screen the phone is put away: shut, in the closed display pose, so
+//     it's always closed when you come back.
 //
-// Drawing (8.6): on demand only, while the entrance plays, a drag turns it or its inertia runs, a
-// fold plays, or it eases back to the display pose (controls.ts), and only while the box is on
-// screen and the tab visible, at most 60 frames a second. Otherwise nothing at all.
+// Drawing (8.6): on demand only, while the entrance plays, a held phone follows its drag, its
+// inertia runs, a fold plays, or it eases back to a display pose (controls.ts), and only while the
+// box is on screen and the tab visible, at most 60 frames a second. Otherwise nothing at all.
 // Pixel ratio (8.5): min(devicePixelRatio, 2), and lower where that would make the drawing buffer
 // (the canvas, with its bleed) bigger than 1.3 megapixels.
 // The canvas reaches 15% (of the box's narrower side) past the box on every side, so a turned
@@ -29,18 +35,20 @@
 // Context loss (8.8): on webglcontextlost it calls preventDefault and shows the still; on
 // webglcontextrestored it rebuilds what the GPU lost (three re-uploads the geometry and textures;
 // the reflections are built again and every material recompiled) and the phone comes back as it
-// was (folded or not, turned or not; an entrance cut short ends in the display pose).
+// was (folded or not, turned or not; an entrance cut short ends in its display pose).
 
 import { Color, DirectionalLight, Group, Mesh, MeshBasicMaterial, NeutralToneMapping, PerspectiveCamera, PlaneGeometry, Scene, SRGBColorSpace, Vector3, WebGLRenderer, type Material, type Texture, type WebGLRenderTarget } from 'three';
 import { PALETTE } from '../../world/palette';
 import { createControls } from './controls';
 import { buildDevice, SIZE, type Device } from './device';
-import { DEG, Entrance, Fold, qDisplay, qStart, quat } from './entrance';
+import { DEG, displayPose, Entrance, Fold, qClosed, qStart, quat } from './entrance';
 import { applyEnvironment, buildEnvironment, PHONE_COLORS, shadowMap } from './materials';
 import { loadPhoto, photoUrls, type Photo } from './screens';
 
 export interface PhoneOptions {
   motion: boolean;
+  /** The hint under the phone ([data-phone-hint]), if any. */
+  hint?: HTMLElement | null;
 }
 
 export interface Phone {
@@ -63,6 +71,12 @@ const MAX_BUFFER = 1.3e6;
 const MIN_FRAME_MS = 15;
 /** How much of the box must be in view before the entrance plays. */
 const ENTRANCE_AT = 0.4;
+/** The contact shadow's floor, as a share of FIT_RADIUS below the phone's centre (apply()). */
+const FLOOR = 0.94;
+/** The hint's top sits this far (CSS px) below that floor, just under the shadow. */
+const HINT_GAP = 10;
+/** Remembers, for this visit, that the phone has been opened (the hint doesn't come back). */
+const OPENED_KEY = 'intro-phone:opened';
 
 /** What one WebGL context draws with; built again after a context loss. */
 interface Stage {
@@ -102,16 +116,49 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
   // ?debug&dpr=2: a fixed pixel ratio, past the caps (the still tool only).
   const fixedDpr = debug && params.has('dpr') ? Number(params.get('dpr')) : undefined;
 
+  const hint = opts.hint ?? null;
+  // The box is a picture (the still) until the live phone is up, then a button.
+  const stillLabel = box.getAttribute('aria-label') ?? '';
+  const openLabel = box.dataset.openLabel ?? 'Open the phone';
+  const closeLabel = box.dataset.closeLabel ?? 'Close the phone';
+  const describedBy = box.dataset.describedby;
+  const opened = () => {
+    try {
+      return window.sessionStorage.getItem(OPENED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  };
+  const hideHint = (remember: boolean) => {
+    if (!hint) return;
+    hint.classList.remove('is-in');
+    if (!remember) return;
+    hint.classList.add('is-gone');
+    try {
+      window.sessionStorage.setItem(OPENED_KEY, '1');
+    } catch {
+      // Storage blocked: the hint stays gone until the page reloads.
+    }
+  };
+
   const showStill = () => {
     box.classList.remove('is-live');
     box.classList.add('is-still');
+    box.setAttribute('role', 'img');
+    box.setAttribute('aria-label', stillLabel);
+    box.removeAttribute('aria-pressed');
+    box.removeAttribute('aria-describedby');
+    hideHint(false);
     // No keyboard controls any more. A box that has focus keeps it until focus moves on.
     if (document.activeElement !== box) box.removeAttribute('tabindex');
     else {
       box.tabIndex = -1;
-      box.addEventListener('blur', () => box.removeAttribute('tabindex'), { once: true });
+      box.addEventListener('blur', dropTab, { once: true });
     }
   };
+  function dropTab() {
+    box.removeAttribute('tabindex');
+  }
 
   const canvas = document.createElement('canvas');
   let gl: WebGL2RenderingContext | null = null;
@@ -129,8 +176,9 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
   box.append(canvas);
 
   // ---- State that outlives a context ----
-  const fold = new Fold(!motion);
-  const view = (motion ? qStart : qDisplay).clone();
+  // It arrives closed, with or without motion.
+  const fold = new Fold(false);
+  const view = (motion ? qStart : qClosed).clone();
   const entrance = new Entrance(motion);
   let stage: Stage | null = null;
   let ready = false;
@@ -146,6 +194,9 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
 
   const announce = () => {
     box.dataset.phoneOpen = String(fold.open);
+    if (!box.classList.contains('is-live')) return;
+    box.setAttribute('aria-pressed', String(fold.open));
+    box.setAttribute('aria-label', fold.open ? closeLabel : openLabel);
   };
   announce();
 
@@ -167,6 +218,9 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
     // The box's narrower side spans 2 x FIT_RADIUS at the phone's centre.
     mmPerPx = FIT_RADIUS / (short / 2);
     radPerPx = Math.PI / short;
+    // The hint sits under the phone's shadow, not under the box: a box taller than it is wide
+    // (stack) leaves room under the phone.
+    if (hint) hint.style.top = `${Math.round(box.offsetTop + height / 2 + (FLOOR * FIT_RADIUS) / mmPerPx + HINT_GAP)}px`;
     dirty = true;
     if (!stage) return;
     const dpr = fixedDpr ?? Math.min(window.devicePixelRatio || 1, MAX_DPR, Math.sqrt(MAX_BUFFER / (canvasW * canvasH)));
@@ -205,7 +259,7 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
       if (tmp.x > maxX) maxX = tmp.x;
       if (tmp.y < minY) minY = tmp.y;
     }
-    const floor = -FIT_RADIUS * 0.94;
+    const floor = -FIT_RADIUS * FLOOR;
     const near = 1 - Math.min(1, Math.max(0, minY - floor) / 60);
     const w = (maxX - minX) * (0.75 + 0.25 * (1 - near));
     s.shadow.position.set((minX + maxX) / 2, floor, -30);
@@ -219,10 +273,14 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
     motion,
     view,
     entrance,
+    live: () => box.classList.contains('is-live'),
     radPerPx: () => radPerPx,
-    toggleFold() {
-      fold.set(!fold.open, motion);
+    isOpen: () => fold.open,
+    setOpen(open) {
+      if (open === fold.open) return;
+      fold.set(open, motion);
       announce();
+      if (open) hideHint(true);
       dirty = true;
     },
     kick,
@@ -240,14 +298,23 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
       box.classList.add('is-live');
       box.classList.remove('is-still');
       box.dataset.phoneReady = '';
-      if (!box.hasAttribute('tabindex')) box.tabIndex = 0;
+      box.setAttribute('role', 'button');
+      if (describedBy) box.setAttribute('aria-describedby', describedBy);
+      announce();
+      // A tab stop again (a still shown while the box had focus left it at -1, due to go on blur).
+      box.removeEventListener('blur', dropTab);
+      box.tabIndex = 0;
+      if (hint && !fold.open && !opened() && !hint.classList.contains('is-gone')) {
+        hint.hidden = false;
+        hint.classList.add('is-in');
+      }
     }
   };
 
-  /** No frames needed now; wake up when the ease back is due (4 s after the last input). */
+  /** No frames needed now; wake up when the next ease back or auto-close is due (controls.ts). */
   const sleep = () => {
     window.clearTimeout(returnTimer);
-    const due = controls.returnDue();
+    const due = controls.nextDue();
     if (due === null || disposed) return;
     returnTimer = window.setTimeout(
       () => {
@@ -266,9 +333,10 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
       raf = requestAnimationFrame(tick);
       return;
     }
-    const dt = Math.min(0.05, last ? (now - last) / 1000 : 0);
+    // The first frame after a rest steps one frame's worth, so a drag that starts moves at once.
+    const dt = Math.min(0.05, last ? (now - last) / 1000 : 1 / 60);
     last = now;
-    entrance.step(dt, view, fold);
+    entrance.step(dt, view);
     fold.step(dt);
     controls.step(dt, now);
     render();
@@ -288,12 +356,25 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
     kick();
   };
 
+  /** Off screen: shut, in the closed display pose, so it's closed when the reader comes back. */
+  const putAway = () => {
+    if (entrance.state === 'waiting') return;
+    entrance.finish();
+    if (fold.open || fold.moving) {
+      fold.set(false, false);
+      announce();
+    }
+    controls.reset(qClosed);
+    dirty = true;
+  };
+
   // ---- Visibility ----
   const io = new IntersectionObserver(
     ([entry]) => {
       onScreen = entry.isIntersecting;
       ratio = entry.intersectionRatio;
       box.classList.toggle('is-away', !onScreen);
+      if (!onScreen) putAway();
       startEntrance();
       kick();
     },
@@ -465,9 +546,7 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
     // An entrance cut short ends where it was going.
     if (entrance.state === 'playing') {
       entrance.finish();
-      fold.set(true, false);
-      view.copy(qDisplay);
-      announce();
+      view.copy(displayPose(fold.open));
     }
     // After three's own handler (on this same event) has started its state afresh. The old
     // reflections died with the context; nothing on the GPU is left to free.
@@ -542,6 +621,7 @@ export function mountPhone(box: HTMLElement, opts: PhoneOptions): Phone {
       stage = null;
       canvas.remove();
       box.classList.remove('is-live', 'is-floating');
+      showStill();
     },
   };
 }

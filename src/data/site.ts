@@ -44,6 +44,11 @@ export const ui = {
   // The one-time hint in the hero (NIGHT-SIGNAL.md 11b.1, content.md Interface labels).
   hintMouse: 'Click anywhere in the city',
   hintTouch: 'Tap the city',
+  // The intro phone (V5.md 1.3, 1.4): its button's name, open or closed, and the hint under it.
+  phoneOpen: 'Open the phone',
+  phoneClose: 'Close the phone',
+  phoneHintMouse: 'Click to open',
+  phoneHintTouch: 'Tap to open',
   notFoundTitle: 'Page not found',
   notFoundBody: 'There is nothing at this address.',
   notFoundLink: 'Go to the home page',

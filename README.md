@@ -2,7 +2,7 @@
 
 Cayden Auyang's portfolio for the Pomfret School Certificate Program (Global Citizenship and Awareness). Live at https://caydenauyang.github.io, and embedded in the program's Google Site.
 
-"Night Signal": night falls on Victoria Harbour, seen from the Kowloon side. The lit windows of a procedural Hong Kong skyline are the site's material. As you scroll, window lights lift off the towers and gather into pictures: Cayden's head and shoulders, a current over the water, the 12 notebooks he built, a feed, a shoe and a screen from his two Wisers summers, and two lights for Pomfret and Hong Kong. Between the hero and the mission, a folding phone opens beside a short greeting.
+"Night Signal": night falls on Victoria Harbour, seen from the Kowloon side. The lit windows of a procedural Hong Kong skyline are the site's material. As you scroll, window lights lift off the towers and gather into pictures: Cayden's head and shoulders, a current over the water, the 12 notebooks he built, a feed, a shoe and a screen from his two Wisers summers, and two lights for Pomfret and Hong Kong. Between the hero and the mission, a folding phone waits beside a short greeting, and opens when you click it.
 
 Built with [Astro](https://astro.build) 7 as a static site, three.js for the scene, GSAP ScrollTrigger and Lenis for scrolling. Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`; `.github/workflows/ci.yml` runs `npm run check` on every push and pull request.
 
@@ -62,9 +62,9 @@ CI runs the same command on Linux in three parallel jobs: the build, types, acce
 | `public/figure/` | The figure of light, built from Cayden's turntable video: `figure-hi`, `figure-lo` and `figure-phone` (`.bin` with a `.json` describing it), exactly 60,000, 30,000 and 16,000 dots, one per particle on each tier. Each dot is 10 bytes (position, normal, brightness). Loaded as is, never resampled. |
 | `public/world/` | The fallback stills of the hero scene. |
 | `public/media/previews/` | The three project preview loops, MP4 and WebM, in desktop encodes and 720px-wide ones for smaller screens, with posters (`src/data/previews.json`). |
-| `public/intro/` | The intro's phone photos (two sizes each, the smaller for phones), the open phone's still, and the logos. |
+| `public/intro/` | The intro's phone photos (two sizes each, the smaller for phones), the closed phone's still, and the logos. |
 | `tools/previews/` | Records the preview loops with Playwright. |
-| `tools/intro/phone-still/` | Renders the open phone's no-WebGL still from the real scene. |
+| `tools/intro/phone-still/` | Renders the closed phone's no-WebGL still from the real scene. |
 | `scripts/` | The checks (`check.mjs` runs them all; `devices.mjs`, `check-a11y.mjs`, `budgets.mjs`, with `serve.mjs` to serve a build), `perf.mjs` and `stills.mjs`. |
 
 ## Modes
@@ -103,8 +103,8 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Civic Exchange holds while you read it, the twelve columns standing still above the skyline | scroll, `wide` layout | about 70vh, in a CSS sticky frame | `Experience.astro` |
 | Each project pins while you read it | scroll, `wide` layout | about 150vh a project, the video playing throughout | `timeline.ts` |
 | The hero text fades as it scrolls up toward the figure | scroll, phones | gone before it reaches the figure's bottom edge | `timeline.ts` |
-| The intro phone unfolds: folded shut and tilted, it opens like a book with a small overshoot and settle, turning a quarter into landscape to face you; then it floats | once, when 40% of it is in view | after 0.6 s, 1.4 s to open; the float is ±4 px and ±2° over 6 s, a CSS transform | `src/intro/phone/entrance.ts` |
-| Dragging the phone turns it in every direction, with inertia; a double click or double tap folds or unfolds it; it eases back to its display pose | drag (horizontal on touch, so vertical swipes scroll); double tap | back after 4 s without input | `src/intro/phone/controls.ts` |
+| The intro phone arrives closed, the vertical photo on its cover, and turns from a tilt to its closed display pose; then it floats. A hint under it says "Click to open" ("Tap to open" on touch) until the first open | once, when 40% of it is in view | after 0.6 s, a 1.4 s turn; the float is ±4 px and ±2° over 6 s, a CSS transform | `src/intro/phone/entrance.ts` |
+| Dragging the phone turns it live in every direction (the drawn phone follows the drag through a critically damped spring, 60 ms), with inertia on release; a click or tap opens or closes it like a book, turning a quarter into landscape to face you; open, it folds shut by itself, and it eases back to the display pose for its state | drag (a mouse after 4 px; horizontal on touch, so vertical swipes scroll); click or tap; Enter or Space | 1.4 s to fold; shut after 6 s without input or when it leaves the screen; back after 4 s without input | `src/intro/phone/controls.ts` |
 | The greeting card pulls away from its place and springs back | drag | up to 120px (80px, horizontal only, on phones) | `src/intro/card-drag.ts` |
 | The "Worked with" logos slide past, fading at both ends; hovering pauses them, and a pause button stops them | always | about 40 s a loop | `LogoStrip.astro` |
 | Smooth scrolling | always | Lenis | `timeline.ts` |
@@ -137,7 +137,7 @@ Every animation on the site. Two curves: `power3.out` for reveals and `power2.in
 | Previews play | at least half visible | pause when not | `loop-video.ts` |
 | The Pomfret and Hong Kong labels fade in | at the bottom of the page | 400 ms | `Contact.astro` |
 
-With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start and never flicker. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The mission's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars. The searchlight and the light show's beams hold still and nothing pulses. The Wisers pictures hold a still frame. The intro phone shows open, in landscape and still, and dragging turns it with no inertia; the logos sit in a still, wrapping row. The system cursor stays (no laser pointer).
+With reduced motion, none of this runs except opening and closing panels and the menu (instantly), and videos play only on request. Dragging the figure still turns it, directly and without a spring, and it stays where it is left. A pulse lights the windows around the tap at once and switches them off 1.5 s later, with no ring or wave, and the spotlight switches on and off without fading. Section headlines are lit from the start and never flicker. Hovering or tapping an archive column lights it and shows its label at once. Videos tint nothing. The mission's slider applies edits without animating. The arc is a faint still line, and hovering the email lights it for a moment. No shooting stars. The searchlight and the light show's beams hold still and nothing pulses. The Wisers pictures hold a still frame. The intro phone shows closed and still, a click swaps it open or closed at once, it only closes by itself when it leaves the screen, and dragging turns it directly with no inertia; the logos sit in a still, wrapping row. The system cursor stays (no laser pointer).
 
 ## Accessibility
 

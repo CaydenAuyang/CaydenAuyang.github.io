@@ -1,12 +1,14 @@
-// entrance.ts: how the phone moves on its own (V4.md 6.1): its poses, the fold (the entrance's
-// unfold, and every fold and unfold after it, with the same animation), and the entrance itself.
+// entrance.ts: how the phone moves on its own (V4.md 6.1, V5.md 1.4): its poses, the fold (every
+// fold and unfold, with the same animation), and the entrance itself.
 //
-// The entrance plays once, when 40% of the phone's box is first in view (index.ts watches that):
-// shut and tilted (yaw -25, pitch 10, roll -6), then after 0.6 s it unfolds over 1.4 s (hinge 0
-// to 180 with a small overshoot and settle), turning a quarter turn counter-clockwise into
-// landscape and toward the reader (yaw -12). The idle float that follows is CSS on the canvas
-// (Intro.astro), not a redraw.
-// Reduced motion: no entrance; open, landscape, still, and a fold is an instant swap.
+// The phone arrives closed, the vertical photo on its cover screen, and stays closed until someone
+// opens it (a click or a tap, controls.ts). The entrance plays once, when 40% of the phone's box is
+// first in view (index.ts watches that): from the start pose (yaw -25, pitch 10, roll -6), after
+// 0.6 s it turns over 1.4 s to the closed display pose (yaw -18, pitch 6, roll -4). It never
+// unfolds by itself. Open, the display pose is landscape, turned toward the reader (yaw -12, pitch
+// 4). The idle float that follows is CSS on the canvas (Intro.astro), not a redraw.
+// Reduced motion: no entrance; closed, in the closed display pose, still, and a fold is an instant
+// swap.
 
 import { Euler, Quaternion } from 'three';
 
@@ -18,15 +20,22 @@ export interface Pose {
   roll: number;
 }
 const START: Pose = { pitch: 10, yaw: -25, roll: -6 };
-const DISPLAY: Pose = { pitch: 4, yaw: -12, roll: 0 };
+/** The display poses, closed and open (the open one turned into landscape by the fold's quarter turn). */
+const CLOSED: Pose = { pitch: 6, yaw: -18, roll: -4 };
+const OPEN: Pose = { pitch: 4, yaw: -12, roll: 0 };
 /** The quarter turn into landscape, counter-clockwise as the reader sees it. */
 export const LANDSCAPE = 90 * DEG;
 const DELAY = 0.6;
+/** The entrance's turn, and every fold and unfold. */
+const TURN = 1.4;
 export const UNFOLD = 1.4;
 
 export const quat = (p: Pose) => new Quaternion().setFromEuler(new Euler(p.pitch * DEG, p.yaw * DEG, p.roll * DEG, 'YXZ'));
 export const qStart = quat(START);
-export const qDisplay = quat(DISPLAY);
+export const qClosed = quat(CLOSED);
+export const qOpen = quat(OPEN);
+/** The display pose that matches the fold: closed or open. */
+export const displayPose = (open: boolean) => (open ? qOpen : qClosed);
 
 export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -101,8 +110,7 @@ export class Fold {
 export class Entrance {
   state: 'waiting' | 'playing' | 'done';
   private t = 0;
-  private unfolded = false;
-  /** Someone took the phone mid-entrance: the turn toward the reader stops; the unfold plays on. */
+  /** Someone took the phone mid-entrance (a drag, a key, a click): the turn stops there. */
   took = false;
 
   constructor(motion: boolean) {
@@ -116,20 +124,16 @@ export class Entrance {
     return true;
   }
 
-  /** Advance; turns view from the start pose to the display pose and unfolds fold on cue. */
-  step(dt: number, view: Quaternion, fold: Fold) {
+  /** Advance; turns view from the start pose to the closed display pose. */
+  step(dt: number, view: Quaternion) {
     if (this.state !== 'playing') return;
     this.t += dt;
-    if (this.t >= DELAY && !this.unfolded) {
-      this.unfolded = true;
-      if (!fold.open) fold.set(true, true);
-    }
-    const u = clamp01((this.t - DELAY) / UNFOLD);
-    if (!this.took) view.slerpQuaternions(qStart, qDisplay, easeInOut(u));
+    const u = clamp01((this.t - DELAY) / TURN);
+    if (!this.took) view.slerpQuaternions(qStart, qClosed, easeInOut(u));
     if (u >= 1) this.state = 'done';
   }
 
-  /** Skip it (debug poses, a rebuilt context): whatever pose it has, it stays. */
+  /** Skip it (debug poses, a rebuilt context, the box scrolled away): whatever pose it has, it stays. */
   finish() {
     this.state = 'done';
   }
