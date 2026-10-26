@@ -41,6 +41,7 @@ export const meta = {
 export type TitleColor = 'window' | 'cool' | 'text';
 export const titleColors: Record<string, TitleColor[]> = {
   'Cayden Auyang': ['window', 'cool'],
+  'Why I build': ['text', 'text', 'window'],
   Experience: ['cool'],
   'Civic Exchange': ['window', 'text'],
   Wisers: ['window'],
@@ -207,10 +208,10 @@ export interface Edit {
   after?: string;
 }
 
-// No headline, lead or notes (v4): the switch is the panel's only label. `name` is the section's
-// name for screen readers only; the nav and the lift say Mission too.
+// A title (v5, Cayden picked it Oct 26), and still no lead or notes: the switch is the panel's only
+// label. The nav and the lift still say Mission.
 export const mission = {
-  name: 'Mission',
+  heading: 'Why I build',
   // The switch, left to right. The default view is Now.
   views: { from: 'Previously', edits: 'Edits', to: 'Now' },
   from: {

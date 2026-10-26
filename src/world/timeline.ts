@@ -681,8 +681,9 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
   /** Room between the waterline and the words' first line when the last point lands. */
   const LAND_GAP = 8;
   const figureClear = (() => {
-    const words = ['[data-scene="intro"] [data-card] > *, [data-scene="intro"] [data-logos] p', '#mission-panel'];
-    const blocks = ['[data-scene="intro"] [data-phone], [data-scene="intro"] [data-intro-phone], [data-scene="intro"] [data-card]', '#mission-panel'];
+    // Without the module, the Mission's title (or its panel) is the first block it must clear.
+    const words = ['[data-scene="intro"] [data-card] > *, [data-scene="intro"] [data-logos] p', '#mission-title', '#mission-panel'];
+    const blocks = ['[data-scene="intro"] [data-phone], [data-scene="intro"] [data-intro-phone], [data-scene="intro"] [data-card]', '#mission-title', '#mission-panel'];
     let found = false;
     let from = 0;
     let to = 1;
