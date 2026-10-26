@@ -1,9 +1,9 @@
 # ci.yml: checks every push and every pull request with "npm run check".
 #
 # A fresh Linux computer downloads the project, installs the exact package versions from
-# package-lock.json and Playwright's Chromium, then runs the checks against a production build
-# (scripts/check.mjs builds, serves the build itself and stops the server after). Three machines
-# share the work, so each should finish in well under 10 minutes:
+# package-lock.json and Playwright's Chromium (cached between runs), then runs the checks against
+# a production build (scripts/check.mjs builds, serves the build itself and stops the server
+# after). Three machines share the work, so each should finish in well under 10 minutes:
 #   - site: the build, the TypeScript checks, the accessibility check (axe) and the budgets
 #   - devices-1 and devices-2: the build and half the 15-size device check each
 #     (scripts/devices.mjs --shard=1/2 and 2/2: every second size, so each gets phones, iPads
@@ -40,7 +40,8 @@ jobs:
     # Pinned: ubuntu-latest moved to 26.04 on Oct 26, 2026, where Playwright 1.59 won't install
     # Chromium. Move up once Playwright supports it.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # A run takes about 6 minutes; the extra time covers one slow Chromium download (below).
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -63,6 +64,19 @@ jobs:
 
       - name: Install exact package versions
         run: npm ci
+
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # Chromium's download took 8 to 13 minutes on some runners on Oct 26, 2026 (it usually takes
+      # 20 s), so it is kept between runs for each Playwright version. The install below then only
+      # adds the system libraries, and still downloads anything the cache lacks.
+      - name: Reuse Playwright's Chromium
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install Chromium for the browser checks
         run: npx playwright-core install --with-deps chromium
