@@ -105,12 +105,10 @@ export interface Logo {
   symbol?: string;
   src?: string;
   // The symbol's viewBox size, or the file's own size in px, for the width and height attributes
-  // (no layout shift).
+  // (no layout shift). Both are trimmed to the logo's visible marks, so LogoStrip.astro sizes each
+  // logo by their area (V5 section 4).
   width: number;
   height: number;
-  // Its height on desktop in px, between 36 and 44, so wide wordmarks and tall marks carry the
-  // same weight (phones show 0.7 of it). Tuned by eye in the strip.
-  size: number;
   // Where the logo came from. Never rendered.
   source: string;
 }
@@ -142,7 +140,6 @@ export const intro = {
       symbol: 'changing-young-lives',
       width: 265,
       height: 160,
-      size: 44,
       source:
         'Traced from https://www.changingyounglives.org.hk/wp-content/uploads/2016/12/logo.png (the site header, 400 x 242); the site has no SVG',
     },
@@ -151,24 +148,21 @@ export const intro = {
       symbol: 'civic-exchange',
       width: 759,
       height: 200,
-      size: 40,
       source:
         'Traced from https://civic-exchange.org/wp-content/uploads/2016/11/CE-logo_white.png (1353 x 406, the site media library; the header shows the same logo as ce-logo.png at 218 x 57); the site has no SVG',
     },
     {
       name: 'Silver Pillars',
       src: '/intro/logos/silver-pillars.webp',
-      width: 72,
-      height: 96,
-      size: 44,
-      source: 'site-handoff/hero-module/web/logos/silver-pillars.webp (from Cayden\'s file), recoloured to text',
+      width: 116,
+      height: 156,
+      source: 'site-handoff/hero-module/logos/silver-pillars-mono.png (Cayden\'s file, already in the text color), resized to 156 px tall: 3x its desktop height',
     },
     {
       name: 'Capstone',
       symbol: 'capstone',
       width: 639,
       height: 120,
-      size: 36,
       source:
         'Traced from https://www.capstoneprep.com/wp/wp-content/uploads/2018/11/cap-logo.png (1481 x 474, the site media library): the CAPSTONE serif wordmark alone, as the white header logo (Captone_CTL_White.png) shows it on navy; the site has no SVG',
     },
@@ -177,7 +171,6 @@ export const intro = {
       src: '/intro/logos/mak-solicitors.webp',
       width: 196,
       height: 96,
-      size: 42,
       source: 'site-handoff/hero-module/web/logos/mak-solicitors.webp (from Cayden\'s file), recoloured to text',
     },
     {
@@ -185,7 +178,6 @@ export const intro = {
       symbol: 'pomfret',
       width: 188,
       height: 41,
-      size: 36,
       source: 'https://resources.finalsite.net/images/v1710351085/pomfret/usyvkhpb3fbp3swt0it0/logo-white.svg (the site header), its path unchanged',
     },
   ] satisfies Logo[],

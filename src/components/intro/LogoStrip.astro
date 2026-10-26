@@ -4,9 +4,10 @@
 // Six logos in the order of content.md, all one flat color (text), at 70% rising to 100% on hover:
 // four are symbols in one SVG sprite (public/intro/logos/logos.svg, colored by the page through
 // currentColor), two are small WebPs already in the text color. Every one has width and height
-// attributes, so nothing shifts as they load. Desktop heights are each logo's `size` (36 to 44px,
-// so wide wordmarks and tall marks carry the same weight); stacked and short layouts show 0.7 of
-// it (28px on average).
+// attributes, so nothing shifts as they load. Each is sized by its area, not its height (V5
+// section 4): on desktop every logo's visible box covers about AREA px², so a wide wordmark
+// (POMFRET) is short and a compact mark (Silver Pillars) tall and they read with even weight, held
+// between 28 and 52px tall; stacked and short layouts show 0.7 of that.
 //
 // The strip slides slowly (40 s a loop) with soft fades at both ends; a second, hidden copy of the
 // list completes the loop. It pauses on hover, while it's off screen, and with its pause button:
@@ -26,6 +27,12 @@ for (const logo of intro.logos as Logo[]) {
   if (!logo.symbol === !logo.src) throw new Error(`LogoStrip.astro: "${logo.name}" needs a symbol or a src, not both.`);
 }
 const logos = intro.logos as Logo[];
+
+// The desktop height that gives a logo AREA px² (its width and height are trimmed to its marks).
+const AREA = 3600;
+const MIN_H = 28;
+const MAX_H = 52;
+const heightFor = (logo: Logo) => Math.round(Math.min(MAX_H, Math.max(MIN_H, Math.sqrt((AREA * logo.height) / logo.width))));
 ---
 
 <div class="logos" data-logos data-no-world>
@@ -47,7 +54,7 @@ const logos = intro.logos as Logo[];
           [false, true].map((loop) => (
             <ul class:list={['logos__list', { 'logos__list--loop': loop }]} aria-hidden={loop ? 'true' : undefined}>
               {logos.map((logo) => (
-                <li style={`--size: ${logo.size}`}>
+                <li style={`--size: ${heightFor(logo)}`}>
                   {logo.symbol ? (
                     <svg
                       class="logos__img"
@@ -214,7 +221,7 @@ const logos = intro.logos as Logo[];
       animation-play-state: paused;
     }
   }
-  /* Stacked and short: 0.7 of each logo's desktop height (28px on average). */
+  /* Stacked and short: 0.7 of each logo's desktop height (20 to 36px). */
   .logos__img {
     display: block;
     width: auto;
