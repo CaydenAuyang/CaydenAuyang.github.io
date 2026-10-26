@@ -37,7 +37,9 @@ concurrency:
 jobs:
   check:
     name: ${{ matrix.part }}
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04 on Oct 26, 2026, where Playwright 1.59 won't install
+    # Chromium. Move up once Playwright supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
