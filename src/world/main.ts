@@ -105,4 +105,8 @@ async function boot() {
   }
 }
 
-boot();
+// A chunk that fails to load before the world's own try (the timeline's) counts as no world too.
+boot().catch((error) => {
+  console.error('Night scene failed to start', error);
+  html.classList.add('no-webgl');
+});

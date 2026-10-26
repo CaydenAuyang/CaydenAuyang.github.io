@@ -1204,8 +1204,8 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
       if (!(x1 > 0 && x0 < 1 && y1 > 0 && y0 < 1)) return null;
       return { x0, y0, x1, y1 };
     },
-    columnsBox(): ScreenBox | null {
-      if (disposed || !drawn((k) => k === 'D')) return null;
+    columnsBox(always = false): ScreenBox | null {
+      if (disposed || (!always && !drawn((k) => k === 'D'))) return null;
       world.camera.updateMatrixWorld();
       const { W, H } = view();
       let x0 = Infinity;

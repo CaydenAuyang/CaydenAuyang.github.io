@@ -1076,14 +1076,21 @@ html[data-snapshot] .world-fallback[data-still]::after {
   .scrim:not(.hero__text)::before {
     display: none !important;
   }
+  /* On stack the hero text fades as it nears the figure (an inline opacity from the timeline), and
+     a print laid out at a portrait page width could leave it at 0 for the next print. On paper it
+     always shows. */
+  .hero__text {
+    opacity: 1 !important;
+  }
   /* A preview fits on a page with the heading above it and its caption (vh is the page here). */
   .vf {
     max-width: calc(55vh * 1.6);
   }
-  /* The long sections start on a page of their own, so their titles never end a page. */
+  /* The long sections start on a page of their own, so their titles never end a page. More work
+     doesn't: it is kept whole (below), so it fills the rest of Civic AI Club's page or moves on as
+     one block. Forced onto its own page, it left the club's last two bullets alone on one. */
   #experience,
-  #work,
-  .more-work {
+  #work {
     break-before: page;
   }
   .scene,
@@ -1116,8 +1123,7 @@ html[data-snapshot] .world-fallback[data-still]::after {
   }
   /* A section that starts a page needs only a little room above it (the page has its margin). */
   #experience,
-  #work,
-  .more-work {
+  #work {
     padding-top: var(--space-4) !important;
   }
   /* Selected work's first page holds its title and the first project's preview, title and first

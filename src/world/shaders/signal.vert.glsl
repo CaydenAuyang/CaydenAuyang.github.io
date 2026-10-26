@@ -370,6 +370,9 @@ void main() {
     p = step(0.5, uT);
     e = p;
   }
+  // The current rising into the columns (or falling back): a long flight from near the camera to
+  // far behind the skyline, tuned on its own below so its light stays in the window.
+  bool curCols = (uFrom == 2 && uTo == 3) || (uFrom == 3 && uTo == 2);
 
   float aF;
   float fF;
@@ -407,22 +410,38 @@ void main() {
     // The current lies on the water, nearer the camera than anything it comes from or goes to: a
     // straight path would skim the water far out and bunch every point into one bright line at
     // the horizon. So points come forward first and drop onto it from above (and leave it rising
-    // first).
-    if (uTo == 2 && uFrom != 2) ctrl = mix(ctrl, vec3(P1.x, P0.y, P1.z), 0.8);
-    if (uFrom == 2 && uTo != 2) ctrl = mix(ctrl, vec3(P0.x, P1.y, P0.z), 0.8);
+    // first). Between the current and the columns the bend sits halfway up and nearly back at the
+    // columns' depth: rising to their full height at the current's own depth, so near the camera,
+    // the light went above the top of a wide window for a stretch.
+    float back = curCols ? 0.95 : 0.0;
+    float rise = curCols ? 0.5 : 1.0;
+    if (uTo == 2 && uFrom != 2) ctrl = mix(ctrl, vec3(P1.x, mix(P1.y, P0.y, rise), mix(P1.z, P0.z, back)), 0.8);
+    if (uFrom == 2 && uTo != 2) ctrl = mix(ctrl, vec3(P0.x, mix(P0.y, P1.y, rise), mix(P0.z, P1.z, back)), 0.8);
     float u = 1.0 - e;
     pos = u * u * P0 + 2.0 * u * e * ctrl + e * e * P1;
     flight = sin(3.14159265 * e);
     // Each point reads the noise a little off its neighbours' (aRand), so a long hold mid-flight
     // can't fold the cloud into a bright seam where the drifting field steepens.
-    // Low into and out of the figure (20% in, 30% out), so it lands cleanly.
-    float curlK = uTo == 1 ? 0.2 : uFrom == 1 ? 0.3 : (uFrom >= 5 || uTo >= 5) ? 0.6 : 1.0;
-    pos += curl(pos * (2.2 / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7) + (aRand.zxw - 0.5) * 0.3) * min(L, uScale * 0.6) * 0.16 * flight * curlK;
+    // Low into and out of the figure (20% in, 30% out), so it lands cleanly. Between the current
+    // and the columns, half as strong and twice as fine: over that long flight the broad field
+    // carried the whole cloud out of the top of the window or down among the towers, depending on
+    // the moment, where the finer one breaks it into plumes.
+    float curlK = uTo == 1 ? 0.2 : uFrom == 1 ? 0.3 : (uFrom >= 5 || uTo >= 5) ? 0.6 : curCols ? 0.5 : 1.0;
+    float curlF = curCols ? 4.4 : 2.2;
+    pos += curl(pos * (curlF / uScale) + vec3(0.0, 0.0, uTime * 0.04 + 3.7) + (aRand.zxw - 0.5) * 0.3) * min(L, uScale * 0.6) * 0.16 * flight * curlK;
   }
 
   // Brightness through the flight. Leaving the figure, a point settles to its target's brightness
-  // early (so the current doesn't flare as the figure's light lands on its thin band).
-  float alpha = mix(aF, aT, uFrom == 1 && uTo != 1 ? smoothstep(0.0, 0.6, e) : e);
+  // early (so the current doesn't flare as the figure's light lands on its thin band). Between the
+  // current and the columns it carries the columns' brightness for most of the way: points shrink
+  // as they go back from the camera, and with the current's own dim light the cloud thinned to a
+  // faint haze in the middle of the rise. (Scrolling back up plays C to D backwards; the D to C
+  // line is for a morph set that way, as the lab page can.)
+  float ae = e;
+  if (uFrom == 1 && uTo != 1) ae = smoothstep(0.0, 0.6, e);
+  if (uFrom == 2 && uTo == 3) ae = smoothstep(0.0, 0.4, e);
+  if (uFrom == 3 && uTo == 2) ae = smoothstep(0.6, 1.0, e);
+  float alpha = mix(aF, aT, ae);
   // Leaving the city, a point carries its window's light up through the flight (it brightens
   // quickly as its window dims) and settles to the target's own brightness near the end, so the
   // city visibly gives its light to the sky even where the target is sparse (the two lights light
@@ -448,7 +467,9 @@ void main() {
   float carrySize = mix(1.0, uCarryMix.w, carrying * carrier * darkEnd);
   // Hide wraps: the target's own fade applies once the point is on its way there.
   alpha *= mix(1.0, fT, smoothstep(0.0, 0.03, e)) * mix(1.0, fF, smoothstep(0.0, 0.03, 1.0 - e));
-  alpha *= (1.0 + 0.35 * flight) * uGain;
+  // A little brighter in flight; less between the current and the columns, which already carry
+  // the columns' light (with the full lift the cloud outshone the finished columns).
+  alpha *= (1.0 + (curCols ? 0.15 : 0.35) * flight) * uGain;
 
   vColor = mix(cF, cT, e);
   vAlpha = alpha;

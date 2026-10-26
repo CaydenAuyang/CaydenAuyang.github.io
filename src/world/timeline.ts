@@ -116,9 +116,10 @@ const BEATS: Record<SceneName, Row> = {
   // layout) or read. On stack and short (V4 8.2) the columns form over the first 20% (the half
   // screen of sky above EXPERIENCE there) and the camera arrives soon after, before the four facts
   // scroll in; the scene starts as Experience is a quarter of the way up the window, which gives
-  // the turn at least the scroll it had before. Reduced motion cuts the current to the columns as
-  // soon as EXPERIENCE enters the window, so the Civic Exchange header never rises through the
-  // current, which sat right behind its meta lines.
+  // the turn at least the scroll it had before. Reduced motion cuts the current back into the city
+  // as soon as Experience enters the window, so the Civic Exchange header never rises through the
+  // current, which sat right behind its meta lines, and cuts in the columns once the Mission panel
+  // has gone up past their tops (columnsClear() below), so they never stand behind its glass.
   experience: {
     el: '[data-scene="experience"]',
     key: 'experience',
@@ -604,19 +605,25 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
       boxBottom = heroFigure.getBoundingClientRect().bottom + window.scrollY;
     };
     measure();
+    const fade = (self: ScrollTrigger) => {
+      if (mode.layout !== 'stack') {
+        heroText.style.opacity = '';
+        return;
+      }
+      const distance = Math.max(24, textTop - (figureBottom?.() ?? boxBottom));
+      heroText.style.opacity = String((1 - clamp01((self.scroll() - self.start) / distance)) ** 2);
+    };
     ScrollTrigger.create({
       trigger: heroSection,
       start: 'top top',
       end: '+=400',
-      onRefresh: measure,
-      onUpdate: (self) => {
-        if (mode.layout !== 'stack') {
-          heroText.style.opacity = '';
-          return;
-        }
-        const distance = Math.max(24, textTop - (figureBottom?.() ?? boxBottom));
-        heroText.style.opacity = String((1 - clamp01((self.scroll() - self.start) / distance)) ** 2);
+      // Also on a refresh: a print laid out at a portrait page width switches to the stack layout
+      // and back, and the text stayed faded on screen until the next scroll.
+      onRefresh: (self) => {
+        measure();
+        fade(self);
       },
+      onUpdate: fade,
     });
   }
 
@@ -742,6 +749,12 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     };
     const keys = world.cameraKeys;
     const cutting = !motion; // reduced motion and snapshot cut to keys
+    const missionPanel = document.querySelector<HTMLElement>('#mission-panel');
+    /** Reduced motion: whether the Mission panel is up past the columns' tops, from the camera as it is now. */
+    const columnsClear = () => {
+      const box = signal?.columnsBox(true);
+      return !missionPanel || !box || missionPanel.getBoundingClientRect().bottom + CLEAR_GAP <= box.y0 * view().height;
+    };
 
     if (!motion) {
       world.setMotion(false);
@@ -851,6 +864,7 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
         let t = Math.max(span(p, over[0], over[1]), from === leaving ? clear : 0);
         if (snapshot || (cutting && name === 'experience')) t = 1;
         if (to === leaving && clear > 0 && leaveTo) signal?.setMorph(to, leaveTo, clear);
+        else if (cutting && !snapshot && name === 'experience' && !columnsClear()) signal?.setMorph(from, 'A', 1);
         else signal?.setMorph(from, to, t);
       }
     }

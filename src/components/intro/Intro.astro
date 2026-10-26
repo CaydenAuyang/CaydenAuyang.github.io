@@ -466,6 +466,7 @@ const STILL = { src: '/intro/photos/phone-open.webp', width: 1200, height: 1200 
 
 <script>
   import { cardDrag } from '../../intro/card-drag';
+  import { whenSettled } from '../../scripts/settled';
 
   const card = document.querySelector<HTMLElement>('[data-card]');
   if (card) cardDrag(card);
@@ -482,16 +483,17 @@ const STILL = { src: '/intro/photos/phone-open.webp', width: 1200, height: 1200 
     // The still of the open phone is fetched only when it is going to show: at once with reduced
     // motion and in snapshot (it stands in until the first frame, which matches it), when the box
     // falls back to it (is-still: no WebGL, a lost context, or the phone's code failed to load),
-    // and when printing starts. Otherwise, a while after the phone is up and once the page is
-    // idle, it is fetched at low priority and kept in memory, so a print finds it, as
-    // print-still.ts does for the hero's stills. Its markup is the <noscript> in the box: shown
-    // as it is without JavaScript, and with JavaScript only text, parsed here (into an inert
-    // template, which fetches nothing) and put in the box when it's needed.
+    // and when printing starts. Otherwise, once the page has settled (settled.ts: the world up and
+    // its intro over, never with Save-Data on), it is fetched at low priority and kept in memory,
+    // so a print finds it, as print-still.ts does for the hero's stills. (It used to wait for the
+    // phone to be up, which never happens for a visitor who prints before scrolling to the module,
+    // so that print had no phone.) Its markup is the <noscript> in the box: shown as it is without
+    // JavaScript, and with JavaScript only text, parsed here (into an inert template, which
+    // fetches nothing) and put in the box when it's needed.
     const template = document.createElement('template');
     template.innerHTML = box.querySelector('noscript')?.textContent ?? '';
     const still = template.content.querySelector('img');
     let kept: HTMLImageElement | null = null;
-    let warming = 0;
     const showStill = () => {
       if (still && !still.isConnected) box.prepend(still);
     };
@@ -503,17 +505,12 @@ const STILL = { src: '/intro/photos/phone-open.webp', width: 1200, height: 1200 
       kept.src = still.getAttribute('src') ?? '';
     };
     const watch = new MutationObserver(() => {
-      if (box.classList.contains('is-still')) {
-        showStill();
-        watch.disconnect();
-      } else if (box.classList.contains('is-live') && !warming) {
-        warming = window.setTimeout(() => {
-          if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(warm, { timeout: 3000 });
-          else warm();
-        }, 4000);
-      }
+      if (!box.classList.contains('is-still')) return;
+      showStill();
+      watch.disconnect();
     });
     watch.observe(box, { attributes: true, attributeFilter: ['class'] });
+    whenSettled(warm);
     if (!motion) showStill();
     window.addEventListener('beforeprint', showStill, { once: true });
 

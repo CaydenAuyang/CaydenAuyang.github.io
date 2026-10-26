@@ -139,11 +139,14 @@ const logos = intro.logos as Logo[];
     box-shadow: 0 0 0 1px rgb(var(--text-rgb) / 0.22);
     transition: background var(--dur-quick) var(--ease-out);
   }
-  .logos__pause:hover {
-    color: var(--window);
-  }
-  .logos__pause:hover::before {
-    background: rgb(var(--night-rgb) / 0.9);
+  /* Hover only with a mouse: a tapped button keeps :hover on iOS until something else is tapped. */
+  @media (--mouse) {
+    .logos__pause:hover {
+      color: var(--window);
+    }
+    .logos__pause:hover::before {
+      background: rgb(var(--night-rgb) / 0.9);
+    }
   }
   .logos__icon {
     position: relative;
@@ -219,8 +222,10 @@ const logos = intro.logos as Logo[];
     opacity: 0.7;
     transition: opacity var(--dur-quick) var(--ease-out);
   }
-  .logos__img:hover {
-    opacity: 1;
+  @media (--mouse) {
+    .logos__img:hover {
+      opacity: 1;
+    }
   }
   @media (--wide) {
     .logos {

@@ -6,8 +6,8 @@
 //     upright) get the 720px encode, unless the frame is wider than 720px (an upright iPad Air or
 //     Pro), where that file would be stretched past its own size even at 1x; everything else gets
 //     the 1280px encode. A video keeps the file it started with. Its poster is set at the same
-//     time, from data-poster (at once in snapshot mode, without IntersectionObserver, and before
-//     printing).
+//     time, from data-poster (at once in snapshot mode and without IntersectionObserver, and for
+//     every video once the page has settled, so a print has them).
 //   - Plays while at least half of it is visible, pauses otherwise, and pauses while the tab is
 //     hidden.
 //   - While one video plays, any other paused video on screen shows its frame as a still: a canvas
@@ -33,6 +33,7 @@
 //     decorative motion. If the browser refuses to read the frame, the spill simply stays off.
 import { ui } from '../data/site';
 import { layoutMode } from '../world/layout';
+import { whenSettled } from './settled';
 
 type Want = 'auto' | 'play' | 'pause';
 
@@ -422,7 +423,12 @@ document.querySelectorAll<HTMLElement>('[data-vf]').forEach((figure) => {
   update(p);
 });
 
+// Printing: a poster set only once printing starts misses that print (its frame came out empty),
+// so every poster is set once the page has settled (settled.ts: the world up and its intro over,
+// never with Save-Data on), as print-still.ts fetches the hero's stills. The posters are off
+// screen then, so nothing moves.
 window.addEventListener('beforeprint', () => players.forEach(setPoster));
+whenSettled(() => players.forEach(setPoster));
 
 // The device's reduced-motion setting changed while the page is open.
 reduceQuery.addEventListener?.('change', () =>
