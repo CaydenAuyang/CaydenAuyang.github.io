@@ -136,8 +136,6 @@ const COL_SHARE = ARCHIVE.map((c) => c.count / Math.max(...ARCHIVE.map((d) => d.
 const COL_FOOT = 0.03;
 const COL_TOP_ROW = 0.1;
 
-const COLORS = { warm: '#FFB65C', cool: '#CFE3FF' };
-
 
 export interface SignalInfo {
   windows: number;
@@ -482,8 +480,12 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     uScale: { value: 1000 },
     uPixelRatio: { value: world.renderer.getPixelRatio() },
     uGain: { value: 1 },
-    uWarm: { value: new Color(COLORS.warm) },
-    uCool: { value: new Color(COLORS.cool) },
+    // Every other dot's two colours (the current, the columns, the Wisers pictures, the two Contact
+    // lights), the windows' gold and blue as display values, like the figure's (V5 section 2). A
+    // Color made from the hex was converted to linear and drew deeper orange and bluer, about
+    // #FF771B and #9FC4FF.
+    uWarm: { value: new Color(...PALETTE.window) },
+    uCool: { value: new Color(...PALETTE.cool) },
     uFlowEye: { value: new Vector3() },
     uFlowFwd: { value: new Vector3(0, 0, -1) },
     uFlowDir: { value: new Vector3(1, 0, 0) },
@@ -837,7 +839,7 @@ export async function createSignal(opts: SignalOptions): Promise<SignalDebug> {
     if (shapeAttr) shapeAttr.needsUpdate = true;
   }
 
-  const arc = createArc({ color: COLORS.warm, motion, requestRender: () => world.requestRender() });
+  const arc = createArc({ color: PALETTE.window, motion, requestRender: () => world.requestRender() });
   build();
 
   const geometry = new BufferGeometry();

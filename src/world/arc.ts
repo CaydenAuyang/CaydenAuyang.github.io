@@ -44,7 +44,8 @@ export interface Arc {
   dispose(): void;
 }
 
-export function createArc(opts: { color: string; motion: boolean; requestRender: () => void }): Arc {
+/** color: a display (sRGB) value, as PALETTE has them; the shader writes it out unchanged. */
+export function createArc(opts: { color: readonly [number, number, number]; motion: boolean; requestRender: () => void }): Arc {
   let motion = opts.motion;
   const geometry = new BufferGeometry();
   const V = (SEGMENTS + 1) * 2;
@@ -78,7 +79,8 @@ export function createArc(opts: { color: string; motion: boolean; requestRender:
     uFlash: { value: 0 },
     uPresence: { value: 0 },
     uFadeEnd: { value: 0.05 },
-    uColor: { value: new Color(opts.color) },
+    // new Color(r, g, b) does no conversion (a hex would be converted to linear and draw darker).
+    uColor: { value: new Color(...opts.color) },
   };
   const material = new RawShaderMaterial({
     glslVersion: GLSL3,
