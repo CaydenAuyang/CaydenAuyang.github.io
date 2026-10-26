@@ -122,10 +122,10 @@ export const intro = {
   // The greeting card (Cayden approved option C). `bold` is the phrase inside `text` shown in window.
   greeting: [
     { text: "Hi, I'm Cayden." },
-    { text: "I'm a student and civic tech builder, hooked on passing know-how on.", bold: 'civic tech builder' },
+    { text: "I'm a student and civic tech builder.", bold: 'civic tech builder' },
     { text: 'Building tools for nonprofits, schools and small businesses, then handing them over, clean.' },
   ] as { text: string; bold?: string }[],
-  greetingSource: 'CEX §3; CLUB §4; OCH §5; "know-how" from Cayden\'s mission, Oct 24',
+  greetingSource: 'CEX §3; CLUB §4; OCH §5',
   // The link line. Cayden may swap it for a CV PDF later.
   email: { text: 'caydenauyang@gmail.com', source: 'POSTER' } satisfies Line,
   logosLabel: 'Worked with',

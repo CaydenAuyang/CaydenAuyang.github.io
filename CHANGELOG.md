@@ -65,3 +65,4 @@ Dated notes on what changed on the site.
   - Every dot in the windows' gold and blue: the signal's two colours and the Contact arc's now come from the palette's display values, like the figure's, instead of hex Colors that three converted to linear (they drew about #FF771B and #9FC4FF). The Wisers pictures, the current, the columns and the two Contact lights all change.
   - The mission has a title again: WHY I BUILD (WHY I in text, BUILD in window), a section title like the others, above the panel.
   - The "Worked with" logos are sized by area, not height, so wordmarks and compact marks read with even weight (28 to 52px tall on desktop). Silver Pillars is re-exported from Cayden's large original to stay sharp at its new size.
+- The greeting card's second line is shorter: "I'm a student and civic tech builder." (content.md 1b, Oct 26).
