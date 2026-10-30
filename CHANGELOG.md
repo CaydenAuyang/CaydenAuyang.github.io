@@ -66,3 +66,9 @@ Dated notes on what changed on the site.
   - The mission has a title again: WHY I BUILD (WHY I in text, BUILD in window), a section title like the others, above the panel.
   - The "Worked with" logos are sized by area, not height, so wordmarks and compact marks read with even weight (28 to 52px tall on desktop). Silver Pillars is re-exported from Cayden's large original to stay sharp at its new size.
 - The greeting card's second line is shorter: "I'm a student and civic tech builder." (content.md 1b, Oct 26).
+
+## 2026-10-30
+
+- Wisers: the title is now Data Intern, confirmed from Cayden's CV.
+- Civic Exchange: a "Next summer" note in its More panel about the summer 2027 research internship.
+- OurCityHealth: seven cities scored, not three, as the OurCityHealth README lists.

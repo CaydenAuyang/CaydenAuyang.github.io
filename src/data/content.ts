@@ -321,15 +321,21 @@ export const experience = {
           source: 'CEX §2, C1 p1; CEX §3g, FD P43; CEX §6, ER §6.3',
         },
       },
+      {
+        title: 'Next summer.',
+        text: {
+          text: 'Civic Exchange invited me back for summer 2027 as a research intern, to study how Hong Kong NGOs, nonprofits, think tanks and schools use AI.',
+          source: 'CV, Oct 21 2026',
+        },
+      },
     ] satisfies MoreBlock[] as MoreBlock[],
     moreLabel: 'about Civic Exchange',
   },
   // Wisers: one entry, two summers, 2024 first. The signal draws each summer as you reach it.
   wisers: {
     name: 'Wisers Information Limited, Hong Kong',
-    // CONFIRM: the title. Records say Data Intern, AI Team Intern and AI Engineering Intern, so
-    // the page says plain "Intern" until Cayden picks one.
-    meta: { text: 'Intern, two summers (2024 and 2025)', source: 'OCH §3, CV' } satisfies Line,
+    // Title confirmed from Cayden's CV (Oct 21, 2026).
+    meta: { text: 'Data Intern, two summers (2024 and 2025)', source: 'CV, Oct 21 2026' } satisfies Line,
     summers: [
       {
         beat: '2024',
@@ -403,7 +409,7 @@ export const work = {
       lead: { text: 'A free dashboard that scores cities from what local news reports.', source: 'OCH §1, GHC' },
       facts: [
         { text: 'The demo shows saved scores from news dated 2014 to early 2024', source: 'OCH §1, REPO, GHC' },
-        { text: 'My own pipeline has analyzed three cities so far', source: 'OCH §1, E44' },
+        { text: 'My own pipeline has scored seven cities so far', source: 'OurCityHealth README; Cayden, Oct 30 2026' },
         { text: 'This fall: testing whether the news actually tracks how a city is doing', source: 'OCH §2, ISP' },
       ],
       link: { label: 'Open the site', href: 'https://caydenauyang.github.io/OurCityHealth/' },
