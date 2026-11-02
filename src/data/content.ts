@@ -41,7 +41,7 @@ export const meta = {
 export type TitleColor = 'window' | 'cool' | 'text';
 export const titleColors: Record<string, TitleColor[]> = {
   'Cayden Auyang': ['window', 'cool'],
-  'Why I build': ['text', 'text', 'window'],
+  'Where it started': ['text', 'text', 'window'],
   Experience: ['cool'],
   'Civic Exchange': ['window', 'text'],
   Wisers: ['window'],
@@ -56,7 +56,7 @@ export const titleColors: Record<string, TitleColor[]> = {
 // ---- Navigation --------------------------------------------------------------------------------
 
 export const nav: Link[] = [
-  { label: 'Mission', href: '#mission' },
+  { label: 'Origins', href: '#mission' },
   { label: 'Experience', href: '#experience' },
   { label: 'Work', href: '#work' },
   { label: 'Contact', href: '#contact' },
@@ -66,7 +66,7 @@ export const nav: Link[] = [
 // section, R (the roof) for Contact. `name` is the section it stands for; G's is the hero's name.
 export const floors: { floor: string; name: string; href: string }[] = [
   { floor: 'G', name: 'Cayden Auyang', href: '#hero' },
-  { floor: '1', name: 'Mission', href: '#mission' },
+  { floor: '1', name: 'Origins', href: '#mission' },
   { floor: '2', name: 'Experience', href: '#experience' },
   { floor: '3', name: 'Work', href: '#work' },
   { floor: 'R', name: 'Contact', href: '#contact' },
@@ -183,52 +183,46 @@ export const intro = {
   ] satisfies Logo[],
 };
 
-// ---- 2. The mission ----------------------------------------------------------------------------
+// ---- 2. Where it started -----------------------------------------------------------------------
 
-// One tracked change, from the Previously text to the Now text. Edits apply in order, left to
-// right, each searching the Previously text from where the previous edit ended.
-//   del:      strike `text`.
-//   ins:      insert `text` right after the words in `after`. `after: ''` means directly after the
-//             previous edit.
-//   replace:  strike `text` and insert `insertText` right after it.
-// The build stops with an error if a `text` or `after` can't be found, or if the edits don't turn
-// the Previously text into the Now text exactly (MissionPanel.astro).
-export interface Edit {
-  type: 'del' | 'ins' | 'replace';
-  text: string;
-  insertText?: string;
-  after?: string;
-}
-
-// A title (v5, Cayden picked it Oct 26), and still no lead or notes: the switch is the panel's only
-// label. The nav and the lift still say Mission.
+// Where it started (Nov 1 2026): replaces the Previously / Edits / Now question. A short opening in
+// Cayden's words, then a dated list in time order. The list states what happened and when; it makes
+// no claims about what caused what, except where a source says so (Civic Exchange).
 export const mission = {
-  heading: 'Why I build',
-  // The switch, left to right. The default view is Now.
-  views: { from: 'Previously', edits: 'Edits', to: 'Now' },
-  from: {
-    text: "If money is what separates people, what could I build that's big enough to close the gap? Which tool finally makes it fair?",
-    source: 'Cayden, Oct 24 chat',
+  heading: 'Where it started',
+  lead: {
+    text: 'TODO(CAYDEN): one or two sentences, in your own words, on how AI Simply started.',
+    source: 'Cayden',
   } satisfies Line,
-  // Cayden's draft; he may still edit it.
-  to: {
-    text: 'Why does know-how move so easily among the people who already have it, and so rarely reach the people who need it most? What does it take to get it across, and how do I pass it on in a way that lets them pass it on too?',
-    source: 'Cayden, Oct 24 chat; angle from his Common App essay',
-  } satisfies Line,
-  // In reading order. Phrase level: each old phrase is struck, the new one inserted right after it.
-  edits: [
+  steps: [
     {
-      type: 'replace',
-      text: 'If money is what separates people,',
-      insertText: 'Why does know-how move so easily among the people who already have it, and so rarely reach the people who need it most?',
+      when: '2024',
+      text: 'AI Simply: donor update emails for Changing Young Lives Foundation',
+      source: 'aisimply.co case study, Jul 5 2024',
     },
-    { type: 'replace', text: "what could I build that's big enough to close the gap?", insertText: 'What does it take to get it across,' },
     {
-      type: 'replace',
-      text: 'Which tool finally makes it fair?',
-      insertText: 'and how do I pass it on in a way that lets them pass it on too?',
+      when: 'Summer 2024',
+      text: 'Wisers: thousands of RedNote posts turned into brand analysis',
+      source: 'content.ts wisers.summers 2024; CV, Oct 21 2026',
     },
-  ] satisfies Edit[] as Edit[],
+    { when: 'November 2024', text: 'Started OurCityHealth', source: 'OCH §1, CV' },
+    {
+      when: 'Summer 2025',
+      text: "Wisers: a prototype agent that reads a computer's screen",
+      source: 'OCH §3, GUI; screen-parsing-gui-agent README',
+    },
+    {
+      when: 'Fall 2025',
+      text: 'Founded the Civic AI Club at Pomfret',
+      source: 'CLUB §2; civic-ai-group notes (founded fall of junior year, 2025-26)',
+    },
+    {
+      when: 'Summer 2026',
+      text: 'Civic Exchange, which started as an AI Simply client',
+      source: 'Common App Additional Information; aisimply.co case study, Aug 31 2026',
+    },
+    { when: 'October 2026', text: 'Three club tools delivered', source: 'civicaiclub numbers.json, Oct 30 2026' },
+  ] satisfies (Line & { when: string })[] as (Line & { when: string })[],
 };
 
 // ---- 3. Experience -----------------------------------------------------------------------------
@@ -256,8 +250,8 @@ export const experience = {
   civic: {
     name: 'Civic Exchange, Hong Kong',
     meta: {
-      text: 'Intern (voluntary), June 9 to August 28, 2026',
-      source: 'CEX §1, Agr; C4 p6',
+      text: 'AI Consultant, June 9 to August 28, 2026',
+      source: 'CEX §1, Agr; C4 p6; Common App activity 2 (AI Consultant, 2026), Nov 1 2026',
     } satisfies Line,
     // Moved here from the People section (cut in v4).
     supervisor: {
@@ -355,6 +349,58 @@ export const experience = {
         link: { label: 'View the code', href: 'https://github.com/CaydenAuyang/screen-parsing-gui-agent' },
       },
     ] satisfies Summer[] as Summer[],
+    // The technical write-up behind More (Nov 1 2026), shaped like Civic Exchange's. It sits after
+    // the held track (Experience.astro), so it never changes the held frame or the beats.
+    more: [
+      {
+        title: 'Summer 2024.',
+        text: {
+          text: 'I built my own program that collected thousands of RedNote posts about four sportswear brands and used a language model to turn them into brand analysis. I also sat in on meetings about social commentary and how it links to sentiment, which is where the OurCityHealth idea started.',
+          source: "Cayden's tech notes, Oct 22 2026; Common App activity 8; Drive: Sportswear Brand Trend Analysis Report, July 2024",
+        },
+      },
+      {
+        title: 'Summer 2025.',
+        text: {
+          text: 'My mentor pointed out that no reliable tool on the market could yet operate a computer on its own, so I built a prototype. You type a goal, and it plans the steps with a language model, reads the screen with computer vision and OCR, then clicks, types and scrolls across apps and websites to carry them out.',
+          source: 'screen-parsing-gui-agent README, intro',
+        },
+      },
+      {
+        title: 'How the agent works.',
+        list: [
+          { text: 'Plan: the language model turns the goal into a list of steps.', source: 'screen-parsing-gui-agent README, How it works 1' },
+          {
+            text: 'See: for each step it takes a screenshot, finds icons with a detection model and reads text with OCR, so every element on screen gets a label and a position.',
+            source: 'screen-parsing-gui-agent README, How it works 2',
+          },
+          {
+            text: "Act and recover: it clicks or types on the matching label, notices when an action changed nothing, and tries another way when it's stuck.",
+            source: 'screen-parsing-gui-agent README, How it works 3 and 4',
+          },
+          {
+            text: 'Check: it confirms each step from the URL or page text, and a final model call checks whether the whole goal was met.',
+            source: 'screen-parsing-gui-agent README, How it works 5',
+          },
+          {
+            text: 'Remember: it keeps a small file per website of which labels led somewhere useful, and tries those first next time.',
+            source: 'screen-parsing-gui-agent README, How it works 6',
+          },
+        ],
+      },
+      {
+        title: 'Built on.',
+        text: {
+          text: "Microsoft's OmniParser icon detection model, PaddleOCR for the text, and OpenAI models for planning. Only the on-screen text and the URL go to OpenAI, never screenshots. It runs only on macOS and takes over the mouse and keyboard while it works.",
+          source: "screen-parsing-gui-agent README, Built on; What it can't do",
+        },
+      },
+      {
+        title: 'What I took away.',
+        text: { text: 'TODO(CAYDEN)', source: 'Cayden' },
+      },
+    ] satisfies MoreBlock[] as MoreBlock[],
+    moreLabel: 'about Wisers',
   },
 };
 
@@ -394,6 +440,8 @@ export interface Project {
   lead: Line;
   facts: Line[];
   link: Link;
+  // A second link, to the code, beside the first (Work.astro).
+  code?: Link;
   caption: string;
   more?: MoreBlock[];
 }
@@ -409,12 +457,57 @@ export const work = {
       lead: { text: 'A free dashboard that scores cities from what local news reports.', source: 'OCH §1, GHC' },
       facts: [
         { text: 'The demo shows saved scores from news dated 2014 to early 2024', source: 'OCH §1, REPO, GHC' },
-        { text: 'My own pipeline has scored seven cities so far', source: 'OurCityHealth README; Cayden, Oct 30 2026' },
+        {
+          text: 'Built to analyze 1,000+ cities. The first run scored seven: Hong Kong, Shanghai, Shenzhen, Singapore, Tokyo, London and New York.',
+          source: 'OurCityHealth README (Cities scored; CesiumJS globe of 1,000+ cities); Common App activity 7; Cayden, Nov 1 2026',
+        },
         { text: 'This fall: testing whether the news actually tracks how a city is doing', source: 'OCH §2, ISP' },
       ],
       link: { label: 'Open the site', href: 'https://caydenauyang.github.io/OurCityHealth/' },
+      code: { label: 'View the code', href: 'https://github.com/CaydenAuyang/OurCityHealth' },
       caption: 'Saved demo data, news from 2014 to early 2024.',
+      // The technical write-up from the OurCityHealth README (Nov 1 2026), then the study.
       more: [
+        {
+          title: 'The problem.',
+          text: {
+            text: "There's no standard, easy way to see how a city is doing and why it's changing. Consultancy reports go deep but cost six figures, cover a few hundred cities and come out once a year as PDFs. Raw news event data is free, but you have to build the whole pipeline yourself.",
+            source: 'OurCityHealth README, The Problem',
+          },
+        },
+        {
+          title: 'What I built.',
+          list: [
+            {
+              text: 'A pipeline that reads news from 380,000+ outlets through GDELT and ranks every source on a four-tier credibility scale.',
+              source: 'OurCityHealth README, How It Works',
+            },
+            // Keep the second sentence only if Cayden confirms it came from a real run.
+            {
+              text: 'Duplicate reports are grouped into single stories before anything is scored. In one run, about 25,000 raw events came down to 24 real stories.',
+              source: 'OurCityHealth README, How It Works (PROCESS)',
+            },
+            {
+              text: 'Each city gets a 0 to 100 score on 12 dimensions, from housing and safety to cost of living, with the change since the last period, what drove it, and links to the articles behind it.',
+              source: 'OurCityHealth README, intro; The 12-Dimension Taxonomy',
+            },
+            {
+              text: 'A 3D globe of 1,000+ cities (CesiumJS), served by a FastAPI backend on PostgreSQL with PostGIS and TimescaleDB.',
+              source: "OurCityHealth README, What's Built (V2)",
+            },
+          ],
+        },
+        {
+          title: 'How I built it.',
+          text: {
+            text: 'I made the core design decisions myself: the 12 dimensions, the four-tier source ranking, and a fixed, structured format for the AI scoring step, so its output stays consistent from one run to the next and every claim traces back to its sources. I built the code with AI coding tools in Cursor. My job was deciding what to build, testing what came back and fixing what was broken.',
+            source: 'OurCityHealth README, How I built this',
+          },
+        },
+        {
+          title: 'What I took away.',
+          text: { text: 'TODO(CAYDEN)', source: 'Cayden' },
+        },
         {
           head: { bold: 'Measuring What Matters', rest: '(independent study, fall 2026)' },
           text: {
@@ -429,12 +522,26 @@ export const work = {
       previewId: 'aisimply',
       name: 'AI Simply',
       role: { text: 'Founder, one-person practice', source: 'OCH §5, CV, AIS' },
-      lead: { text: 'Tools for charities and small businesses. Unpaid so far.', source: 'OCH §5, CV, E46' },
+      lead: {
+        text: 'Free tools for charities and small businesses.',
+        source: 'OCH §5, CV, E46; Common App activity 6 ("built tools (for free)")',
+      },
+      // The three case studies on aisimply.co/insights, oldest first.
       facts: [
-        { text: "Automated a Hong Kong charity's donor update emails (2024)", source: 'OCH §5, TRK' },
-        { text: 'Built a bilingual photo-album site for Our Gallery in Wan Chai (2025 to 2026)', source: 'OCH §5, SITE, AIS' },
+        {
+          text: "Automated donor update emails for Changing Young Lives Foundation, a Hong Kong children's charity (2024)",
+          source: 'OCH §5, TRK; aisimply.co case study "Streamlining Data Management for a NPO", Jul 5 2024',
+        },
+        {
+          text: 'Built a bilingual photo-album site for Our Gallery in Wan Chai (2025 to 2026)',
+          source: 'OCH §5, SITE, AIS; aisimply.co case study "A Bilingual Website for a Hong Kong Community Gallery", Feb 13 2026',
+        },
+        {
+          text: 'Took on Civic Exchange as a client, which became my summer 2026 role (see Experience)',
+          source: 'aisimply.co case study "Institutional Memory and AI Writing for a Hong Kong Think Tank", Aug 31 2026; Common App Additional Information',
+        },
       ],
-      link: { label: 'Open the site', href: 'https://aisimply.co' },
+      link: { label: 'Read the case studies', href: 'https://www.aisimply.co/insights' },
       caption: 'aisimply.co',
     },
     {
@@ -444,24 +551,31 @@ export const work = {
       role: { text: 'Founder and president, Pomfret School', source: 'CLUB §2' },
       lead: { text: 'School offices bring us a problem. Students build the tool and hand it over.', source: 'CLUB §8, CTX' },
       facts: [
-        { text: '40+ members, 8 cases this year', source: 'CLUB §2; CLUB §1, §4' },
-        { text: '2 tools handed over in October', source: 'CLUB §4 A, B' },
-        { text: 'None of our tools calls an AI model', source: 'CLUB §8, CTX' },
+        { text: '40+ members, 8 cases this year', source: 'CLUB §2; CLUB §1, §4; civicaiclub numbers.json, Oct 30 2026' },
+        {
+          text: '3 tools delivered in October',
+          source: 'civicaiclub numbers.json tools-delivered (AutoPlanner, Music Studio, Project: Pomfret sorting), Oct 30 2026',
+        },
+        { text: 'Student teams working with 3 local organizations', source: 'Common App activity 1 ("3 community clients"); civicaiclub clients.json' },
       ],
       link: { label: 'Open the site', href: 'https://civicaiclub.github.io' },
+      code: { label: "The club's GitHub", href: 'https://github.com/CivicAIClub' },
       caption: 'Demo data.',
-      // The club's full facts from the long copy.
+      // The club's full facts (Nov 1 2026).
       more: [
         {
           list: [
             { text: '40+ members.', source: 'CLUB §2' },
             { text: 'Eight cases this school year, each for a different school office.', source: 'CLUB §1, §4' },
             {
-              text: 'Two tools delivered and handed over in October: a weekly planner for the CLC Supported Study Hall, and a lesson and booking portal for the Music Department.',
-              source: 'CLUB §4 A, B',
+              text: 'Three tools delivered in October: a weekly planner for the CLC Supported Study Hall, a lesson and booking portal for the Music Department, and a group sorter for Project: Pomfret.',
+              source: 'CLUB §4 A, B; civicaiclub cases a, b, f',
             },
-            { text: "None of the tools we've built so far calls an AI model.", source: 'CLUB §8, CTX' },
-            { text: 'Three local organizations have student teams at the discovery stage.', source: 'CLUB §5' },
+            {
+              text: 'Student teams are working with three local organizations: two projects are under way and a third is about to start.',
+              source:
+                'Common App activity 1; civicaiclub clients.json (Green Valley Hospitality and Black Pond Brews in progress, Covenant Soup Kitchen discovery pending)',
+            },
             { text: 'A school-wide AI Literacy Week in May 2026, with AI Youth Alliance.', source: 'CLUB §6' },
           ],
         },
@@ -472,6 +586,14 @@ export const work = {
     heading: 'More work',
     linkLabel: 'GitHub',
     items: [
+      {
+        name: 'STORM',
+        line: {
+          text: 'A storm in Three.js that a crowd controls with its noise and movement.',
+          source: 'STORM README (mic level and webcam pose / crowd detection)',
+        },
+        href: 'https://github.com/CaydenAuyang/STORM',
+      },
       {
         name: 'Han Dynasty Jeopardy',
         line: { text: 'A teaching game for my Advanced Global Studies class.', source: 'POSTER; 20-Repos card' },

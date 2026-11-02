@@ -24,16 +24,6 @@ export const ui = {
   previewPending: 'Recording to come',
   more: 'More',
   less: 'Less',
-  viewLegend: 'Show the question as',
-  // The mission scrubber (NIGHT-SIGNAL.md 11b.5): its label (content.md Interface labels) and what
-  // each stop says to screen readers.
-  scrubLabel: 'Drag from Previously to Now',
-  scrubStep: (k: number, n: number, what: string) => `Edit ${k} of ${n}: ${what}`,
-  scrubStruck: (words: string) => `"${words}" struck`,
-  scrubInserted: (words: string) => `"${words}" inserted`,
-  scrubReplaced: (from: string, to: string) => `"${from}" replaced with "${to}"`,
-  deleted: 'deleted',
-  inserted: 'inserted',
   moreAbout: (name: string) => `about ${name}`,
   emailLabel: 'Email',
   // Contact (NIGHT-SIGNAL.md 11b.7, content.md Interface labels).

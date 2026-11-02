@@ -1,6 +1,7 @@
 ---
 // Work.astro: section 4. The headline, then one stop per project (OurCityHealth, AI Simply,
-// Civic AI Club), then the More work cards.
+// Civic AI Club), then the More work cards. A project's actions are its link, a link to its code
+// where it has one, then More.
 //
 // Timeline hooks: each project is `data-stop="och|ais|club"` with `data-pin`; the More work
 // cards are `data-stop="more"`. Layouts (media.css, V4.md 8.1 and 8.2):
@@ -50,6 +51,11 @@ const moreHeadline = ignite(work.moreWork.heading);
               <ExternalLink class="action-link" href={project.link.href} hint={project.name} arrow>
                 {project.link.label}
               </ExternalLink>
+              {project.code && (
+                <ExternalLink class="action-link" href={project.code.href} hint={project.name} arrow>
+                  {project.code.label}
+                </ExternalLink>
+              )}
               {project.more && (
                 <More id={`${project.stop}-more`} label={ui.moreAbout(project.name)} class="stop__more">
                   {project.more.map((block) => (
@@ -66,11 +72,18 @@ const moreHeadline = ignite(work.moreWork.heading);
                         </p>
                       )}
                       {block.list && (
-                        <ul>
-                          {block.list.map((item) => (
-                            <li>{item.text}</li>
-                          ))}
-                        </ul>
+                        <>
+                          {block.title && (
+                            <p>
+                              <strong>{block.title}</strong>
+                            </p>
+                          )}
+                          <ul>
+                            {block.list.map((item) => (
+                              <li>{item.text}</li>
+                            ))}
+                          </ul>
+                        </>
                       )}
                     </>
                   ))}
@@ -245,8 +258,85 @@ const moreHeadline = ignite(work.moreWork.heading);
       padding-block: var(--space-6);
     }
     :global(html[data-snapshot]) .stop[data-stop='och'] {
-      padding-top: calc(var(--space-5) + var(--fs-h2) * 0.9 + var(--space-3));
-      padding-bottom: var(--space-2);
+      --top: calc(var(--space-5) + var(--fs-h2) * 0.9 + var(--space-3));
+      padding-top: var(--top);
+      padding-bottom: 0;
+    }
+    /*
+      OurCityHealth's open More is a full write-up, too long to share a screen, so the stop takes
+      two (Nov 1 2026): the first as live, under SELECTED WORK (the video and the short copy, which
+      sits centered beside it), the second the open More in two columns in the same right column,
+      as Civic Exchange's second screen in Experience. The text column spans both rows; with the
+      actions row unwrapped, the panel is its last item, one screen tall, and the links stack.
+    */
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__grid {
+      grid-template-rows: calc(100vh - var(--top)) 100vh;
+      row-gap: 0;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__text {
+      grid-row: 1 / span 2;
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__text > :first-child {
+      margin-top: auto;
+    }
+    /* Its scrim is a band down the right side over both screens (feathered over 120px at the top
+       and bottom, masked off on the left), as Civic Exchange's: the second screen's text sits over
+       the lit city. The pseudo is 2.6 block widths wide; the block starts at 30.77% of it. */
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__text.scrim::before {
+      inset: 0 -80%;
+      background: linear-gradient(
+        to bottom,
+        rgb(var(--night-rgb) / 0) 0,
+        rgb(var(--night-rgb) / 0.6) 120px,
+        rgb(var(--night-rgb) / 0.6) calc(100% - 120px),
+        rgb(var(--night-rgb) / 0) 100%
+      );
+      -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+      mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__actions {
+      display: contents;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__actions > :global(.action-link) {
+      align-self: flex-start;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__actions > :global(.action-link:first-child) {
+      margin-top: var(--space-4);
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__actions > :global(.action-link:last-of-type) {
+      margin-bottom: auto;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] .stop__actions :global(.more__panel) {
+      flex: none;
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner) {
+      columns: 2;
+      column-gap: var(--space-5);
+      padding-block: 0;
+    }
+    /* Under 1280px the right column is too narrow for two columns of text. */
+    @media (max-width: 1279px) {
+      :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner) {
+        columns: 1;
+      }
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner p),
+    :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner li) {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner p:has(+ ul)) {
+      break-after: avoid;
+    }
+    :global(html[data-snapshot]) .stop[data-stop='och'] :global(.more__inner li) {
+      break-inside: avoid;
     }
     :global(html[data-snapshot]) .more-work {
       min-height: 100vh;
@@ -273,11 +363,11 @@ const moreHeadline = ignite(work.moreWork.heading);
     display: grid;
     gap: var(--space-5);
   }
-  /* Two cards: one under the other in the stack layout, side by side otherwise, each as wide as the
-     work text column in the wide layout. */
+  /* Three cards: one under the other in the stack layout, side by side otherwise, across ten of the
+     twelve columns in the wide layout. */
   @media (--short), (--wide) {
     .more-work__list {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: var(--space-5);
     }
   }

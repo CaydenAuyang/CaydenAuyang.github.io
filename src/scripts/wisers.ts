@@ -7,26 +7,29 @@
 // the text reaches the pictures' bottom edge it fades out, over 48px from 8px under it, and its band
 // of night with it: a mask on the frame whose edge stays on that line while the page scrolls, as
 // civic.ts does for Civic Exchange under the archive columns. The text is read in the lower part of
-// the screen with the pictures clear above it. Nothing moves or changes size, and it runs with
-// reduced motion too (it is where the text is cut, not an animation).
+// the screen with the pictures clear above it. Wisers' More, which follows the frame, is cut off the
+// same way, since the screen agent is still drawn while it goes by. Nothing moves or changes size,
+// and it runs with reduced motion too (it is where the text is cut, not an animation).
 //
 // It steps aside without WebGL or while the world's context is lost (no pictures then), side by
 // side (short and wide put the text right of the pictures, and the pin layout holds the frame), and
-// in snapshot and print, which show everything. It works only while the frame is near the screen,
-// one read and one write a frame.
+// in snapshot and print, which show everything. It works only while a masked box is near the
+// screen, one read and one write a frame for each.
 import { wisersBox } from '../world/contract';
 
 const GAP = 8;
 const FADE = 48;
 
 const html = document.documentElement;
-const frame = document.querySelector<HTMLElement>('[data-scene="wisers"] .wisers__frame');
+const boxes = Array.from(
+  document.querySelectorAll<HTMLElement>('[data-scene="wisers"] .wisers__frame, [data-wisers-more] .wisers-more__frame'),
+);
 const canvas = document.querySelector<HTMLElement>('[data-world]');
 
-if (frame && canvas && !html.hasAttribute('data-snapshot')) {
-  let near = false;
+if (boxes.length && canvas && !html.hasAttribute('data-snapshot')) {
+  const near = new Set<HTMLElement>();
   let queued = false;
-  let masked = false;
+  const masked = new Set<HTMLElement>();
   // The pictures' bottom edge in viewport px. Screen fractions are of the canvas, which is the
   // large viewport's height (base.css), as the signal places them.
   let line = 0;
@@ -35,23 +38,30 @@ if (frame && canvas && !html.hasAttribute('data-snapshot')) {
     line = wisersBox(window.innerWidth, height).y1 * height + GAP;
   };
 
-  const clear = () => {
-    if (!masked) return;
-    masked = false;
-    frame.style.removeProperty('-webkit-mask-image');
-    frame.style.removeProperty('mask-image');
+  const clear = (box: HTMLElement) => {
+    if (!masked.delete(box)) return;
+    box.style.removeProperty('-webkit-mask-image');
+    box.style.removeProperty('mask-image');
   };
 
   const update = () => {
     queued = false;
-    const off = !near || html.dataset.layout !== 'stack' || html.classList.contains('no-webgl') || html.classList.contains('world-lost');
-    if (off) return clear();
-    const cut = line - frame.getBoundingClientRect().top;
-    if (cut <= 0) return clear();
-    const mask = `linear-gradient(to bottom, transparent ${cut.toFixed(1)}px, #000 ${(cut + FADE).toFixed(1)}px)`;
-    frame.style.setProperty('-webkit-mask-image', mask);
-    frame.style.setProperty('mask-image', mask);
-    masked = true;
+    const off = html.dataset.layout !== 'stack' || html.classList.contains('no-webgl') || html.classList.contains('world-lost');
+    for (const box of boxes) {
+      if (off || !near.has(box)) {
+        clear(box);
+        continue;
+      }
+      const cut = line - box.getBoundingClientRect().top;
+      if (cut <= 0) {
+        clear(box);
+        continue;
+      }
+      const mask = `linear-gradient(to bottom, transparent ${cut.toFixed(1)}px, #000 ${(cut + FADE).toFixed(1)}px)`;
+      box.style.setProperty('-webkit-mask-image', mask);
+      box.style.setProperty('mask-image', mask);
+      masked.add(box);
+    }
   };
 
   const queue = () => {
@@ -60,12 +70,17 @@ if (frame && canvas && !html.hasAttribute('data-snapshot')) {
     requestAnimationFrame(update);
   };
 
-  new IntersectionObserver(([entry]) => {
-    near = entry.isIntersecting;
+  const io = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const box = entry.target as HTMLElement;
+      if (entry.isIntersecting) near.add(box);
+      else near.delete(box);
+    }
     queue();
-  }).observe(frame);
+  });
+  boxes.forEach((box) => io.observe(box));
   measure();
-  window.addEventListener('scroll', () => near && queue(), { passive: true });
+  window.addEventListener('scroll', () => near.size > 0 && queue(), { passive: true });
   window.addEventListener('resize', () => {
     measure();
     queue();

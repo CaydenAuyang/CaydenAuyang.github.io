@@ -1,7 +1,7 @@
 ---
 // Experience.astro: section 3. Civic Exchange first with the full block (place, meta, the
 // supervisor line, lead, four facts, and the full summer section from the long copy behind More),
-// then Wisers: one entry with two summers, 2024 first.
+// then Wisers: one entry with two summers, 2024 first, and its technical write-up behind More.
 //
 // Civic Exchange (`.xp__track`): where sections are held (the pin layout: wide, at least 600 tall;
 // V4.md 8.1) with motion on, a track whose one-screen frame (`.xp__wrap`) holds still for about
@@ -29,6 +29,12 @@
 // (src/scripts/wisers.ts). The timeline sets data-beat="2024" or "2025" on the track; that
 // summer's label lights and the other dims (with no attribute both read evenly). Snapshot: the
 // track is two screens with the frame held, one per summer.
+//
+// Wisers' More (`data-wisers-more`, the technical write-up) comes after the track and scrolls
+// normally, so it never changes the held frame. The timeline leaves its height out of the Wisers
+// scene, so the three pictures keep their beats whether it is shut or open. In the stack layout
+// wisers.ts cuts it off at the pictures' bottom edge, like the Wisers text. Snapshot: its own
+// screen, after Wisers 2025.
 import More from '../ui/More.astro';
 import ExternalLink from '../ui/ExternalLink.astro';
 import { archive, experience } from '../../data/content';
@@ -124,6 +130,38 @@ const headline = ignite(experience.heading);
             }
           </ol>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="wisers-more" data-wisers-more>
+    <div class="wrap grid wisers-more__frame">
+      <div class="wisers-more__block scrim">
+        <More id="wisers-more" label={wisers.moreLabel}>
+          {
+            wisers.more.map((block) => (
+              <>
+                {block.text && (
+                  <p>
+                    <strong>{block.title}</strong> {block.text.text}
+                  </p>
+                )}
+                {block.list && (
+                  <>
+                    <p>
+                      <strong>{block.title}</strong>
+                    </p>
+                    <ul>
+                      {block.list.map((item) => (
+                        <li>{item.text}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </>
+            ))
+          }
+        </More>
       </div>
     </div>
   </div>
@@ -242,15 +280,34 @@ const headline = ignite(experience.heading);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
     }
   }
-  /* Side by side: Wisers in the same right column, clear of its pictures (WISERS_ANCHOR, left sky,
-     x 0.1 to 0.5), its scrim masked the same way. */
+  /* Side by side: Wisers and its More in the same right column, clear of its pictures
+     (WISERS_ANCHOR, left sky, x 0.1 to 0.5), their scrims masked the same way. */
   @media (--short), (--wide) {
-    .wisers__block {
+    .wisers__block,
+    .wisers-more__block {
       grid-column: 8 / span 5;
     }
-    .wisers__block.scrim::before {
+    .wisers__block.scrim::before,
+    .wisers-more__block.scrim::before {
       -webkit-mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
       mask-image: linear-gradient(to right, transparent 25.77%, #000 30.77%);
+    }
+  }
+  /* The More's spacing is padding, not margin, so the timeline measures all of it. */
+  .wisers-more {
+    position: relative;
+    padding-top: var(--space-3);
+  }
+  /* Stack: wisers.ts cuts it off under the pictures with a mask on the frame, whose box reaches
+     160px past the block above and below as its band of night does (base.css), so the mask covers
+     all of it; the negative margins (inside a flow root) keep everything where it was. */
+  @media (--stack) {
+    :global(html:not([data-snapshot])) .wisers-more {
+      display: flow-root;
+    }
+    :global(html:not([data-snapshot])) .wisers-more__frame {
+      padding-block: 160px;
+      margin-block: -160px;
     }
   }
 
@@ -536,7 +593,8 @@ const headline = ignite(experience.heading);
     clear on the left, the headline and the Civic Exchange short copy on the right, centered. The
     second holds the open More text, in two columns in the same right column, so the chart stays
     clear there too. The block's scrim becomes a band down the right side (feathered over 120px at
-    the top and bottom, masked off on the left as live). Wisers follows in two screens.
+    the top and bottom, masked off on the left as live). Wisers follows in two screens, and its open
+    More in a third.
   */
   @media (--wide) {
     :global(html[data-snapshot]) .xp {
@@ -588,6 +646,21 @@ const headline = ignite(experience.heading);
     }
     :global(html[data-snapshot]) .xp :global(.more__inner li) {
       break-inside: avoid;
+    }
+    /* Wisers' open More: a screen of its own after Wisers 2025, in the right column, set like
+       Civic Exchange's (the rules above cover every More in the section). */
+    :global(html[data-snapshot]) .wisers-more {
+      min-height: 100vh;
+      padding-top: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    /* At 15px it ran 16px past the screen. */
+    :global(html[data-snapshot]) .wisers-more :global(.more__inner p),
+    :global(html[data-snapshot]) .wisers-more :global(.more__inner li) {
+      font-size: 14px;
+      line-height: 1.5;
     }
   }
 </style>

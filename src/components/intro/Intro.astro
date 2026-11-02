@@ -28,11 +28,12 @@
 //
 // The card is transparent: a 1px border and nothing behind the words but a dark halo around the
 // letters (no blur on touch, V4.md 8.6). It can be pulled about and springs back
-// (src/intro/card-drag.ts); that is decoration only, its words and link sit in the normal reading
-// order.
+// (src/intro/card-drag.ts); that is decoration only, its words and links (the email, and GitHub in
+// a new tab) sit in the normal reading order.
 // Timeline hook: data-scene="intro" (the lead decides what the world does behind it).
-import { intro } from '../../data/content';
+import { contact, intro } from '../../data/content';
 import { ui } from '../../data/site';
+import ExternalLink from '../ui/ExternalLink.astro';
 import LogoStrip from './LogoStrip.astro';
 
 // The greeting's paragraphs, with the bold phrase split out. Stop the build if a phrase marked bold
@@ -89,6 +90,7 @@ const STILL = { src: '/intro/photos/phone-closed.webp', width: 1200, height: 120
                 <path d="m2.25 4.25 5.75 4.5 5.75-4.5" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"></path>
               </svg><span class="sr-only">{ui.emailLabel}: </span>{intro.email.text}</a
             >
+            <ExternalLink class="action-link intro__github" href={contact.github.href} arrow>{contact.github.label}</ExternalLink>
           </p>
         </div>
 
@@ -391,7 +393,12 @@ const STILL = { src: '/intro/photos/phone-closed.webp', width: 1200, height: 120
     font-weight: var(--fw-medium);
     color: var(--window);
   }
+  /* The email, then GitHub beside it (on the next line where the card is too narrow for both). */
   .intro__link-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-5);
     margin-top: var(--space-3);
   }
   .intro__email {

@@ -1,0 +1,107 @@
+---
+// StartPanel.astro: Where it started (Nov 1 2026), on the glass panel the mission's question used.
+// A short opening in Cayden's words at the mission text's size (--fs-mission), then a dated list in
+// time order: each date in the small meta style, each line at body size. A plain list with no
+// animation of its own; the section's title above it carries the neon ignition.
+//
+// The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
+// alone. It is #mission-panel: the timeline clears the figure as it rises, and with reduced motion
+// cuts in the archive columns only once the panel has gone up past them (timeline.ts). It keeps the
+// question's footprint, at most 34rem wide side by side (short and wide) and the full width inside
+// the gutters in the stack layout, which the signal counts on: the current runs on the open water
+// right of it (signal.ts).
+//
+// While the opening is still a TODO(CAYDEN), the build prints a warning instead of failing, so the
+// rest can be previewed.
+import type { Line } from '../../data/content';
+
+interface Props {
+  lead: Line;
+  steps: (Line & { when: string })[];
+}
+
+const { lead, steps } = Astro.props;
+
+if (lead.text.startsWith('TODO(CAYDEN)')) {
+  console.warn(`\nStartPanel: the opening is still a placeholder (content.ts, mission.lead): "${lead.text}"`);
+}
+---
+
+<div class="start glass" id="mission-panel">
+  <p class="start__lead">{lead.text}</p>
+  <ol class="start__steps">
+    {
+      steps.map((step) => (
+        <li class="start__step">
+          <p class="t-meta start__when">{step.when}</p>
+          <p class="start__text">{step.text}</p>
+        </li>
+      ))
+    }
+  </ol>
+</div>
+
+<style>
+  @import '../../styles/media.css';
+
+  /* Glass, as the question had it (one of only two places it appears; the other is the video
+     frames): sized to its text, at most 34rem wide side by side, the full width inside the gutters
+     in the stack layout, 24px of padding. */
+  .start {
+    max-width: 34rem;
+    padding: var(--space-4);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-frame);
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: var(--glow-soft);
+  }
+  @media (--stack) {
+    .start {
+      max-width: none;
+    }
+  }
+  /* Touch screens: no blur over the live canvas, which phones would redo every frame (V4.md 8.6).
+     A flat fill and the same border instead. */
+  @media (--touch) {
+    .start {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      background: var(--glass-flat);
+    }
+  }
+
+  .start__lead {
+    max-width: var(--measure);
+    font-size: var(--fs-mission);
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+
+  .start__steps {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+  /* Stack: the date above its line. Side by side, the dates in a column of their own on the left
+     ("November 2024" is the longest). */
+  .start__step {
+    display: grid;
+    gap: var(--space-1);
+  }
+  @media (--short), (--wide) {
+    .start__step {
+      grid-template-columns: 8.5rem minmax(0, 1fr);
+      column-gap: var(--space-3);
+      align-items: baseline;
+    }
+  }
+  .start__text {
+    max-width: var(--measure);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    color: var(--c-body);
+    text-wrap: pretty;
+  }
+</style>

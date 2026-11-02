@@ -72,3 +72,14 @@ Dated notes on what changed on the site.
 - Wisers: the title is now Data Intern, confirmed from Cayden's CV.
 - Civic Exchange: a "Next summer" note in its More panel about the summer 2027 research internship.
 - OurCityHealth: seven cities scored, not three, as the OurCityHealth README lists.
+
+## 2026-11-01
+
+- Where it started replaces Why I build, in the same place with the same camera stop and current: a short opening in Cayden's words, then a dated list from 2024 to October 2026, on the same glass panel. The Previously / Edits / Now slider and its code are gone. The nav and the lift say Origins.
+- Civic Exchange: the title is now AI Consultant, as on Cayden's Common App.
+- OurCityHealth: built to analyze 1,000+ cities, seven scored in the first run, and a View the code link. Its More now opens with a technical write-up from the OurCityHealth README (the problem, what was built, how it was built) before Measuring What Matters; with `?snapshot` the stop takes two screens at 1440 x 900, the second for that write-up.
+- Wisers: a More with the technical write-up of both summers and how the screen agent works. It comes after the held block, so the three pictures keep their timing.
+- AI Simply: "Free tools for charities and small businesses", the three case studies on aisimply.co (Changing Young Lives Foundation, Our Gallery, Civic Exchange) and a link to them.
+- Civic AI Club: three tools delivered in October, student teams working with three local organizations, and a link to the club's GitHub. The line saying none of its tools calls an AI model is gone.
+- GitHub is easier to find: beside the email on the intro card, under the section links in the menu, and on OurCityHealth and the club.
+- More work has three cards, STORM first.

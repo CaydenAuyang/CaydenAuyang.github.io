@@ -500,6 +500,19 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     civicSize = size;
   });
 
+  /**
+   * Wisers' More (Experience.astro, [data-wisers-more]) sits between the Wisers track and Work, so
+   * its button, and its panel when open, would push Work's start down and stretch the last Wisers
+   * scene, sliding the pictures' morphs later. That scene ends this much sooner instead: while the
+   * block goes by, Wisers rests on its last frame (the screen agent), as it did at the end of the
+   * scene before the block was there.
+   */
+  const wisersMore = document.querySelector<HTMLElement>('[data-wisers-more]');
+  let wisersMoreHeight = 0;
+  ScrollTrigger.addEventListener('refresh', () => {
+    wisersMoreHeight = wisersMore?.offsetHeight ?? 0;
+  });
+
   /** One trigger per scene, in page order, each starting where its beat says (the table above). */
   function build() {
     triggers.forEach((st) => st.kill(true));
@@ -739,6 +752,10 @@ export function createTimeline({ motion, snapshot }: TimelineOptions): Timeline 
     let end = next ? next.start : Math.max(st.start + 1, ScrollTrigger.maxScroll(window));
     // Civic Exchange's open More doesn't stretch the experience scene (see civicLength).
     if (index === civicIndex && civicLength > 0) end = Math.min(end, st.start + civicLength);
+    // Nor does Wisers' More the last Wisers scene (see wisersMoreHeight).
+    if (next && scenes[index + 1]?.name === 'work' && scenes[index]?.name.startsWith('wisers')) {
+      end = Math.max(st.start + 1, end - wisersMoreHeight);
+    }
     return { index, p: clamp01((y - st.start) / Math.max(1, end - st.start)), y };
   }
 

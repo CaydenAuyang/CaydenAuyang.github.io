@@ -564,7 +564,7 @@ html[data-snapshot] .world-canvas {
   state. Reduced motion, snapshot and no JavaScript: lit from the start.
 */
 :root {
-  /* The window color's white-hot flash (also the mission's inserted words lighting up). */
+  /* The window color's white-hot flash. */
   --ign-hot: #ffe0b8;
 }
 /* Unlit: the tube in its word's color at 16%. The keyframes read the word's --tc, --tc-rgb and

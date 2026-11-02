@@ -2,7 +2,8 @@
 // Header.astro: the only thing fixed on screen. The name, small, at top left (back to the top),
 // and "Menu" at top right.
 //
-// Menu opens a full-screen overlay listing the section links over the dimmed world. It is a
+// Menu opens a full-screen overlay listing the section links over the dimmed world, with a smaller
+// GitHub link (a new tab) under them. It is a
 // modal <dialog>: the rest of the page is inert while it is open (a focus trap), Esc closes it,
 // and focus goes back to the Menu button. Picking a section closes it and moves focus to that
 // section. While it is open the page can't scroll (V4.md 8.2): `overflow: hidden` on <html>, and
@@ -11,8 +12,9 @@
 //
 // Without JavaScript the Menu button is hidden; every section is still a scroll away.
 // In snapshot mode the Menu button is hidden too.
-import { nav } from '../data/content';
+import { contact, nav } from '../data/content';
 import { site, ui } from '../data/site';
+import ExternalLink from './ui/ExternalLink.astro';
 
 interface Props {
   menu?: boolean;
@@ -51,17 +53,24 @@ const { menu = false } = Astro.props;
           {ui.close}
         </button>
       </div>
-      <nav class="menu__nav" aria-label={ui.menuLabel}>
-        <ol class="menu__list">
-          {nav.map((item, i) => (
-            <li style={`--i: ${i}`}>
-              <a class="menu__link" href={item.href} data-menu-link>
-                {item.label}
-              </a>
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <div class="menu__body">
+        <nav class="menu__nav" aria-label={ui.menuLabel}>
+          <ol class="menu__list">
+            {nav.map((item, i) => (
+              <li style={`--i: ${i}`}>
+                <a class="menu__link" href={item.href} data-menu-link>
+                  {item.label}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+        <p class="menu__ext" style={`--i: ${nav.length}`}>
+          <ExternalLink class="action-link" href={contact.github.href} arrow>
+            {contact.github.label}
+          </ExternalLink>
+        </p>
+      </div>
     </dialog>
   )
 }
@@ -193,10 +202,14 @@ const { menu = false } = Astro.props;
     padding-top: env(safe-area-inset-top, 0);
     flex: none;
   }
-  .menu__nav {
+  /* The section links, then GitHub under them, together in the middle of the screen. */
+  .menu__body {
     flex: 1;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: var(--space-5);
     padding-block: var(--space-5);
   }
   .menu__list {
@@ -220,7 +233,8 @@ const { menu = false } = Astro.props;
       color: var(--window);
     }
   }
-  .menu[open] .menu__list > li {
+  .menu[open] .menu__list > li,
+  .menu[open] .menu__ext {
     animation: menu-item 420ms var(--ease-out) both;
     animation-delay: calc(60ms + var(--i) * 40ms);
   }
@@ -237,7 +251,8 @@ const { menu = false } = Astro.props;
     }
   }
   :global(html[data-motion='off']) .menu[open],
-  :global(html[data-motion='off']) .menu[open] .menu__list > li {
+  :global(html[data-motion='off']) .menu[open] .menu__list > li,
+  :global(html[data-motion='off']) .menu[open] .menu__ext {
     animation: none;
   }
 </style>

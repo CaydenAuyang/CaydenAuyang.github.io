@@ -158,8 +158,8 @@
   --fs-lead: clamp(18px, 0.19vw + 17.26px, 20px); /* 18px at 390, 20px at 1440 */
   --fs-body: clamp(15px, 0.095vw + 14.63px, 16px); /* 15px at 390, 16px at 1440 */
   --fs-small: clamp(12px, 0.095vw + 11.63px, 13px); /* 12px at 390, 13px at 1440 */
-  /* The mission text (Previously and Now), inside the glass panel: lead size, at line height
-     1.55, never larger. */
+  /* The opening of Where it started, inside the glass panel (the mission's question used it):
+     lead size, at line height 1.55, never larger. */
   --fs-mission: clamp(17px, 1.3vw, 20px);
   /* The email: the largest link on the page, on one line: 22 characters at 0.6em each (13.2em, so
      13.3 with a hair to spare) never wider than the content. 26px at 390; at 360 the width holds it
