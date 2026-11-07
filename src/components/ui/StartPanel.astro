@@ -10,9 +10,6 @@
 // question's footprint, at most 34rem wide side by side (short and wide) and the full width inside
 // the gutters in the stack layout, which the signal counts on: the current runs on the open water
 // right of it (signal.ts).
-//
-// While the opening is still a TODO(CAYDEN), the build prints a warning instead of failing, so the
-// rest can be previewed.
 import type { Line } from '../../data/content';
 
 interface Props {
@@ -21,10 +18,6 @@ interface Props {
 }
 
 const { lead, steps } = Astro.props;
-
-if (lead.text.startsWith('TODO(CAYDEN)')) {
-  console.warn(`\nStartPanel: the opening is still a placeholder (content.ts, mission.lead): "${lead.text}"`);
-}
 ---
 
 <div class="start glass" id="mission-panel">

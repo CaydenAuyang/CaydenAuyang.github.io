@@ -191,8 +191,8 @@ export const intro = {
 export const mission = {
   heading: 'Where it started',
   lead: {
-    text: 'TODO(CAYDEN): one or two sentences, in your own words, on how AI Simply started.',
-    source: 'Cayden',
+    text: "AI Simply started in 2024 with one automation for a children's charity in Hong Kong where I used to volunteer as an English tutor. By 2025, more organizations were asking than I could help alone, which is how the Civic AI Club started.",
+    source: 'Cayden, Nov 5 2026 (aisimply.co How it started; Brown draft, Oct 18: tutored English there; UC PIQ 1 draft, Nov 3)',
   } satisfies Line,
   steps: [
     {
@@ -397,7 +397,10 @@ export const experience = {
       },
       {
         title: 'What I took away.',
-        text: { text: 'TODO(CAYDEN)', source: 'Cayden' },
+        text: {
+          text: "Both summers came down to how much to trust what's in front of me. In 2024 it was working out which of thousands of posts actually mattered. In 2025 it was building an agent that checks every step against the page to see whether it really worked.",
+          source: 'Cayden, Nov 5 2026 (UC PIQ 6 draft, Nov 3; screen-parsing-gui-agent README, How it works 5)',
+        },
       },
     ] satisfies MoreBlock[] as MoreBlock[],
     moreLabel: 'about Wisers',
@@ -482,9 +485,8 @@ export const work = {
               text: 'A pipeline that reads news from 380,000+ outlets through GDELT and ranks every source on a four-tier credibility scale.',
               source: 'OurCityHealth README, How It Works',
             },
-            // Keep the second sentence only if Cayden confirms it came from a real run.
             {
-              text: 'Duplicate reports are grouped into single stories before anything is scored. In one run, about 25,000 raw events came down to 24 real stories.',
+              text: 'Duplicate reports are grouped into single stories before anything is scored.',
               source: 'OurCityHealth README, How It Works (PROCESS)',
             },
             {
@@ -506,7 +508,10 @@ export const work = {
         },
         {
           title: 'What I took away.',
-          text: { text: 'TODO(CAYDEN)', source: 'Cayden' },
+          text: {
+            text: 'The hardest decisions were judgment calls: which reports are really one story, and how much to trust each source. Every time I find the main message in the data, the next question is how much weight it really deserves.',
+            source: 'Cayden, Nov 5 2026 (UC PIQ 6 draft, Nov 3; UW draft, Nov 2)',
+          },
         },
         {
           head: { bold: 'Measuring What Matters', rest: '(independent study, fall 2026)' },
@@ -572,9 +577,8 @@ export const work = {
               source: 'CLUB §4 A, B; civicaiclub cases a, b, f',
             },
             {
-              text: 'Student teams are working with three local organizations: two projects are under way and a third is about to start.',
-              source:
-                'Common App activity 1; civicaiclub clients.json (Green Valley Hospitality and Black Pond Brews in progress, Covenant Soup Kitchen discovery pending)',
+              text: 'We reached out to more than 50 local organizations. Seven said they were interested, and student teams are working with three of them.',
+              source: 'Cayden, Nov 5 2026 (50+ contacted, 7 interested, 3 active); Common App activity 1',
             },
             { text: 'A school-wide AI Literacy Week in May 2026, with AI Youth Alliance.', source: 'CLUB §6' },
           ],

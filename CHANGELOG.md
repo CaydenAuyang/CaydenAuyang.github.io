@@ -83,3 +83,9 @@ Dated notes on what changed on the site.
 - Civic AI Club: three tools delivered in October, student teams working with three local organizations, and a link to the club's GitHub. The line saying none of its tools calls an AI model is gone.
 - GitHub is easier to find: beside the email on the intro card, under the section links in the menu, and on OurCityHealth and the club.
 - More work has three cards, STORM first.
+
+## 2026-11-05
+
+- Where it started: the opening is in, on how AI Simply began with one automation for the Hong Kong children's charity where Cayden volunteered, and led to the Civic AI Club.
+- Wisers and OurCityHealth: each More now ends with What I took away. With `?snapshot` at 1440 x 900, both write-ups still fit their screens. OurCityHealth's What I built no longer gives a 25,000 to 24 figure, which Cayden hadn't confirmed from a real run.
+- Civic AI Club: its More says the club reached out to more than 50 local organizations, seven said they were interested, and student teams are working with three.
