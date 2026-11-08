@@ -1,8 +1,18 @@
 ---
 // StartPanel.astro: Where it started (Nov 1 2026), on the glass panel the mission's question used.
-// A short opening in Cayden's words at the mission text's size (--fs-mission), then a dated list in
-// time order: each date in the small meta style, each line at body size. A plain list with no
-// animation of its own; the section's title above it carries the neon ignition.
+// A short opening in Cayden's words at the mission text's size (--fs-mission), then the dated list
+// in time order, drawn as two lines of light (Nov 7): the AI Simply line in window and the Wisers
+// line in cool (content.ts mission, which says why each step is on its line). Each step is a stop
+// on its line, a lit window; each line's rail runs from its first stop, larger, where the rest of
+// it started, to its last. Side by side (short and wide) the rails, the date and the line sit in
+// three columns; in the stack layout the date sits above its line, both right of the rails.
+//
+// The first time the list comes into view the two lines draw themselves from the top, row by row,
+// and each stop strikes like the titles' neon as the light reaches it; after that, while the panel
+// is on screen, a light runs down each line every few seconds and each stop flares as it passes
+// (src/scripts/origins.ts). With a mouse, pointing at a step brings its line forward and dims the other one, as pointing at
+// an archive column does. Reduced motion, snapshot, print and no JavaScript: drawn and lit from the
+// start. Only the rails and the stops animate; the words are always there in full.
 //
 // The panel carries `glass`, so the night scene's interactions (interact.ts) leave presses on it
 // alone. It is #mission-panel: the timeline clears the figure as it rises, and with reduced motion
@@ -10,29 +20,64 @@
 // question's footprint, at most 34rem wide side by side (short and wide) and the full width inside
 // the gutters in the stack layout, which the signal counts on: the current runs on the open water
 // right of it (signal.ts).
-import type { Line } from '../../data/content';
+import type { Line, OriginLine, OriginStep } from '../../data/content';
 
 interface Props {
   lead: Line;
-  steps: (Line & { when: string })[];
+  steps: OriginStep[];
 }
 
 const { lead, steps } = Astro.props;
+
+// Each line's first and last stop, and so what its rail does in each row: nothing, start at the
+// stop, run through, or end at the stop.
+const LINES: OriginLine[] = ['ais', 'wisers'];
+const ends = new Map(
+  LINES.map((line) => {
+    const rows = steps.flatMap((step, i) => (step.line === line ? [i] : []));
+    return [line, { first: rows[0] ?? -1, last: rows[rows.length - 1] ?? -1 }];
+  }),
+);
+const rail = (line: OriginLine, i: number) => {
+  const { first, last } = ends.get(line)!;
+  if (first < 0 || first === last || i < first || i > last) return null;
+  return i === first ? 'start' : i === last ? 'end' : 'through';
+};
 ---
 
-<div class="start glass" id="mission-panel">
+<div class="start glass" id="mission-panel" data-origins>
   <p class="start__lead">{lead.text}</p>
-  <ol class="start__steps">
+  <div class="start__map">
+    <ol class="start__steps">
+      {
+        steps.map((step, i) => (
+          <li class={`start__step start__step--${step.line}`} style={`--row: ${i}`}>
+            <span class="start__rails" aria-hidden="true">
+              {LINES.map((line) => {
+                const part = rail(line, i);
+                return part && <span class={`start__rail start__rail--${line} start__rail--${part}`} />;
+              })}
+              <span class:list={['start__stop', `start__stop--${step.line}`, { 'start__stop--origin': ends.get(step.line)!.first === i }]} />
+            </span>
+            <p class="t-meta start__when">{step.when}</p>
+            <p class="start__text">{step.text}</p>
+          </li>
+        ))
+      }
+    </ol>
     {
-      steps.map((step) => (
-        <li class="start__step">
-          <p class="t-meta start__when">{step.when}</p>
-          <p class="start__text">{step.text}</p>
-        </li>
+      LINES.map((line) => (
+        <span class={`start__train start__train--${line}`} data-train={line} aria-hidden="true">
+          <span class="start__head" />
+        </span>
       ))
     }
-  </ol>
+  </div>
 </div>
+
+<script>
+  import '../../scripts/origins';
+</script>
 
 <style>
   @import '../../styles/media.css';
@@ -41,6 +86,11 @@ const { lead, steps } = Astro.props;
      frames): sized to its text, at most 34rem wide side by side, the full width inside the gutters
      in the stack layout, 24px of padding. */
   .start {
+    /* The rails' column, the two lanes' centers in it, and how long the light takes per row. */
+    --rails-w: 28px;
+    --lane-ais: 7px;
+    --lane-wisers: 21px;
+    --step: 220ms;
     max-width: 34rem;
     padding: var(--space-4);
     border: 1px solid var(--glass-border);
@@ -72,29 +122,372 @@ const { lead, steps } = Astro.props;
     text-wrap: pretty;
   }
 
+  /* The rows carry their own padding instead of a gap, so the rails run on unbroken from row to
+     row; the margins take the first and last row's outer padding back. */
+  .start__map {
+    position: relative;
+    margin-top: calc(var(--space-4) - var(--space-2));
+    margin-bottom: calc(var(--space-2) * -1);
+  }
   .start__steps {
     display: grid;
-    gap: var(--space-3);
-    margin-top: var(--space-4);
   }
-  /* Stack: the date above its line. Side by side, the dates in a column of their own on the left
-     ("November 2024" is the longest). */
+  /* Stack: the date above its line, right of the rails. --node-y is where the stop sits: the
+     middle of the row's first line (the date's here, the line's side by side). */
   .start__step {
+    --node-y: calc(var(--space-2) + var(--fs-small) * 0.75);
+    --t0: calc(var(--row) * var(--step));
+    position: relative;
+    isolation: isolate;
     display: grid;
-    gap: var(--space-1);
+    grid-template-columns: var(--rails-w) minmax(0, 1fr);
+    grid-template-areas:
+      'rails when'
+      'rails text';
+    column-gap: var(--space-3);
+    row-gap: var(--space-1);
+    padding-block: var(--space-2);
   }
+  /* Side by side: rails, date and line in three columns ("November 2024" is the longest date). */
   @media (--short), (--wide) {
     .start__step {
-      grid-template-columns: 8.5rem minmax(0, 1fr);
-      column-gap: var(--space-3);
+      --node-y: calc(var(--space-2) + var(--fs-body) * var(--lh-body) / 2);
+      grid-template-columns: var(--rails-w) 6.5rem minmax(0, 1fr);
+      grid-template-areas: 'rails when text';
       align-items: baseline;
     }
   }
+  .start__when {
+    grid-area: when;
+  }
   .start__text {
+    grid-area: text;
     max-width: var(--measure);
     font-size: var(--fs-body);
     line-height: var(--lh-body);
     color: var(--c-body);
     text-wrap: pretty;
+  }
+
+  /* ---- The two lines ---- */
+  /* The rails' cell covers the whole row, its padding too, above the date's hug scrim. */
+  .start__rails {
+    grid-area: rails;
+    align-self: stretch;
+    position: relative;
+    z-index: 1;
+    margin-block: calc(var(--space-2) * -1);
+  }
+  .start__rail--ais,
+  .start__stop--ais {
+    --lane: var(--lane-ais);
+    --tc: var(--window);
+    --tc-rgb: var(--window-rgb);
+    --tc-hot: #ffe0b8;
+  }
+  .start__rail--wisers,
+  .start__stop--wisers {
+    --lane: var(--lane-wisers);
+    --tc: var(--cool);
+    --tc-rgb: var(--cool-rgb);
+    --tc-hot: #f2f8ff;
+  }
+  /* A rail piece: the unlit tube at 16%, as the titles' letters are before they strike, with the
+     lit light on top of it (::after), which draws down from the top. */
+  .start__rail {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--lane) - 1.5px);
+    width: 3px;
+    border-radius: 1.5px;
+    background: rgb(var(--tc-rgb) / 0.16);
+  }
+  .start__rail--start {
+    top: var(--node-y);
+  }
+  .start__rail--end {
+    bottom: auto;
+    height: var(--node-y);
+  }
+  /* Lit, the rail holds at 60% with a soft glow, so the stops (and the light that runs down it)
+     stand out against it. */
+  .start__rail::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgb(var(--tc-rgb) / 0.6);
+    box-shadow:
+      0 0 6px rgb(var(--tc-rgb) / 0.5),
+      0 0 16px rgb(var(--tc-rgb) / 0.25);
+    transform-origin: top;
+  }
+  /* A stop: a lit window on its lane, ringed with night so the rail reads as passing under it. The
+     first stop of each line is larger, with a second thin ring: where the line started. */
+  .start__stop {
+    position: absolute;
+    top: var(--node-y);
+    left: var(--lane);
+    width: 10px;
+    height: 10px;
+    translate: -50% -50%;
+    border-radius: 2px;
+    background: var(--tc);
+    box-shadow:
+      0 0 0 2px rgb(var(--night-rgb) / 0.9),
+      0 0 10px rgb(var(--tc-rgb) / 0.75),
+      0 0 22px rgb(var(--tc-rgb) / 0.35);
+  }
+  .start__stop--origin {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    box-shadow:
+      0 0 0 2px rgb(var(--night-rgb) / 0.9),
+      0 0 0 3.5px rgb(var(--tc-rgb) / 0.85),
+      0 0 12px rgb(var(--tc-rgb) / 0.75),
+      0 0 28px rgb(var(--tc-rgb) / 0.35);
+  }
+  /* The ring that spreads from a line's first stop as it strikes (motion only, below). */
+  .start__stop--origin::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border: 1.5px solid var(--tc);
+    border-radius: 5px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ---- Drawing the lines (motion on, not snapshot: html.js-ignite, as the titles) ----
+     Unlit until origins.ts adds .is-drawing; then, --step per row, each rail piece draws down
+     (a start piece once its stop has struck, an end piece only to its stop) and each stop strikes
+     as the light reaches it; .is-drawn is the resting state. */
+  :global(html.js-ignite) .start__rail::after {
+    transform: scaleY(0);
+  }
+  :global(html.js-ignite) .start__stop {
+    background: rgb(var(--tc-rgb) / 0.16);
+    box-shadow: 0 0 0 2px rgb(var(--night-rgb) / 0.9);
+  }
+  .start__rail--through::after {
+    --seg-delay: var(--t0);
+    --seg-dur: var(--step);
+  }
+  .start__rail--end::after {
+    --seg-delay: var(--t0);
+    --seg-dur: calc(var(--step) * 0.35);
+  }
+  .start__rail--start::after {
+    --seg-delay: calc(var(--t0) + var(--step) * 0.35);
+    --seg-dur: calc(var(--step) * 0.65);
+  }
+  .start__stop {
+    --stop-delay: calc(var(--t0) + var(--step) * 0.3);
+  }
+  :global(html.js-ignite) .is-drawing .start__rail::after {
+    animation: start-draw var(--seg-dur) linear var(--seg-delay) both;
+  }
+  :global(html.js-ignite) .is-drawing .start__stop {
+    animation: start-strike 380ms linear var(--stop-delay) both;
+  }
+  :global(html.js-ignite) .is-drawing .start__stop--origin {
+    animation-name: start-strike-origin;
+  }
+  :global(html.js-ignite) .is-drawing .start__stop--origin::after {
+    animation: start-ripple 900ms var(--ease-out) calc(var(--stop-delay) + 300ms) both;
+  }
+  :global(html.js-ignite) .is-drawn .start__rail::after {
+    transform: none;
+  }
+  :global(html.js-ignite) .is-drawn .start__stop {
+    background: var(--tc);
+    box-shadow:
+      0 0 0 2px rgb(var(--night-rgb) / 0.9),
+      0 0 10px rgb(var(--tc-rgb) / 0.75),
+      0 0 22px rgb(var(--tc-rgb) / 0.35);
+  }
+  :global(html.js-ignite) .is-drawn .start__stop--origin {
+    box-shadow:
+      0 0 0 2px rgb(var(--night-rgb) / 0.9),
+      0 0 0 3.5px rgb(var(--tc-rgb) / 0.85),
+      0 0 12px rgb(var(--tc-rgb) / 0.75),
+      0 0 28px rgb(var(--tc-rgb) / 0.35);
+  }
+  @keyframes start-draw {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+  /* The titles' one-flicker strike (base.css ign-a), on a stop: a hot flash, out, on and hold. */
+  @keyframes start-strike {
+    0%,
+    14% {
+      background: rgb(var(--tc-rgb) / 0.16);
+      box-shadow: 0 0 0 2px rgb(var(--night-rgb) / 0.9);
+    }
+    15%,
+    28% {
+      background: var(--tc-hot);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 6px var(--tc-hot),
+        0 0 18px rgb(var(--tc-rgb) / 0.9),
+        0 0 40px rgb(var(--tc-rgb) / 0.5);
+    }
+    29%,
+    46% {
+      background: rgb(var(--tc-rgb) / 0.16);
+      box-shadow: 0 0 0 2px rgb(var(--night-rgb) / 0.9);
+    }
+    47% {
+      background: var(--tc-hot);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 6px var(--tc-hot),
+        0 0 18px rgb(var(--tc-rgb) / 0.9),
+        0 0 40px rgb(var(--tc-rgb) / 0.5);
+    }
+    100% {
+      background: var(--tc);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 10px rgb(var(--tc-rgb) / 0.75),
+        0 0 22px rgb(var(--tc-rgb) / 0.35);
+    }
+  }
+  @keyframes start-strike-origin {
+    0%,
+    14% {
+      background: rgb(var(--tc-rgb) / 0.16);
+      box-shadow: 0 0 0 2px rgb(var(--night-rgb) / 0.9);
+    }
+    15%,
+    28% {
+      background: var(--tc-hot);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 0 3.5px var(--tc-hot),
+        0 0 18px rgb(var(--tc-rgb) / 0.9),
+        0 0 48px rgb(var(--tc-rgb) / 0.55);
+    }
+    29%,
+    46% {
+      background: rgb(var(--tc-rgb) / 0.16);
+      box-shadow: 0 0 0 2px rgb(var(--night-rgb) / 0.9);
+    }
+    47% {
+      background: var(--tc-hot);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 0 3.5px var(--tc-hot),
+        0 0 18px rgb(var(--tc-rgb) / 0.9),
+        0 0 48px rgb(var(--tc-rgb) / 0.55);
+    }
+    100% {
+      background: var(--tc);
+      box-shadow:
+        0 0 0 2px rgb(var(--night-rgb) / 0.9),
+        0 0 0 3.5px rgb(var(--tc-rgb) / 0.85),
+        0 0 12px rgb(var(--tc-rgb) / 0.75),
+        0 0 28px rgb(var(--tc-rgb) / 0.35);
+    }
+  }
+  @keyframes start-ripple {
+    from {
+      opacity: 0.9;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  /* ---- The light that runs down each line once it is drawn (motion only) ----
+     origins.ts sets each train's top and height (its line's first stop to its last) and runs its
+     head down it: a short bright core with a soft glow around it, in the line's color. */
+  .start__train {
+    display: none;
+    position: absolute;
+    z-index: 2;
+    left: calc(var(--lane) - 6px);
+    width: 12px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  :global(html.js-ignite) .is-drawn .start__train[style] {
+    display: block;
+  }
+  .start__train--ais {
+    --lane: var(--lane-ais);
+    --tc-rgb: var(--window-rgb);
+    --tc-hot: #ffe0b8;
+  }
+  .start__train--wisers {
+    --lane: var(--lane-wisers);
+    --tc-rgb: var(--cool-rgb);
+    --tc-hot: #f2f8ff;
+  }
+  /* The head: 64px tall, its tip at the bottom. origins.ts moves it from above the first stop to
+     past the last; the train's box clips it to the line. */
+  .start__head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 64px;
+    transform: translateY(-64px);
+  }
+  .start__head::before {
+    content: '';
+    position: absolute;
+    left: 4.5px;
+    bottom: 0;
+    width: 3px;
+    height: 64px;
+    border-radius: 1.5px;
+    background: linear-gradient(to bottom, rgb(var(--tc-rgb) / 0), rgb(var(--tc-rgb) / 0.7) 55%, var(--tc-hot) 92%, #fff);
+  }
+  .start__head::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -10px;
+    width: 12px;
+    height: 40px;
+    background: radial-gradient(closest-side, rgb(var(--tc-rgb) / 0.85), rgb(var(--tc-rgb) / 0));
+  }
+
+  /* ---- Pointing at a step (a mouse only): its line comes forward, the other one dims ---- */
+  @media (--mouse) {
+    .start__when,
+    .start__text,
+    .start__rail,
+    .start__stop {
+      transition: opacity var(--dur-quick) var(--ease-out);
+    }
+    .start__steps:has(.start__step--ais:hover)
+      :is(.start__step--wisers > .start__when, .start__step--wisers > .start__text, .start__rail--wisers, .start__stop--wisers),
+    .start__steps:has(.start__step--wisers:hover)
+      :is(.start__step--ais > .start__when, .start__step--ais > .start__text, .start__rail--ais, .start__stop--ais) {
+      opacity: 0.38;
+    }
+  }
+
+  /* Print: drawn and lit, whatever the scroll reached. */
+  @media print {
+    :global(html.js-ignite) .start__rail::after {
+      transform: none !important;
+      animation: none !important;
+    }
+    :global(html.js-ignite) .start__stop {
+      background: var(--tc) !important;
+      animation: none !important;
+    }
   }
 </style>

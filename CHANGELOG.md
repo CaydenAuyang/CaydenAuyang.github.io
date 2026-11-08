@@ -89,3 +89,8 @@ Dated notes on what changed on the site.
 - Where it started: the opening is in, on how AI Simply began with one automation for the Hong Kong children's charity where Cayden volunteered, and led to the Civic AI Club.
 - Wisers and OurCityHealth: each More now ends with What I took away. With `?snapshot` at 1440 x 900, both write-ups still fit their screens. OurCityHealth's What I built no longer gives a 25,000 to 24 figure, which Cayden hadn't confirmed from a real run.
 - Civic AI Club: its More says the club reached out to more than 50 local organizations, seven said they were interested, and student teams are working with three.
+
+## 2026-11-07
+
+- Where it started is drawn as two lines of light, the AI Simply line in window and the Wisers line in cool, each starting at the stop the rest grew from: the club and Civic Exchange are on the AI Simply line, OurCityHealth on the Wisers line. The first time the list comes into view the lines draw down row by row and each stop strikes like the titles' neon; after that a light runs down each line every 7 s. Pointing at a step brings its line forward. Reduced motion, snapshot and print show it drawn and still. Same footprint and height: still one screen with `?snapshot` at 1440 x 900.
+- Its 2024 line now reads "AI Simply: first client solution delivered", and October 2026 "Several club tools delivered".

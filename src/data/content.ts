@@ -187,7 +187,17 @@ export const intro = {
 
 // Where it started (Nov 1 2026): replaces the Previously / Edits / Now question. A short opening in
 // Cayden's words, then a dated list in time order. The list states what happened and when; it makes
-// no claims about what caused what, except where a source says so (Civic Exchange).
+// no claims about what caused what, except where a source says so.
+//
+// Since Nov 7 the list is drawn as two lines of light (StartPanel.astro), each starting at the
+// place the rest grew from: the AI Simply line (window) and the Wisers line (cool). Every step is a
+// stop on one of them. Only sourced links put a step on a line: the club grew out of AI Simply
+// (mission.lead; aisimply.co About, "AI Simply also led to the Civic AI Club"), Civic Exchange
+// started as an AI Simply client (its step), and OurCityHealth started at Wisers (wisers.summers
+// 2024, "which is where the OurCityHealth idea started").
+export type OriginLine = 'ais' | 'wisers';
+export type OriginStep = Line & { when: string; line: OriginLine };
+
 export const mission = {
   heading: 'Where it started',
   lead: {
@@ -197,32 +207,37 @@ export const mission = {
   steps: [
     {
       when: '2024',
-      text: 'AI Simply: donor update emails for Changing Young Lives Foundation',
-      source: 'aisimply.co case study, Jul 5 2024',
+      text: 'AI Simply: first client solution delivered',
+      source: 'Cayden, Nov 7 2026; aisimply.co case study (Changing Young Lives Foundation), Jul 5 2024',
+      line: 'ais',
     },
     {
       when: 'Summer 2024',
       text: 'Wisers: thousands of RedNote posts turned into brand analysis',
       source: 'content.ts wisers.summers 2024; CV, Oct 21 2026',
+      line: 'wisers',
     },
-    { when: 'November 2024', text: 'Started OurCityHealth', source: 'OCH §1, CV' },
+    { when: 'November 2024', text: 'Started OurCityHealth', source: 'OCH §1, CV; on the Wisers line: wisers.summers 2024', line: 'wisers' },
     {
       when: 'Summer 2025',
       text: "Wisers: a prototype agent that reads a computer's screen",
       source: 'OCH §3, GUI; screen-parsing-gui-agent README',
+      line: 'wisers',
     },
     {
       when: 'Fall 2025',
       text: 'Founded the Civic AI Club at Pomfret',
-      source: 'CLUB §2; civic-ai-group notes (founded fall of junior year, 2025-26)',
+      source: 'CLUB §2; civic-ai-group notes (founded fall of junior year, 2025-26); on the AI Simply line: mission.lead',
+      line: 'ais',
     },
     {
       when: 'Summer 2026',
       text: 'Civic Exchange, which started as an AI Simply client',
       source: 'Common App Additional Information; aisimply.co case study, Aug 31 2026',
+      line: 'ais',
     },
-    { when: 'October 2026', text: 'Three club tools delivered', source: 'civicaiclub numbers.json, Oct 30 2026' },
-  ] satisfies (Line & { when: string })[] as (Line & { when: string })[],
+    { when: 'October 2026', text: 'Several club tools delivered', source: 'Cayden, Nov 7 2026; civicaiclub numbers.json, Oct 30 2026', line: 'ais' },
+  ] satisfies OriginStep[] as OriginStep[],
 };
 
 // ---- 3. Experience -----------------------------------------------------------------------------
